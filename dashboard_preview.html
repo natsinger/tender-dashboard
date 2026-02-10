@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Land Tenders Dashboard Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .metric-card { transition: transform 0.2s; }
+        .metric-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Sidebar -->
+    <div class="fixed left-0 top-0 w-64 h-full bg-white shadow-lg p-4 overflow-y-auto">
+        <div class="text-center mb-4">
+            <div class="text-4xl mb-2">🏗️</div>
+            <h1 class="text-xl font-bold text-gray-800">מכרזי קרקע</h1>
+            <p class="text-sm text-gray-500">Land Tenders Dashboard</p>
+        </div>
+        
+        <hr class="my-4">
+        
+        <div class="mb-4">
+            <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked class="rounded">
+                <span>Use Sample Data</span>
+            </label>
+        </div>
+        
+        <h3 class="font-semibold text-gray-700 mb-2">🔍 Filters</h3>
+        
+        <div class="space-y-3">
+            <div>
+                <label class="text-xs text-gray-500">City / עיר</label>
+                <select class="w-full mt-1 p-2 border rounded text-sm">
+                    <option>All</option>
+                    <option>תל אביב</option>
+                    <option>ירושלים</option>
+                    <option>חיפה</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Type / סוג</label>
+                <select class="w-full mt-1 p-2 border rounded text-sm">
+                    <option>All</option>
+                    <option>מגורים</option>
+                    <option>מסחר</option>
+                    <option>תעסוקה</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Status</label>
+                <select class="w-full mt-1 p-2 border rounded text-sm">
+                    <option>All</option>
+                    <option>פעיל</option>
+                    <option>נסגר</option>
+                </select>
+            </div>
+        </div>
+        
+        <hr class="my-4">
+        <p class="text-xs text-gray-400">Last updated: 2025-02-08</p>
+        <p class="text-xs text-gray-400">Total records: 50</p>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="ml-64 p-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">📊 Israel Land Tenders Dashboard</h1>
+        <p class="text-gray-600 mb-6">Track and analyze land tenders from רשות מקרקעי ישראל</p>
+        
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-4 gap-4 mb-8">
+            <div class="metric-card bg-white rounded-xl shadow p-4 text-center">
+                <div class="text-3xl font-bold text-green-600">35</div>
+                <div class="text-sm text-gray-500">🟢 Active Tenders</div>
+            </div>
+            <div class="metric-card bg-white rounded-xl shadow p-4 text-center">
+                <div class="text-3xl font-bold text-blue-600">12,450</div>
+                <div class="text-sm text-gray-500">🏠 Total Units</div>
+            </div>
+            <div class="metric-card bg-white rounded-xl shadow p-4 text-center">
+                <div class="text-3xl font-bold text-purple-600">890K</div>
+                <div class="text-sm text-gray-500">📐 Area (sqm)</div>
+            </div>
+            <div class="metric-card bg-white rounded-xl shadow p-4 text-center">
+                <div class="text-3xl font-bold text-orange-600">8</div>
+                <div class="text-sm text-gray-500">⏰ Closing Soon</div>
+            </div>
+        </div>
+        
+        <!-- Charts Row -->
+        <div class="grid grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow p-4">
+                <h2 class="text-lg font-semibold mb-4">📍 Tenders by City</h2>
+                <canvas id="cityChart" height="200"></canvas>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <h2 class="text-lg font-semibold mb-4">🏷️ Tenders by Type</h2>
+                <canvas id="typeChart" height="200"></canvas>
+            </div>
+        </div>
+        
+        <!-- Timeline & Price -->
+        <div class="grid grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow p-4">
+                <h2 class="text-lg font-semibold mb-4">📈 Tenders Over Time</h2>
+                <canvas id="timelineChart" height="200"></canvas>
+            </div>
+            <div class="bg-white rounded-xl shadow p-4">
+                <h2 class="text-lg font-semibold mb-4">💰 Price Distribution</h2>
+                <canvas id="priceChart" height="200"></canvas>
+            </div>
+        </div>
+        
+        <!-- Upcoming Deadlines -->
+        <div class="bg-white rounded-xl shadow p-4 mb-8">
+            <h2 class="text-lg font-semibold mb-4">⏰ Upcoming Deadlines</h2>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-2 text-left"></th>
+                        <th class="p-2 text-left">Tender ID</th>
+                        <th class="p-2 text-left">City</th>
+                        <th class="p-2 text-left">Type</th>
+                        <th class="p-2 text-left">Units</th>
+                        <th class="p-2 text-left">Deadline</th>
+                        <th class="p-2 text-left">Days Left</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-t">
+                        <td class="p-2">🔴</td>
+                        <td class="p-2 font-mono">מכ/234/2024</td>
+                        <td class="p-2">תל אביב</td>
+                        <td class="p-2">מגורים</td>
+                        <td class="p-2">120</td>
+                        <td class="p-2">2025-02-12</td>
+                        <td class="p-2 text-red-600 font-bold">4</td>
+                    </tr>
+                    <tr class="border-t">
+                        <td class="p-2">🟡</td>
+                        <td class="p-2 font-mono">מכ/567/2024</td>
+                        <td class="p-2">הרצליה</td>
+                        <td class="p-2">מסחר</td>
+                        <td class="p-2">45</td>
+                        <td class="p-2">2025-02-18</td>
+                        <td class="p-2 text-yellow-600 font-bold">10</td>
+                    </tr>
+                    <tr class="border-t">
+                        <td class="p-2">🟢</td>
+                        <td class="p-2 font-mono">מכ/891/2024</td>
+                        <td class="p-2">באר שבע</td>
+                        <td class="p-2">מגורים</td>
+                        <td class="p-2">280</td>
+                        <td class="p-2">2025-03-01</td>
+                        <td class="p-2 text-green-600 font-bold">21</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Data Table Preview -->
+        <div class="bg-white rounded-xl shadow p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">📋 All Tenders Data</h2>
+                <button class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600">
+                    📥 Download CSV
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="p-2 text-left">ID</th>
+                            <th class="p-2 text-left">City</th>
+                            <th class="p-2 text-left">Type</th>
+                            <th class="p-2 text-left">Units</th>
+                            <th class="p-2 text-left">Area</th>
+                            <th class="p-2 text-left">Min Price</th>
+                            <th class="p-2 text-left">Published</th>
+                            <th class="p-2 text-left">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-t"><td class="p-2">מכ/574/2024</td><td class="p-2">רעננה</td><td class="p-2">מעורב</td><td class="p-2">377</td><td class="p-2">25,000</td><td class="p-2">₪12.5M</td><td class="p-2">2024-12-15</td><td class="p-2"><span class="bg-gray-200 px-2 py-1 rounded text-xs">נסגר</span></td></tr>
+                        <tr class="border-t"><td class="p-2">מכ/316/2024</td><td class="p-2">רעננה</td><td class="p-2">מגורים</td><td class="p-2">241</td><td class="p-2">18,500</td><td class="p-2">₪8.2M</td><td class="p-2">2024-12-20</td><td class="p-2"><span class="bg-green-200 px-2 py-1 rounded text-xs">פעיל</span></td></tr>
+                        <tr class="border-t"><td class="p-2">מכ/472/2024</td><td class="p-2">באר שבע</td><td class="p-2">מעורב</td><td class="p-2">401</td><td class="p-2">32,100</td><td class="p-2">₪15.8M</td><td class="p-2">2024-11-28</td><td class="p-2"><span class="bg-gray-200 px-2 py-1 rounded text-xs">נסגר</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // City Chart
+        new Chart(document.getElementById('cityChart'), {
+            type: 'bar',
+            data: {
+                labels: ['תל אביב', 'ירושלים', 'חיפה', 'באר שבע', 'נתניה', 'הרצליה'],
+                datasets: [{
+                    data: [12, 9, 7, 6, 5, 4],
+                    backgroundColor: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff']
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true } }
+            }
+        });
+        
+        // Type Chart
+        new Chart(document.getElementById('typeChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['מגורים', 'מסחר', 'תעסוקה', 'מעורב', 'תיירות'],
+                datasets: [{
+                    data: [45, 20, 15, 12, 8],
+                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444']
+                }]
+            },
+            options: { plugins: { legend: { position: 'right' } } }
+        });
+        
+        // Timeline Chart
+        new Chart(document.getElementById('timelineChart'), {
+            type: 'line',
+            data: {
+                labels: ['Nov', 'Dec', 'Jan', 'Feb'],
+                datasets: [{
+                    label: 'Tenders',
+                    data: [8, 15, 12, 18],
+                    borderColor: '#3b82f6',
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: { plugins: { legend: { display: false } } }
+        });
+        
+        // Price Chart
+        new Chart(document.getElementById('priceChart'), {
+            type: 'bar',
+            data: {
+                labels: ['0-5M', '5-10M', '10-20M', '20-50M', '50M+'],
+                datasets: [{
+                    data: [8, 15, 18, 6, 3],
+                    backgroundColor: '#3b82f6'
+                }]
+            },
+            options: { plugins: { legend: { display: false } } }
+        });
+    </script>
+</body>
+</html>
