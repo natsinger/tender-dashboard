@@ -1,60 +1,425 @@
 """
 Israel Land Tenders Dashboard (מכרזי קרקע)
 ==========================================
-A Streamlit dashboard for tracking and analyzing land tenders from רמ"י.
+Executive-grade Streamlit dashboard for tracking land tenders from רמ"י.
+Focused on three tender types: מכרז פומבי רגיל, מחיר מטרה, דיור במחיר מופחת.
 
 Run with: streamlit run app.py
 """
 
-import streamlit as st
+import logging
+import urllib.parse
+from datetime import datetime, timedelta
+from typing import Dict, Optional
+
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-from typing import Optional, Dict
-import sys
-sys.path.append('src')
+import streamlit as st
 
-from data_client import LandTendersClient, generate_sample_data, normalize_hebrew_columns
+from config import (
+    CACHE_TTL,
+    CLOSING_SOON_DAYS,
+    DATA_DIR,
+    DEFAULT_FETCH_DELAY,
+    DEFAULT_FETCH_WORKERS,
+    DOCUMENT_DOWNLOAD_API,
+    NON_ACTIVE_STATUSES,
+    PROJECT_ROOT,
+    RMI_SITE_URL,
+)
+from data_client import LandTendersClient, generate_sample_data
+
+# ── Logging setup ─────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 
 # ============================================================================
-# PAGE CONFIG
+# PAGE CONFIG & STYLING
 # ============================================================================
 
 st.set_page_config(
-    page_title="מכרזי קרקע - Dashboard",
+    page_title="מכרזים",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for RTL support
+# ── FIX: Load ALL Material fonts (Icons + Symbols) so dataframe sort arrows render as icons ──
+st.markdown("""
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+""", unsafe_allow_html=True)
+
+
 st.markdown("""
 <style>
-    .rtl-text {
+    /* ── Global RTL ── */
+    html, body, [data-testid="stAppViewContainer"], .main .block-container {
         direction: rtl;
         text-align: right;
     }
-    .metric-card {
-        background-color: #f0f2f6;
-        border-radius: 10px;
-        padding: 20px;
-        text-align: center;
+
+    /* ── CRITICAL: Hide ALL Streamlit keyboard/input instruction overlays ── */
+    [data-testid*="nstruction"],
+    [class*="nstruction"],
+    [class*="InputInstruction"],
+    [data-testid="InputInstructions"],
+    [data-testid="StyledThumbValue"],
+    div[class*="InputInstruction"],
+    div[class*="instruction"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        overflow: hidden !important;
+        position: absolute !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
     }
-    .stMetric > div {
+
+    /* ── Fix bidirectional text (Hebrew + numbers mix) ── */
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary span,
+    .streamlit-expanderHeader,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stText"],
+    [data-testid="stCaptionContainer"],
+    p, span, label, li {
+        unicode-bidi: plaintext;
+    }
+
+    /* Keep LTR for code / numbers where needed */
+    code, pre, [data-testid="stMetricValue"] { direction: ltr; }
+
+    /* ── Horizon Design Tokens ── */
+    :root {
+        --horizon-bg-main: #F4F7FE;
+        --horizon-bg-card: #FFFFFF;
+        --horizon-primary: #4318FF;
+        --horizon-text-heading: #2B3674;
+        --horizon-text-secondary: #A3AED0;
+    }
+
+    /* ── Typography & Foundation ── */
+    html, body, [class*="st-"], [data-testid="stAppViewContainer"] {
+        font-family: 'DM Sans', sans-serif !important;
+        background-color: var(--horizon-bg-main) !important;
+        color: var(--horizon-text-heading);
+    }
+
+    h1, h2, h3, h4, h5, h6, .stTabs button {
+        font-family: 'DM Sans', sans-serif !important;
+        color: var(--horizon-text-heading) !important;
+    }
+
+    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+
+    /* ── Sort Icon Fix: Force Font & Align ── */
+    [data-testid="stIconMaterial"] {
+        font-family: 'Material Icons' !important;
+        font-weight: normal;
+        font-style: normal;
+        font-size: 18px !important;
+        visibility: visible !important;
+        line-height: 1;
+        direction: ltr;
+        float: left !important;
+    }
+
+    /* ── Metric Cards (Horizon Style) ── */
+    [data-testid="stMetric"] {
+        background-color: var(--horizon-bg-card) !important;
+        border-radius: 20px !important;
+        border: none !important;
+        box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.12) !important;
+        padding: 20px !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: var(--horizon-text-heading) !important;
+        font-weight: 700 !important;
+        font-size: 26px !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: var(--horizon-text-secondary) !important;
+        font-weight: 500 !important;
+        font-size: 14px !important;
+    }
+
+    /* ── Sidebar (Horizon Style) ── */
+    section[data-testid="stSidebar"] > div {
         direction: rtl;
+        text-align: right;
+    }
+    section[data-testid="stSidebar"] {
+        background-color: var(--horizon-bg-card) !important;
+        background-image: none !important;
+        min-width: 285px !important;
+        width: 285px !important;
+        box-shadow: 1px 0px 20px rgba(0,0,0,0.02);
+    }
+
+    /* Default sidebar text */
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] label {
+        color: var(--horizon-text-secondary) !important;
+    }
+
+    /* Headers in sidebar */
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: var(--horizon-text-heading) !important;
+    }
+
+    /* Navigation/Inputs in sidebar */
+    section[data-testid="stSidebar"] .stRadio label,
+    section[data-testid="stSidebar"] .stMultiSelect label {
+        color: var(--horizon-text-secondary) !important;
+        font-weight: 500;
+    }
+
+    /* ── Tables (Horizon Borderless) ── */
+    [data-testid="stDataFrame"], .stDataFrame {
+        border: none !important;
+    }
+
+    /* ── Buttons (Horizon Pill) ── */
+    .stButton button {
+        background-color: var(--horizon-primary) !important;
+        color: #FFFFFF !important;
+        border-radius: 20px !important;
+        border: none !important;
+        padding: 10px 24px !important;
+        font-weight: 500 !important;
+        box-shadow: 0px 4px 10px rgba(67, 24, 255, 0.2) !important;
+        transition: all 0.2s ease-in-out;
+    }
+    .stButton button:hover {
+        box-shadow: 0px 8px 16px rgba(67, 24, 255, 0.3) !important;
+        transform: translateY(-1px);
+    }
+
+    /* ── Chart Titles ── */
+    .pie-title {
+        font-family: 'DM Sans', sans-serif !important;
+        color: var(--horizon-text-heading) !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        margin-bottom: 10px !important;
+        text-align: center !important;
+    }
+
+    /* ── Pill-style Radio Buttons (Main Area) ── */
+    div[role="radiogroup"] {
+        background-color: #FFFFFF;
+        padding: 4px;
+        border-radius: 12px;
+        display: inline-flex;
+        border: 1px solid #E0E5F2;
+    }
+    div[role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+    div[role="radiogroup"] label {
+        padding: 6px 16px !important;
+        border-radius: 8px !important;
+        margin: 0 !important;
+        transition: all 0.2s;
+    }
+    div[role="radiogroup"] label:hover {
+        background-color: #F4F7FE;
+    }
+
+    /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
+    [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="collapsedControl"] button,
+    button[kind="header"] {
+        border: none !important;
+        background: transparent !important;
+    }
+    [data-testid="stSidebarCollapseButton"] button span,
+    [data-testid="collapsedControl"] button span,
+    button[kind="header"] span {
+        display: none !important;
+    }
+
+    /* Collapsed state (Hamburger) */
+    [data-testid="collapsedControl"] button::after,
+    button[kind="header"]::after {
+        content: "☰";
+        font-size: 1.8rem;
+        color: #1a1a2e;
+        display: block;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    /* Expanded state (Close X) */
+    [data-testid="stSidebarCollapseButton"] button::after {
+        content: "✕";
+        font-size: 1.5rem;
+        color: #b8c4d4;
+        display: block;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    /* ── Expander Arrow Fix (Hide arrow, keep clickable) ── */
+    .streamlit-expanderHeader svg,
+    .streamlit-expanderHeader span[data-testid="stExpanderToggleIcon"] {
+        display: none !important;
+    }
+    .streamlit-expanderHeader {
+        padding-right: 0px !important;
+    }
+    /* ── Sidebar custom header ── */
+    .sidebar-header {
+        background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+        border-radius: 12px;
+        padding: 20px 16px;
+        text-align: center;
+        margin-bottom: 12px;
+    }
+    .sidebar-header h2 {
+        color: #ffffff !important;
+        font-size: 1.4rem;
+        margin: 0;
+        text-align: center !important;
+    }
+    .sidebar-header p {
+        color: #b8c4d4 !important;
+        font-size: 0.85rem;
+        margin: 6px 0 0 0;
+        text-align: center !important;
+    }
+
+    /* ── New tenders highlight table ── */
+    .new-tenders-card {
+        background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+        border: 1px solid #a5d6a7;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    /* ── Expander styling ── */
+    .streamlit-expanderHeader {
+        font-weight: 600;
+        direction: rtl;
+        text-align: right;
+    }
+    [data-testid="stExpander"] details {
+        direction: rtl;
+    }
+
+    /* ── Headers RTL with proper spacing ── */
+    h1, h2, h3, h4, h5, h6 {
+        direction: rtl;
+        text-align: right;
+        unicode-bidi: plaintext;
+    }
+    h2, h3 {
+        margin-top: 0.8rem;
+        margin-bottom: 0.6rem;
+    }
+    h4, h5, h6 {
+        margin-top: 0.5rem;
+        margin-bottom: 0.4rem;
+    }
+
+    /* ── Prevent text overflow globally ── */
+    .detail-field {
+        word-break: break-word;
+        overflow-wrap: break-word;
+        line-height: 1.6;
+        font-size: 0.95rem;
+        direction: rtl;
+        unicode-bidi: plaintext;
+    }
+    .detail-field strong { color: #1a1a2e; }
+
+    /* ── Column containers: prevent clipping ── */
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        min-width: 0;
+        overflow: visible;
+    }
+    [data-testid="stHorizontalBlock"] {
+        gap: 1rem;
+    }
+
+    /* ── Plotly chart containers: no overflow ── */
+    .stPlotlyChart {
+        overflow: visible !important;
+    }
+    .js-plotly-plot, .plot-container {
+        overflow: visible !important;
+    }
+
+    /* ── Divider colour ── */
+    hr { border-color: #e0e3eb !important; }
+
+    /* ── Subheader spacing fix ── */
+    [data-testid="stSubheader"] {
+        padding-bottom: 0.3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* ── Radio buttons inline fix ── */
+    .stRadio > div {
+        gap: 0.3rem;
+    }
+    .stRadio label {
+        font-size: 0.85rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ── JavaScript: Force-remove keyboard instruction overlays from DOM ──────
+st.markdown("""
+<script>
+(function() {
+    function removeInstructions() {
+        document.querySelectorAll('[data-testid*="nstruction"]').forEach(el => el.remove());
+        document.querySelectorAll('[data-testid="StyledThumbValue"]').forEach(el => el.remove());
+        document.querySelectorAll('[class*="nstruction"]').forEach(el => el.remove());
+        document.querySelectorAll('[class*="InputInstruction"]').forEach(el => el.remove());
+        document.querySelectorAll('div, span, p, small').forEach(el => {
+            const t = (el.textContent || '').trim().toLowerCase();
+            if (t && (t.includes('keyboard') || t.includes('press ') ||
+                t === 'double_arrow_left' || t === 'double_arrow_right' ||
+                t.includes('\u2318') || t.includes('ctrl'))) {
+                if (el.querySelectorAll('input, select, textarea, button, table, [data-testid="stDataFrame"]').length === 0) {
+                    el.style.cssText = 'display:none!important;height:0!important;overflow:hidden!important;visibility:hidden!important;';
+                }
+            }
+        });
+    }
+    removeInstructions();
+    const observer = new MutationObserver(removeInstructions);
+    observer.observe(document.body, { childList: true, subtree: true });
+    [300, 800, 1500, 3000, 5000, 8000].forEach(ms => setTimeout(removeInstructions, ms));
+})();
+</script>
+""", unsafe_allow_html=True)
+
 
 # ============================================================================
 # DATA LOADING
 # ============================================================================
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+@st.cache_data(ttl=CACHE_TTL)
 def load_data(data_source: str = "latest_file") -> pd.DataFrame:
     """Load tender data from API, JSON file, or sample data."""
-    client = LandTendersClient(data_dir=".")  # Root directory for JSON files
+    client = LandTendersClient(data_dir=str(PROJECT_ROOT))
 
     if data_source == "sample":
         return generate_sample_data()
@@ -63,123 +428,112 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
         df = client.load_latest_json_snapshot()
         if df is not None:
             return df
-        st.warning("⚠️ No JSON files found, fetching from API...")
+        logger.warning("No JSON files found, fetching from API")
+        st.warning("לא נמצאו קבצי JSON, טוען מהAPI...")
 
-    # Fetch fresh from API
     df = client.fetch_tenders_list()
     if df is None:
-        st.error("❌ Could not fetch from API. Using sample data.")
+        logger.error("Could not fetch from API, falling back to sample data")
+        st.error("לא ניתן לטעון מהAPI. מציג נתונים לדוגמה.")
         return generate_sample_data()
 
-    # Save for future use
     client.save_json_snapshot(df)
     return df
 
-@st.cache_data(ttl=3600)
+
+@st.cache_data(ttl=CACHE_TTL)
 def load_tender_details(tender_id: int) -> Optional[Dict]:
     """Load tender details with caching."""
-    client = LandTendersClient(data_dir="data")
+    client = LandTendersClient(data_dir=str(DATA_DIR))
     return client.get_tender_details_cached(tender_id)
+
+
+def build_document_url(doc: Dict) -> str:
+    """Build a direct download URL for a tender document."""
+    params = {
+        "michrazId": doc.get("MichrazID", 0),
+        "rowId": doc.get("RowID", 0),
+        "size": doc.get("Size") or 0,
+        "typePirsum": doc.get("PirsumType", 0),
+        "fileName": doc.get("DocName", "document.pdf"),
+        "teur": doc.get("Teur", ""),
+        "fileType": doc.get("FileType", "application/pdf"),
+    }
+    return f"{DOCUMENT_DOWNLOAD_API}?{urllib.parse.urlencode(params)}"
+
 
 # ============================================================================
 # SIDEBAR
 # ============================================================================
 
 with st.sidebar:
-    st.image("https://www.gov.il/BlobFolder/generalpage/land-tenders/he/Michrazim_land-tenders_banner.jpg", 
-             use_container_width=True)
-    st.title("🏗️ מכרזי קרקע")
+    st.markdown("""
+    <div class="sidebar-header">
+        <h2>🏗️ מכרזי קרקע</h2>
+        <p>רשות מקרקעי ישראל</p>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
 
-    # Data source selector
-    data_source = st.radio(
-        "Data Source",
-        ["latest_file", "live_api", "sample"],
-        format_func=lambda x: {
-            "latest_file": "📂 Latest JSON File",
-            "live_api": "🌐 Live API",
-            "sample": "🧪 Sample Data"
-        }[x],
-        index=0,  # Default to latest file
-        help="Choose data source: Latest JSON file (default), Live API, or Sample data for testing"
-    )
-
-    # Load data
+    data_source = "latest_file"
     df = load_data(data_source=data_source)
-    
-    st.markdown("### 🔍 Filters")
+    today = datetime.now()
 
-    # Region filter - multiselect
+    st.markdown("---")
+
+    # ── Filters ──────────────────────────────────────────────────────────
+    st.markdown("### 🔍 סינון")
+
+    # Region filter
     if 'region' in df.columns:
         regions = sorted(df['region'].dropna().unique().tolist())
         selected_regions = st.multiselect(
-            "Regions / אזורים",
+            "אזור / מחוז",
             regions,
             default=[],
-            placeholder="Select regions (leave empty for all)"
+            placeholder="בחר אזורים (ריק = הכל)"
         )
     else:
         selected_regions = []
 
-    # City filter - CASCADE from region selection
+    # City filter — cascades from region
     if selected_regions:
-        # Filter cities to only those in selected regions
-        cities_in_selected_regions = df[df['region'].isin(selected_regions)]['city'].dropna().unique()
-        cities = sorted(cities_in_selected_regions.tolist())
-        placeholder_text = f"Select cities in selected region(s) ({len(cities)} available)"
+        cities_in_regions = df[df['region'].isin(selected_regions)]['city'].dropna().unique()
+        cities = sorted(cities_in_regions.tolist())
+        city_placeholder = f"ערים באזורים שנבחרו ({len(cities)})"
     else:
-        # No region selected - show all cities
         cities = sorted(df['city'].dropna().unique().tolist())
-        placeholder_text = "Select cities (leave empty for all)"
+        city_placeholder = "בחר ערים (ריק = הכל)"
 
     selected_cities = st.multiselect(
-        "Cities / ערים",
+        "עיר / יישוב",
         cities,
         default=[],
-        placeholder=placeholder_text
+        placeholder=city_placeholder
     )
 
-    # Tender type filter - multiselect
+    # Tender type filter
     types = sorted(df['tender_type'].dropna().unique().tolist())
     selected_types = st.multiselect(
-        "Types / סוגי מכרז",
+        "סוג מכרז",
         types,
         default=[],
-        placeholder="Select types (leave empty for all)"
+        placeholder="בחר סוגים (ריק = הכל)"
     )
 
-    # Status filter - multiselect
+    # Status filter
     statuses = sorted(df['status'].dropna().unique().tolist())
     selected_statuses = st.multiselect(
-        "Status / סטטוס",
+        "סטטוס",
         statuses,
         default=[],
-        placeholder="Select statuses (leave empty for all)"
+        placeholder="בחר סטטוסים (ריק = הכל)"
     )
-    
-    # Date range filter
-    st.markdown("#### 📅 Date Range")
 
-    # Use deadline instead of publish_date (more reliable in the data)
-    valid_dates = df['deadline'].dropna()
-
-    if len(valid_dates) > 0:
-        min_date = valid_dates.min()
-        max_date = valid_dates.max()
-
-        date_range = st.date_input(
-            "Deadline Range",
-            value=(min_date.date(), max_date.date()),
-            min_value=min_date.date(),
-            max_value=max_date.date()
-        )
-    else:
-        date_range = None
-        st.info("No valid dates available for filtering")
-    
     st.markdown("---")
-    st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    st.caption(f"Total records: {len(df)}")
+    st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
+    st.caption(f"סה\"כ רשומות: {len(df):,}")
+
 
 # ============================================================================
 # APPLY FILTERS
@@ -187,335 +541,546 @@ with st.sidebar:
 
 filtered_df = df.copy()
 
-# Apply region filter (only if regions are selected)
 if selected_regions:
     filtered_df = filtered_df[filtered_df['region'].isin(selected_regions)]
 
-# Apply city filter (only if cities are selected)
 if selected_cities:
     filtered_df = filtered_df[filtered_df['city'].isin(selected_cities)]
 
-# Apply tender type filter (only if types are selected)
 if selected_types:
     filtered_df = filtered_df[filtered_df['tender_type'].isin(selected_types)]
 
-# Apply status filter (only if statuses are selected)
 if selected_statuses:
     filtered_df = filtered_df[filtered_df['status'].isin(selected_statuses)]
 
-# Apply date range filter
-if date_range and len(date_range) == 2:
-    start_date, end_date = date_range
-    filtered_df = filtered_df[
-        (filtered_df['deadline'].notna()) &
-        (filtered_df['deadline'].dt.date >= start_date) &
-        (filtered_df['deadline'].dt.date <= end_date)
-    ]
+# Default active-only filter (unless user explicitly selected statuses)
+if not selected_statuses:
+    filtered_df = filtered_df[~filtered_df['status'].isin(NON_ACTIVE_STATUSES)]
 
 # ============================================================================
-# MAIN DASHBOARD
+# SECTION 0: NEW TENDERS THIS WEEK (since last Sunday)
 # ============================================================================
 
-st.title("📊 Israel Land Tenders Dashboard")
-st.markdown("Track and analyze land tenders from רשות מקרקעי ישראל")
 
-# KPI Metrics Row
+def _last_sunday(ref_date: datetime) -> datetime:
+    """Return the most recent Sunday (00:00) on or before ref_date."""
+    days_since_sunday = ref_date.weekday() + 1
+    if days_since_sunday == 7:
+        days_since_sunday = 0
+    return (ref_date - timedelta(days=days_since_sunday)).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+
+
+sunday_cutoff = _last_sunday(today)
+
+# Filter: brochure available + still open
+new_tenders_df = filtered_df[
+    (filtered_df['published_booklet'] == True) &
+    (filtered_df['deadline'].notna()) &
+    (filtered_df['deadline'] >= today)
+].copy()
+
+# Use publish_date as the "new since" indicator
+date_col = None
+for candidate in ['created_date', 'publish_date', 'published_date']:
+    if candidate in new_tenders_df.columns:
+        date_col = candidate
+        break
+
+if date_col:
+    new_tenders_df = new_tenders_df[new_tenders_df[date_col] >= sunday_cutoff]
+
+st.title("🏗️ מכרזים")
+st.caption(f"מעקב אחר מכרזי קרקע של רשות מקרקעי ישראל  •  מעודכן: {today.strftime('%d/%m/%Y')}")
+
+if len(new_tenders_df) > 0:
+    st.markdown('<div class="new-tenders-card">', unsafe_allow_html=True)
+    st.markdown(f"### 🆕 מכרזים חדשים מיום ראשון ({sunday_cutoff.strftime('%d/%m')})")
+    new_display = new_tenders_df[[
+        'tender_name', 'city', 'units', 'tender_type', 'deadline'
+    ]].copy()
+    new_display.columns = ['שם מכרז', 'עיר', 'יח"ד', 'סוג', 'מועד אחרון']
+    new_display['מועד אחרון'] = pd.to_datetime(new_display['מועד אחרון']).dt.strftime('%d/%m/%Y')
+    new_display = new_display.sort_values('יח"ד', ascending=False)
+    st.dataframe(
+        new_display,
+        use_container_width=True,
+        hide_index=True,
+        height=min(38 * len(new_display) + 40, 250),
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info(f"אין מכרזים חדשים עם חוברת מאז יום ראשון ({sunday_cutoff.strftime('%d/%m')})")
+
+st.markdown("---")
+
+# ============================================================================
+# SECTION 1: EXECUTIVE KPIs
+# ============================================================================
+
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    active_tenders = len(filtered_df[filtered_df['status'] == 'פעיל'])
-    st.metric("🟢 Active Tenders", active_tenders)
+    st.metric("🟢 מכרזים פתוחים", f"{len(filtered_df):,}")
 
 with col2:
-    total_units = filtered_df['units'].sum()
-    st.metric("🏠 Total Units", f"{int(total_units):,}")
+    total_units = int(filtered_df['units'].sum())
+    st.metric("🏠 יח\"ד", f"{total_units:,}")
 
 with col3:
     unique_cities = filtered_df['city'].nunique()
-    st.metric("🏙️ Cities", f"{unique_cities}")
+    st.metric("🏙️ ערים", f"{unique_cities}")
 
 with col4:
-    # Tenders closing soon (next 14 days)
-    today = datetime.now()
     closing_soon = len(filtered_df[
-        (filtered_df['deadline'] >= today) & 
-        (filtered_df['deadline'] <= today + timedelta(days=14))
+        (filtered_df['deadline'].notna()) &
+        (filtered_df['deadline'] >= today) &
+        (filtered_df['deadline'] <= today + timedelta(days=CLOSING_SOON_DAYS))
     ])
-    st.metric("⏰ Closing Soon (14d)", closing_soon)
+    st.metric(f"⏰ נסגרים ב-{CLOSING_SOON_DAYS} יום", closing_soon)
 
 st.markdown("---")
 
+
 # ============================================================================
-# CHARTS ROW 1: Distribution by City & Type
+# SECTION 2: THREE PIE CHARTS (side by side)
 # ============================================================================
 
-col1, col2 = st.columns(2)
+PLOTLY_FONT = dict(family="DM Sans, sans-serif", size=12, color="#2B3674")
+PLOTLY_TRANSPARENT_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
-with col1:
-    st.subheader("📍 Tenders by City")
-    city_counts = filtered_df['city'].value_counts().head(10)
+col_pie1, col_pie2, col_pie3 = st.columns(3)
 
-    if len(city_counts) > 0:
-        fig_city = px.bar(
-            x=city_counts.values,
-            y=city_counts.index,
-            orientation='h',
-            labels={'x': 'Number of Tenders', 'y': 'City'},
-            color=city_counts.values,
-            color_continuous_scale='Blues'
+# ── Pie Chart 1: Brochure Availability ────────────────────────────────────
+with col_pie1:
+    st.markdown('<p class="pie-title">📋 חוברת מכרז</p>', unsafe_allow_html=True)
+
+    if 'published_booklet' in filtered_df.columns and len(filtered_df) > 0:
+        booklet_counts = filtered_df['published_booklet'].value_counts()
+        available = int(booklet_counts.get(True, 0))
+        not_available = int(booklet_counts.get(False, 0))
+
+        fig_booklet = px.pie(
+            values=[available, not_available],
+            names=["חוברת זמינה", "חוברת לא זמינה"],
+            color_discrete_sequence=["#4318FF", "#E9EDF7"],
+            hole=0.55,
         )
-        fig_city.update_layout(showlegend=False, height=400)
-        st.plotly_chart(fig_city, use_container_width=True)
-    else:
-        st.info("No data available for the selected filters")
-
-with col2:
-    st.subheader("🏷️ Tenders by Type")
-    type_counts = filtered_df['tender_type'].value_counts()
-
-    if len(type_counts) > 0:
-        fig_type = px.pie(
-            values=type_counts.values,
-            names=type_counts.index,
-            hole=0.4,
-            color_discrete_sequence=px.colors.qualitative.Set2
+        fig_booklet.update_traces(
+            textinfo='value',
+            textposition='inside',
+            textfont_size=14,
+            hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
         )
-        fig_type.update_layout(height=400)
-        st.plotly_chart(fig_type, use_container_width=True)
-    else:
-        st.info("No data available for the selected filters")
-
-# ============================================================================
-# CHARTS ROW 2: Timeline & Price Analysis
-# ============================================================================
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("📈 Tenders Over Time")
-    # Group by publish month
-    timeline_df = filtered_df.copy()
-
-    if len(timeline_df) > 0 and timeline_df['publish_date'].notna().any():
-        timeline_df['month'] = timeline_df['publish_date'].dt.to_period('M').astype(str)
-        monthly_counts = timeline_df.groupby('month').size().reset_index(name='count')
-
-        fig_timeline = px.line(
-            monthly_counts,
-            x='month',
-            y='count',
-            markers=True,
-            labels={'month': 'Month', 'count': 'Number of Tenders'}
+        fig_booklet.update_layout(
+            height=300,
+            margin=dict(t=30, b=50, l=20, r=20),
+            legend=dict(
+                orientation="h", yanchor="top", y=-0.08,
+                xanchor="center", x=0.5, font=dict(size=11),
+            ),
+            showlegend=True,
+            font=PLOTLY_FONT,
+            uniformtext_minsize=10, uniformtext_mode='hide',
+            **PLOTLY_TRANSPARENT_BG,
         )
-        fig_timeline.update_layout(height=400)
-        st.plotly_chart(fig_timeline, use_container_width=True)
+        st.plotly_chart(fig_booklet, use_container_width=True, key="pie_booklet")
     else:
-        st.info("No data available for the selected filters")
+        st.info("אין נתוני חוברת מכרז")
 
-with col2:
-    st.subheader("🏠 Housing Units by Type")
-    # Group by tender type
-    units_by_type = filtered_df.groupby('tender_type')['units'].sum().reset_index()
-    units_by_type = units_by_type[units_by_type['units'] > 0]  # Filter out zero units
+# ── Pie Chart 2: Brochure-only tenders by District + Urgency Toggle ──────
+with col_pie2:
+    st.markdown('<p class="pie-title">📋🗺️ חוברות לפי מחוז</p>', unsafe_allow_html=True)
 
-    if not units_by_type.empty:
-        fig_units = px.bar(
-            units_by_type,
-            x='tender_type',
-            y='units',
-            labels={'units': 'Total Units', 'tender_type': 'Tender Type'},
-            color_discrete_sequence=['#1f77b4']
+    pie2_days_options = {"1W": 7, "2W": 14, "4W": 28}
+    urgency_pie2 = st.session_state.get('urgency_pie2', '4W')
+    pie2_days = pie2_days_options.get(urgency_pie2, 28)
+
+    pie2_df = filtered_df[filtered_df['published_booklet'] == True].copy()
+    pie2_cutoff = today + timedelta(days=pie2_days)
+    pie2_df = pie2_df[
+        (pie2_df['deadline'].notna()) &
+        (pie2_df['deadline'] >= today) &
+        (pie2_df['deadline'] <= pie2_cutoff)
+    ]
+
+    if 'region' in pie2_df.columns and len(pie2_df) > 0:
+        brochure_by_region = (
+            pie2_df.groupby('region')
+            .size()
+            .reset_index(name='count')
+            .sort_values('count', ascending=False)
         )
-        fig_units.update_layout(height=400)
-        st.plotly_chart(fig_units, use_container_width=True)
+        if not brochure_by_region.empty:
+            fig_brochure_region = px.pie(
+                brochure_by_region,
+                values='count',
+                names='region',
+                hole=0.55,
+                color_discrete_sequence=px.colors.sequential.Blues_r,
+            )
+            fig_brochure_region.update_traces(
+                textinfo='value',
+                textposition='inside',
+                textfont_size=14,
+                hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
+            )
+            fig_brochure_region.update_layout(
+                height=300,
+                margin=dict(t=30, b=20, l=10, r=10),
+                showlegend=False,
+                uniformtext_minsize=10, uniformtext_mode='hide',
+                font=dict(family="DM Sans, sans-serif", size=11, color="#2B3674"),
+                **PLOTLY_TRANSPARENT_BG,
+            )
+            st.plotly_chart(fig_brochure_region, use_container_width=True, key="pie_brochure_region")
+        else:
+            st.info("אין מכרזים עם חוברת בטווח שנבחר")
     else:
-        st.info("No units data available for the selected filters")
+        st.info("אין נתונים")
 
-# ============================================================================
-# UPCOMING DEADLINES
-# ============================================================================
+    st.radio(
+        "חלון סגירה:",
+        list(pie2_days_options.keys()),
+        index=2,
+        horizontal=True,
+        key="urgency_pie2",
+    )
+
+# ── Pie Chart 3: All tenders by District ──────────────────────────────────
+with col_pie3:
+    st.markdown('<p class="pie-title">מכרזים פעילים</p>', unsafe_allow_html=True)
+
+    if 'region' in filtered_df.columns and len(filtered_df) > 0:
+        tenders_by_region = (
+            filtered_df.groupby('region')
+            .size()
+            .reset_index(name='count')
+            .sort_values('count', ascending=False)
+        )
+
+        if not tenders_by_region.empty:
+            fig_region = px.pie(
+                tenders_by_region,
+                values='count',
+                names='region',
+                hole=0.55,
+                color_discrete_sequence=px.colors.sequential.Blues_r,
+            )
+            fig_region.update_traces(
+                textinfo='value',
+                textposition='inside',
+                textfont_size=14,
+                hovertemplate='%{label}: %{value} מכרזים (%{percent})<extra></extra>',
+            )
+            fig_region.update_layout(
+                height=300,
+                margin=dict(t=30, b=20, l=10, r=10),
+                showlegend=False,
+                uniformtext_minsize=10, uniformtext_mode='hide',
+                font=dict(family="DM Sans, sans-serif", size=11, color="#2B3674"),
+                **PLOTLY_TRANSPARENT_BG,
+            )
+            st.plotly_chart(fig_region, use_container_width=True, key="pie_region_units")
+
+            with st.expander("📋 פירוט לפי מחוז"):
+                for region_name in tenders_by_region['region'].tolist():
+                    region_subset = filtered_df[filtered_df['region'] == region_name]
+                    region_units = int(region_subset['units'].sum())
+                    with st.expander(f"{region_name} — {region_units:,} יח\"ד ({len(region_subset)} מכרזים)"):
+                        detail = region_subset.nlargest(8, 'units')[['tender_name', 'city', 'units', 'tender_type']].copy()
+                        detail.columns = ['שם מכרז', 'עיר', 'יח"ד', 'סוג']
+                        st.dataframe(detail, use_container_width=True, hide_index=True, height=min(38 * len(detail) + 40, 200))
+        else:
+            st.info("אין נתוני יח\"ד להצגה")
+    else:
+        st.info("אין נתוני אזור")
 
 st.markdown("---")
-st.subheader("⏰ Upcoming Deadlines")
 
-today = datetime.now()
+
+# ============================================================================
+# SECTION 3: UPCOMING DEADLINES TABLE (enhanced)
+# ============================================================================
+
+st.subheader("⏰ מכרזים קרובים לסגירה")
+
+EXCLUDED_STATUSES = {"בוטל", "נסגר"}
 upcoming = filtered_df[
-    (filtered_df['deadline'] >= today) & 
-    (filtered_df['status'] == 'פעיל')
-].sort_values('deadline').head(10)
+    (filtered_df['deadline'].notna()) &
+    (filtered_df['deadline'] >= today) &
+    (~filtered_df['status'].isin(EXCLUDED_STATUSES))
+].sort_values('deadline')
 
 if len(upcoming) > 0:
-    upcoming_display = upcoming[['tender_id', 'city', 'tender_type', 'units', 'deadline']].copy()
+    upcoming_display = upcoming[[
+        'tender_id', 'tender_name', 'city', 'region', 'tender_type',
+        'purpose', 'units', 'deadline', 'published_booklet'
+    ]].copy()
+
     upcoming_display['days_left'] = (upcoming_display['deadline'] - today).dt.days
-    upcoming_display['deadline'] = upcoming_display['deadline'].dt.strftime('%Y-%m-%d')
-    
-    # Color code by urgency
-    def urgency_color(days):
+
+    def urgency_indicator(days: int) -> str:
+        """Return urgency emoji based on days remaining."""
         if days <= 7:
             return '🔴'
         elif days <= 14:
             return '🟡'
-        else:
-            return '🟢'
-    
-    upcoming_display['urgency'] = upcoming_display['days_left'].apply(urgency_color)
-    upcoming_display = upcoming_display[['urgency', 'tender_id', 'city', 'tender_type', 'units', 'deadline', 'days_left']]
-    
+        return '🟢'
+
+    upcoming_display['urgency'] = upcoming_display['days_left'].apply(urgency_indicator)
+    upcoming_display['booklet'] = upcoming_display['published_booklet'].apply(
+        lambda x: '✅' if x else '❌'
+    )
+
+    display_upcoming = upcoming_display[[
+        'urgency', 'tender_id', 'tender_name', 'city', 'region',
+        'tender_type', 'purpose', 'units', 'deadline', 'days_left', 'booklet'
+    ]].copy()
+    display_upcoming['deadline'] = display_upcoming['deadline'].dt.strftime('%Y-%m-%d')
+
+    st.info(f"מציג **{len(display_upcoming)}** מכרזים עם מועד סגירה עתידי")
+
     st.dataframe(
-        upcoming_display,
+        display_upcoming,
         column_config={
-            "urgency": st.column_config.TextColumn("", width=30),
-            "tender_id": "Tender ID",
-            "city": "City",
-            "tender_type": "Type",
-            "units": "Units",
-            "deadline": "Deadline",
-            "days_left": st.column_config.NumberColumn("Days Left", format="%d")
+            "urgency": st.column_config.TextColumn("", width="small"),
+            "tender_id": st.column_config.NumberColumn("מס' מכרז", format="%d"),
+            "tender_name": st.column_config.TextColumn("שם", width="medium"),
+            "city": st.column_config.TextColumn("עיר", width="medium"),
+            "region": st.column_config.TextColumn("מחוז", width="small"),
+            "tender_type": st.column_config.TextColumn("סוג", width="medium"),
+            "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
+            "units": st.column_config.NumberColumn("יח\"ד", format="%d"),
+            "deadline": st.column_config.TextColumn("מועד סגירה"),
+            "days_left": st.column_config.NumberColumn("ימים", format="%d"),
+            "booklet": st.column_config.TextColumn("חוברת", width="small"),
         },
         hide_index=True,
-        use_container_width=True
+        use_container_width=True,
     )
 else:
-    st.info("No upcoming deadlines found.")
-
-# ============================================================================
-# FULL DATA TABLE
-# ============================================================================
+    st.info("אין מכרזים קרובים לסגירה בטווח שנבחר.")
 
 st.markdown("---")
-st.subheader("📋 All Tenders Data")
 
-# Column selection
-all_cols = filtered_df.columns.tolist()
-default_cols = ['tender_id', 'tender_name', 'city', 'tender_type', 'units', 'deadline', 'status']
-display_cols = [c for c in default_cols if c in all_cols]
 
-selected_cols = st.multiselect("Select columns to display", all_cols, default=display_cols)
+# ============================================================================
+# SECTION 4: FULL DATA EXPLORER
+# ============================================================================
 
-# Add search functionality
-col1, col2 = st.columns([3, 1])
-with col1:
-    search_term = st.text_input("🔍 Search in all columns", placeholder="Type to search...")
-with col2:
-    st.write("")  # Spacing
-    show_all = st.checkbox("Show all columns", value=False)
+st.subheader("📋 כל המכרזים")
 
-if show_all:
-    selected_cols = all_cols
+COLUMN_LABELS = {
+    "tender_id": "מס' מכרז",
+    "tender_name": "שם מכרז",
+    "city": "עיר",
+    "region": "מחוז",
+    "tender_type": "סוג מכרז",
+    "purpose": "ייעוד",
+    "units": "יח\"ד",
+    "deadline": "מועד סגירה",
+    "publish_date": "תאריך פרסום",
+    "committee_date": "תאריך ועדה",
+    "status": "סטטוס",
+    "published_booklet": "חוברת מכרז",
+    "location": "מיקום",
+    "targeted": "מכוון",
+}
+
+HIDDEN_COLUMNS = {
+    'city_code', 'status_code', 'purpose_code', 'tender_type_code',
+    'KodMerchav', 'KhalYaadRashi', 'PirsumDate', 'ChoveretUpdateDate',
+    'area_sqm', 'min_price', 'gush', 'helka',
+}
+
+user_cols = [c for c in filtered_df.columns if c not in HIDDEN_COLUMNS]
+default_cols = [
+    'tender_id', 'tender_name', 'city', 'region', 'tender_type',
+    'purpose', 'units', 'deadline', 'status', 'published_booklet'
+]
+display_cols = [c for c in default_cols if c in user_cols]
+
+selected_cols = st.multiselect(
+    "בחר עמודות להצגה",
+    user_cols,
+    default=display_cols,
+    format_func=lambda c: COLUMN_LABELS.get(c, c),
+)
+
+# ── Per-column filters ──────────────────────────────────────────────────
+st.markdown("##### סינון לפי עמודה")
+filter_cols = st.columns(4)
+
+table_df = filtered_df.copy()
+
+with filter_cols[0]:
+    if 'city' in table_df.columns:
+        city_vals = sorted(table_df['city'].dropna().unique().tolist())
+        tbl_city = st.multiselect(
+            "עיר", city_vals, default=[], key="tbl_city",
+            placeholder="הכל",
+        )
+        if tbl_city:
+            table_df = table_df[table_df['city'].isin(tbl_city)]
+
+with filter_cols[1]:
+    if 'region' in table_df.columns:
+        region_vals = sorted(table_df['region'].dropna().unique().tolist())
+        tbl_region = st.multiselect(
+            "מחוז", region_vals, default=[], key="tbl_region",
+            placeholder="הכל",
+        )
+        if tbl_region:
+            table_df = table_df[table_df['region'].isin(tbl_region)]
+
+with filter_cols[2]:
+    if 'purpose' in table_df.columns:
+        purpose_vals = sorted(table_df['purpose'].dropna().unique().tolist())
+        tbl_purpose = st.multiselect(
+            "ייעוד", purpose_vals, default=[], key="tbl_purpose",
+            placeholder="הכל",
+        )
+        if tbl_purpose:
+            table_df = table_df[table_df['purpose'].isin(tbl_purpose)]
+
+with filter_cols[3]:
+    if 'status' in table_df.columns:
+        status_vals = sorted(table_df['status'].dropna().unique().tolist())
+        tbl_status = st.multiselect(
+            "סטטוס", status_vals, default=[], key="tbl_status",
+            placeholder="הכל",
+        )
+        if tbl_status:
+            table_df = table_df[table_df['status'].isin(tbl_status)]
+
+search_term = st.text_input(
+    "🔍 חיפוש חופשי", placeholder="הקלד לחיפוש בכל העמודות..."
+)
 
 if selected_cols:
-    display_df = filtered_df[selected_cols].copy()
+    display_df = table_df[selected_cols].copy()
 
-    # Apply search filter if search term provided
     if search_term:
-        # Search across all string columns
         mask = display_df.astype(str).apply(
             lambda row: row.str.contains(search_term, case=False, na=False).any(),
             axis=1
         )
         display_df = display_df[mask]
-        st.caption(f"Found {len(display_df)} records matching '{search_term}'")
 
-    # Format columns for display
+    st.caption(f"מציג {len(display_df):,} רשומות")
+
+    if 'deadline' in display_df.columns:
+        display_df = display_df.sort_values(
+            'deadline', ascending=True, na_position='last'
+        )
+
     display_df_formatted = display_df.copy()
 
-    # Convert date columns to datetime
     for col in ['publish_date', 'deadline', 'committee_date']:
         if col in display_df_formatted.columns:
-            display_df_formatted[col] = pd.to_datetime(display_df_formatted[col], errors='coerce')
+            display_df_formatted[col] = pd.to_datetime(
+                display_df_formatted[col], errors='coerce'
+            )
 
-    # Convert tender_id to string for better display
     if 'tender_id' in display_df_formatted.columns:
-        display_df_formatted['tender_id'] = display_df_formatted['tender_id'].astype(str)
+        display_df_formatted['tender_id'] = (
+            display_df_formatted['tender_id'].astype(str)
+        )
 
-    # Convert tender_name to string
-    if 'tender_name' in display_df_formatted.columns:
-        display_df_formatted['tender_name'] = display_df_formatted['tender_name'].astype(str)
-
-    # Display with data_editor for better interactivity
-    st.data_editor(
+    st.dataframe(
         display_df_formatted,
         hide_index=True,
         use_container_width=True,
-        disabled=True,  # Read-only
         column_config={
-            "tender_id": st.column_config.TextColumn("Tender ID", width="medium"),
-            "tender_name": st.column_config.TextColumn("Tender Name", width="large"),
-            "city": st.column_config.TextColumn("City", width="medium"),
-            "tender_type": st.column_config.TextColumn("Type", width="medium"),
-            "units": st.column_config.NumberColumn("Units", format="%d"),
-            "deadline": st.column_config.DateColumn("Deadline", format="YYYY-MM-DD"),
-            "publish_date": st.column_config.DateColumn("Published", format="YYYY-MM-DD"),
-            "committee_date": st.column_config.DateColumn("Committee Date", format="YYYY-MM-DD"),
-            "status": st.column_config.TextColumn("Status", width="small"),
-        }
+            "tender_id": st.column_config.TextColumn("מס' מכרז", width="medium"),
+            "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
+            "city": st.column_config.TextColumn("עיר", width="medium"),
+            "region": st.column_config.TextColumn("מחוז", width="small"),
+            "tender_type": st.column_config.TextColumn("סוג", width="medium"),
+            "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
+            "units": st.column_config.NumberColumn("יח\"ד", format="%d"),
+            "deadline": st.column_config.DateColumn("מועד סגירה", format="YYYY-MM-DD"),
+            "publish_date": st.column_config.DateColumn("תאריך פרסום", format="YYYY-MM-DD"),
+            "committee_date": st.column_config.DateColumn("תאריך ועדה", format="YYYY-MM-DD"),
+            "status": st.column_config.TextColumn("סטטוס", width="small"),
+            "published_booklet": st.column_config.CheckboxColumn("חוברת"),
+            "location": st.column_config.TextColumn("מיקום", width="medium"),
+        },
     )
 
-    # Download button
     csv = display_df.to_csv(index=False, encoding='utf-8-sig')
     st.download_button(
-        label="📥 Download CSV",
+        label="📥 הורד CSV",
         data=csv,
-        file_name=f"land_tenders_{datetime.now().strftime('%Y%m%d')}.csv",
+        file_name=f"land_tenders_{today.strftime('%Y%m%d')}.csv",
         mime="text/csv"
     )
 
-# ============================================================================
-# TENDER DETAIL VIEWER
-# ============================================================================
-
 st.markdown("---")
-st.subheader("🔍 Tender Detail Viewer")
 
-# Create columns for controls
-col1, col2, col3 = st.columns([3, 1, 1])
 
-with col1:
-    # Filter for tenders in committee review
-    committee_tenders = filtered_df[filtered_df['status'] == 'נדון בוועדת מכרזים'].copy()
+# ============================================================================
+# SECTION 5: TENDER DETAIL VIEWER
+# ============================================================================
 
-    if len(committee_tenders) == 0:
-        st.info("No tenders with status 'נדון בוועדת מכרזים' found. Adjust filters or select different status.")
-        committee_tenders = filtered_df.head(50)  # Fallback to first 50
+st.subheader("🔍 צפייה בפרטי מכרז")
 
-    # Sort by deadline descending (most recent first)
-    committee_tenders = committee_tenders.sort_values('deadline', ascending=False)
+col_select, col_refresh, col_fetch = st.columns([3, 1, 1])
 
-    # Create display labels
-    def format_tender_label(row):
-        return f"{row['tender_id']} - {row['tender_name'][:50] if pd.notna(row['tender_name']) else 'N/A'} ({row['city'][:20] if pd.notna(row['city']) else 'N/A'})"
+with col_select:
+    detail_candidates = filtered_df.copy()
+    if len(detail_candidates) == 0:
+        detail_candidates = df.head(50)
 
-    committee_tenders['display_label'] = committee_tenders.apply(format_tender_label, axis=1)
+    detail_candidates = detail_candidates.sort_values('deadline', ascending=False)
+
+    def format_tender_label(row: pd.Series) -> str:
+        """Format tender row for selectbox display."""
+        name = row['tender_name'][:50] if pd.notna(row['tender_name']) else 'N/A'
+        city = row['city'][:20] if pd.notna(row['city']) else 'N/A'
+        return f"{row['tender_id']} - {name} ({city})"
+
+    detail_candidates['display_label'] = detail_candidates.apply(format_tender_label, axis=1)
 
     selected_tender_id = st.selectbox(
-        "Select a tender to view details",
-        options=committee_tenders['tender_id'].tolist(),
-        format_func=lambda tid: committee_tenders[committee_tenders['tender_id']==tid]['display_label'].values[0]
+        "בחר מכרז לצפייה",
+        options=detail_candidates['tender_id'].tolist(),
+        format_func=lambda tid: detail_candidates[
+            detail_candidates['tender_id'] == tid
+        ]['display_label'].values[0]
     )
 
-with col2:
-    force_refresh = st.checkbox("Force refresh", value=False,
-                                help="Bypass cache and fetch latest data from API")
+with col_refresh:
+    force_refresh = st.checkbox(
+        "רענן מהAPI",
+        value=False,
+        help="עקוף מטמון וטען נתונים חדשים"
+    )
 
-with col3:
-    # Bulk fetch button
-    if st.button("📥 Fetch All", help=f"Fetch details for all {len(committee_tenders)} committee review tenders"):
-        with st.spinner(f"Fetching details for {len(committee_tenders)} tenders..."):
-            client = LandTendersClient(data_dir="data")
-            tender_ids = committee_tenders['tender_id'].tolist()
-            details_dict = client.fetch_multiple_details(tender_ids, max_workers=3, delay_seconds=1.0)
-
-            st.success(f"✅ Fetched details for {len(details_dict)} tenders! They are now cached for instant viewing.")
-            st.info(f"Cache saved to: data/details_cache/")
+with col_fetch:
+    if st.button(
+        "📥 טען הכל",
+        help=f"טען פרטים עבור {len(detail_candidates)} מכרזים"
+    ):
+        with st.spinner(f"טוען פרטים עבור {len(detail_candidates)} מכרזים..."):
+            client = LandTendersClient(data_dir=str(DATA_DIR))
+            tender_ids = detail_candidates['tender_id'].tolist()
+            details_dict = client.fetch_multiple_details(
+                tender_ids,
+                max_workers=DEFAULT_FETCH_WORKERS,
+                delay_seconds=DEFAULT_FETCH_DELAY,
+            )
+            st.success(f"נטענו פרטים עבור {len(details_dict)} מכרזים!")
 
 # Display selected tender details
 if selected_tender_id:
     st.markdown("---")
 
-    with st.spinner(f"Loading details for tender {selected_tender_id}..."):
+    with st.spinner(f"טוען פרטי מכרז {selected_tender_id}..."):
         details = load_tender_details(selected_tender_id)
 
-        # Also get list data for context
         list_data = filtered_df[filtered_df['tender_id'] == selected_tender_id]
         if len(list_data) > 0:
             list_data = list_data.iloc[0].to_dict()
@@ -523,188 +1088,281 @@ if selected_tender_id:
             list_data = None
 
     if details:
-        # Create expandable detail view
-        with st.expander(f"📋 Tender {selected_tender_id} - Full Details", expanded=True):
+        with st.expander(f"📋 מכרז {selected_tender_id} — פרטים מלאים", expanded=True):
 
-            # Overview section
-            st.markdown("### Overview")
+            st.markdown("### סקירה כללית")
+            ov1, ov2, ov3, ov4 = st.columns(4)
 
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric("Tender ID", details.get('MichrazID', selected_tender_id))
-            with col2:
-                st.metric("Status", list_data.get('status', 'N/A') if list_data else 'N/A')
-            with col3:
-                units = details.get('YechidotDiur', list_data.get('units', 0) if list_data else 0)
-                st.metric("Units", f"{int(units):,}" if units else "N/A")
-            with col4:
-                deadline = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
-                if pd.notna(deadline):
-                    # Convert to timezone-naive for comparison
-                    deadline_naive = deadline.tz_localize(None) if deadline.tzinfo else deadline
-                    days_until = (deadline_naive - datetime.now()).days
-                    st.metric("Days Until Deadline", days_until)
+            with ov1:
+                st.metric("מס' מכרז", details.get('MichrazID', selected_tender_id))
+            with ov2:
+                st.metric("סטטוס", list_data.get('status', 'N/A') if list_data else 'N/A')
+            with ov3:
+                units = details.get(
+                    'YechidotDiur',
+                    list_data.get('units', 0) if list_data else 0
+                )
+                st.metric("יח\"ד", f"{int(units):,}" if units else "N/A")
+            with ov4:
+                deadline_dt = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
+                if pd.notna(deadline_dt):
+                    deadline_naive = (
+                        deadline_dt.tz_localize(None) if deadline_dt.tzinfo else deadline_dt
+                    )
+                    days_until = (deadline_naive - today).days
+                    st.metric("ימים לסגירה", days_until)
                 else:
-                    st.metric("Deadline", "N/A")
+                    st.metric("מועד סגירה", "N/A")
 
-            # Tender information
             st.markdown("---")
-            st.markdown("### Tender Information")
+            st.markdown("### פרטי מכרז")
 
-            info_cols = st.columns(2)
+            info_left, info_right = st.columns(2)
 
-            with info_cols[0]:
-                st.write("**Tender Name:**", details.get('MichrazName', 'N/A'))
-                st.write("**City:**", list_data.get('city', 'N/A') if list_data else 'N/A')
-                # Show location (neighborhood/street) if available
+            with info_left:
+                tender_name = details.get('MichrazName', 'N/A')
+                city_val = list_data.get('city', 'N/A') if list_data else 'N/A'
                 location = details.get('Shchuna', list_data.get('location', '') if list_data else '')
-                if location:
-                    st.write("**Location:**", location)
-                st.write("**Type:**", list_data.get('tender_type', 'N/A') if list_data else 'N/A')
+                tender_type_val = list_data.get('tender_type', 'N/A') if list_data else 'N/A'
+                purpose_val = list_data.get('purpose', 'N/A') if list_data else 'N/A'
 
-            with info_cols[1]:
+                info_html = f'''
+                <div class="detail-field">
+                    <strong>שם מכרז:</strong> {tender_name}<br>
+                    <strong>עיר:</strong> {city_val}<br>
+                    {'<strong>מיקום:</strong> ' + str(location) + '<br>' if location else ''}
+                    <strong>סוג:</strong> {tender_type_val}<br>
+                    <strong>ייעוד:</strong> {purpose_val}
+                </div>
+                '''
+                st.markdown(info_html, unsafe_allow_html=True)
+
+            with info_right:
                 publish = pd.to_datetime(details.get('PtichaDate'), errors='coerce')
-                st.write("**Publish Date:**", publish.strftime('%Y-%m-%d') if pd.notna(publish) else 'N/A')
-
-                deadline = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
-                st.write("**Deadline:**", deadline.strftime('%Y-%m-%d %H:%M') if pd.notna(deadline) else 'N/A')
-
+                publish_str = publish.strftime('%Y-%m-%d') if pd.notna(publish) else 'N/A'
+                deadline_dt = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
+                deadline_str = deadline_dt.strftime('%Y-%m-%d %H:%M') if pd.notna(deadline_dt) else 'N/A'
                 committee = pd.to_datetime(details.get('VaadaDate'), errors='coerce')
-                st.write("**Committee Date:**", committee.strftime('%Y-%m-%d') if pd.notna(committee) else 'N/A')
+                committee_str = committee.strftime('%Y-%m-%d') if pd.notna(committee) else 'N/A'
 
-            # Bidder information section
+                dates_html = f'''
+                <div class="detail-field">
+                    <strong>תאריך פרסום:</strong> {publish_str}<br>
+                    <strong>מועד סגירה:</strong> {deadline_str}<br>
+                    <strong>תאריך ועדה:</strong> {committee_str}
+                </div>
+                '''
+                st.markdown(dates_html, unsafe_allow_html=True)
+
             st.markdown("---")
-            st.markdown("### 💰 Bidder Information")
+            st.markdown("### 💰 הצעות ומציעים")
 
-            # Get plots (Tik)
             plots = details.get('Tik', [])
 
-            if plots and len(plots) > 0:
+            if plots:
                 for plot_idx, plot in enumerate(plots, 1):
-                    st.markdown(f"#### Plot {plot_idx}: {plot.get('TikID', 'N/A')}")
+                    st.markdown(f"#### מגרש {plot_idx}: {plot.get('TikID', 'N/A')}")
 
-                    # Winner information
                     winner_name = (plot.get('ShemZoche') or '').strip()
                     winner_amount = plot.get('SchumZchiya', 0)
 
                     if winner_name:
-                        st.success(f"🏆 **Winner:** {winner_name}")
-                        winner_cols = st.columns(3)
-                        with winner_cols[0]:
-                            st.write("**Winning Bid:**", f"₪{winner_amount:,.2f}" if winner_amount else 'N/A')
-                        with winner_cols[1]:
-                            st.write("**Plot Area:**", f"{plot.get('Shetach', 0):,} sqm")
-                        with winner_cols[2]:
-                            st.write("**Min Price:**", f"₪{plot.get('MechirSaf', 0):,.2f}")
+                        st.success(f"🏆 **זוכה:** {winner_name}")
+                        winner_amount_str = f"₪{winner_amount:,.2f}" if winner_amount else 'N/A'
+                        area_str = f"{plot.get('Shetach', 0):,} מ\"ר"
+                        threshold_str = f"₪{plot.get('MechirSaf', 0):,.2f}"
+                        bid_html = f'''
+                        <div class="detail-field">
+                            <strong>סכום זכייה:</strong> {winner_amount_str} &nbsp;|&nbsp;
+                            <strong>שטח:</strong> {area_str} &nbsp;|&nbsp;
+                            <strong>מחיר סף:</strong> {threshold_str}
+                        </div>
+                        '''
+                        st.markdown(bid_html, unsafe_allow_html=True)
 
-                    # Bidders list
                     bidders = plot.get('mpHatzaaotMitcham', [])
+                    if bidders:
+                        st.info(f"📊 **סה\"כ הצעות:** {len(bidders)}")
 
-                    if bidders and len(bidders) > 0:
-                        st.info(f"📊 **Total Bids:** {len(bidders)}")
-
-                        # Convert to DataFrame for display
                         bidder_df = pd.DataFrame(bidders)
-                        bidder_df = bidder_df.sort_values('HatzaaSum', ascending=False)  # Sort by amount
+                        bidder_df = bidder_df.sort_values('HatzaaSum', ascending=False)
 
-                        # Format the display
                         display_bidder_df = bidder_df.copy()
-                        display_bidder_df['HatzaaSum'] = display_bidder_df['HatzaaSum'].apply(lambda x: f"₪{x:,.2f}" if pd.notna(x) else 'N/A')
+                        display_bidder_df['HatzaaSum'] = display_bidder_df['HatzaaSum'].apply(
+                            lambda x: f"₪{x:,.2f}" if pd.notna(x) else 'N/A'
+                        )
                         display_bidder_df = display_bidder_df.rename(columns={
-                            'HatzaaID': 'Bid ID',
-                            'HatzaaSum': 'Bid Amount',
-                            'HatzaaDescription': 'Description'
+                            'HatzaaID': 'מס\' הצעה',
+                            'HatzaaSum': 'סכום',
+                            'HatzaaDescription': 'תיאור'
                         })
 
-                        # Display as table
                         st.dataframe(
                             display_bidder_df,
                             use_container_width=True,
                             hide_index=True
                         )
 
-                        # Offer CSV download of bidders
-                        csv = bidder_df.to_csv(index=False, encoding='utf-8-sig')
+                        csv_bid = bidder_df.to_csv(index=False, encoding='utf-8-sig')
                         st.download_button(
-                            label=f"📥 Download Bidders CSV (Plot {plot_idx})",
-                            data=csv,
+                            label=f"📥 הורד CSV מציעים (מגרש {plot_idx})",
+                            data=csv_bid,
                             file_name=f"bidders_{selected_tender_id}_plot{plot_idx}.csv",
                             mime="text/csv"
                         )
                     else:
-                        st.info("No bids available for this plot")
+                        st.info("אין הצעות למגרש זה")
 
                     if plot_idx < len(plots):
                         st.markdown("---")
             else:
-                st.info("No bidder information available for this tender")
+                st.info("אין מידע על הצעות למכרז זה")
 
-            # Documents section
             st.markdown("---")
-            st.markdown("### 📄 Documents")
+            st.markdown("### 📄 מסמכים")
+
+            full_doc = details.get('MichrazFullDocument')
+            if full_doc and full_doc.get('RowID') is not None:
+                doc_name = full_doc.get('DocName', 'מסמך פרסום מלא.pdf')
+                doc_url = build_document_url(full_doc)
+                st.markdown(
+                    f"#### 📕 מסמך פרסום מלא\n\n"
+                    f"[📥 **הורד: {doc_name}**]({doc_url})"
+                )
 
             docs = details.get('MichrazDocList', [])
-
-            if docs and len(docs) > 0:
-                st.info(f"📁 **Total Documents:** {len(docs)}")
-
-                for doc in docs[:10]:  # Show first 10 documents
+            if docs:
+                st.markdown(f"#### 📁 מסמכים נוספים ({len(docs)})")
+                for doc in docs[:15]:
                     doc_name = doc.get('DocName', doc.get('Teur', 'Unknown'))
-                    doc_desc = doc.get('Teur', 'No description')
+                    doc_desc = doc.get('Teur', '')
                     doc_date = doc.get('UpdateDate', '')
+                    if doc_date:
+                        date_formatted = pd.to_datetime(doc_date, errors='coerce')
+                        if pd.notna(date_formatted):
+                            doc_date = date_formatted.strftime('%Y-%m-%d')
 
-                    st.markdown(f"- **{doc_name}** - {doc_desc} ({doc_date})")
+                    doc_url = build_document_url(doc)
+                    st.markdown(
+                        f"- [{doc_name}]({doc_url}) — {doc_desc} ({doc_date})"
+                    )
 
-                if len(docs) > 10:
-                    st.caption(f"... and {len(docs) - 10} more documents")
-            else:
-                st.info("No documents available")
+                if len(docs) > 15:
+                    st.caption(f"... ועוד {len(docs) - 15} מסמכים")
 
-            # Link to official site
+            elif not full_doc:
+                st.info("אין מסמכים זמינים")
+
             st.markdown("---")
-            official_url = f"https://apps.land.gov.il/MichrazimSite/#/michraz/{selected_tender_id}"
-            st.markdown(f"🔗 [View on Official Land Authority Site]({official_url})")
-
-            # Raw data for debugging (collapsed by default)
-            with st.expander("🔧 Raw API Response (for debugging)"):
-                st.json(details)
+            official_url = f"{RMI_SITE_URL}/{selected_tender_id}"
+            st.markdown(f"🔗 [צפה באתר רמ\"י הרשמי]({official_url})")
 
     else:
-        st.error(f"❌ Failed to load details for tender {selected_tender_id}")
-        st.info("This could mean:")
-        st.write("- The tender ID does not exist in the detail API")
-        st.write("- The API is currently unavailable")
-        st.write("- Network connection issue")
-
-# ============================================================================
-# FOOTER / API STATUS
-# ============================================================================
+        st.error(f"לא ניתן לטעון פרטים למכרז {selected_tender_id}")
+        st.info("יתכן שמזהה המכרז לא קיים, או שהAPI אינו זמין.")
 
 st.markdown("---")
-with st.expander("🔧 Configuration & API Status"):
-    st.markdown("""
-    ### API Configuration Instructions
-    
-    To connect to the real data source:
-    
-    1. **Discover API endpoints:**
-       - Open https://apps.land.gov.il/MichrazimSite/#/homePage in Chrome
-       - Press F12 → Network tab → Filter by "XHR"
-       - Browse the tenders list and look for API calls
-    
-    2. **Update `src/data_client.py`:**
-       - Modify the `ENDPOINTS` dict with real URLs
-       - Adjust the `fetch_tenders_list()` method based on API structure
-       - Update `normalize_hebrew_columns()` mapping
-    
-    3. **Toggle off "Use Sample Data"** in the sidebar
-    
-    ### Current Status
-    """)
-    
+
+
+# ============================================================================
+# SECTION 6: DETAILED ANALYTICS (collapsible)
+# ============================================================================
+
+with st.expander("📊 ניתוח מפורט", expanded=False):
+
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        st.subheader("📍 מכרזים לפי עיר")
+        city_counts = filtered_df['city'].value_counts().head(10)
+
+        if len(city_counts) > 0:
+            fig_city = px.bar(
+                x=city_counts.values,
+                y=city_counts.index,
+                orientation='h',
+                labels={'x': 'מספר מכרזים', 'y': 'עיר'},
+                color=city_counts.values,
+                color_continuous_scale='Blues'
+            )
+            fig_city.update_layout(showlegend=False, height=400)
+            st.plotly_chart(fig_city, use_container_width=True)
+        else:
+            st.info("אין נתונים להצגה")
+
+    with chart_col2:
+        st.subheader("🏷️ מכרזים לפי סוג")
+        type_counts = filtered_df['tender_type'].value_counts()
+
+        if len(type_counts) > 0:
+            fig_type = px.pie(
+                values=type_counts.values,
+                names=type_counts.index,
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_type.update_layout(height=400)
+            st.plotly_chart(fig_type, use_container_width=True)
+        else:
+            st.info("אין נתונים להצגה")
+
+    chart_col3, chart_col4 = st.columns(2)
+
+    with chart_col3:
+        st.subheader("📈 מכרזים לאורך זמן")
+        timeline_df = filtered_df.copy()
+
+        if len(timeline_df) > 0 and timeline_df['publish_date'].notna().any():
+            timeline_df['month'] = timeline_df['publish_date'].dt.to_period('M').astype(str)
+            monthly_counts = timeline_df.groupby('month').size().reset_index(name='count')
+
+            fig_timeline = px.line(
+                monthly_counts,
+                x='month',
+                y='count',
+                markers=True,
+                labels={'month': 'חודש', 'count': 'מספר מכרזים'}
+            )
+            fig_timeline.update_layout(height=400)
+            st.plotly_chart(fig_timeline, use_container_width=True)
+        else:
+            st.info("אין נתוני תאריכים להצגה")
+
+    with chart_col4:
+        st.subheader("🏠 יח\"ד לפי סוג מכרז")
+        units_by_type = filtered_df.groupby('tender_type')['units'].sum().reset_index()
+        units_by_type = units_by_type[units_by_type['units'] > 0]
+
+        if not units_by_type.empty:
+            fig_units = px.bar(
+                units_by_type,
+                x='tender_type',
+                y='units',
+                labels={'units': 'סה\"כ יח\"ד', 'tender_type': 'סוג מכרז'},
+                color_discrete_sequence=['#1f77b4']
+            )
+            fig_units.update_layout(height=400)
+            st.plotly_chart(fig_units, use_container_width=True)
+        else:
+            st.info("אין נתוני יח\"ד להצגה")
+
+
+# ============================================================================
+# SECTION 7: ADMIN / DEBUG (collapsible)
+# ============================================================================
+
+with st.expander("🔧 ניהול ודיבוג", expanded=False):
+    st.markdown("### סטטוס מערכת")
     st.code(f"""
-    Data source: {data_source}
-    Records loaded: {len(df)}
-    Filtered records: {len(filtered_df)}
+    מקור נתונים: {data_source}
+    רשומות שנטענו: {len(df):,}
+    רשומות מסוננות: {len(filtered_df):,}
+    סוגי מכרז: {', '.join(df['tender_type'].unique().tolist())}
+    """)
+
+    st.markdown("### API Endpoints")
+    st.code(f"""
+    List: {LAND_AUTHORITY_API} (POST)
+    Detail: {TENDER_DETAIL_API}?michrazID=
+    Docs: {DOCUMENT_DOWNLOAD_API}
     """)

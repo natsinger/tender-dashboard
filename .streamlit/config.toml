@@ -1,0 +1,13 @@
+[client]
+toolbarMode = "minimal"
+
+[server]
+headless = true
+port = 8501
+
+[theme]
+primaryColor = "#4318FF"
+backgroundColor = "#F4F7FE"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#2B3674"
+font = "sans serif"

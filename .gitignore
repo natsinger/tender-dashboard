@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.local
+
+# Streamlit secrets (never commit)
+.streamlit/secrets.toml
+
+# Temporary files
+tmp/
+
+# Logs
+logs/
+
+# Data (raw/sensitive)
+data/raw/
+data/details_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+nul

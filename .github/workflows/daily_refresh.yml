@@ -1,0 +1,36 @@
+name: Daily Tender Refresh
+
+on:
+  schedule:
+    # Run at 06:00 UTC (09:00 Israel time) every day
+    - cron: "0 6 * * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pandas python-dotenv
+
+      - name: Fetch tenders
+        run: python scripts/refresh_tenders.py
+
+      - name: Commit and push snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tenders_list_*.json
+          # Only commit if there are changes
+          git diff --cached --quiet || git commit -m "data: daily tender snapshot $(date +%Y-%m-%d)"
+          git push

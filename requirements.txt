@@ -1,0 +1,16 @@
+# Dashboard core
+streamlit==1.54.0
+pandas==2.3.3
+plotly==6.5.2
+requests==2.32.5
+python-dateutil>=2.8.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# PDF extraction
+pdfplumber==0.11.9
+Pillow==12.1.0
+
+# Mavat client (browser automation)
+playwright==1.58.0
