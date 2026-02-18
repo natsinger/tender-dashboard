@@ -67,6 +67,7 @@ This project must always contain these three files at the root level. **Read all
 - When I describe what I want, **ask me clarifying questions first** before writing code. At minimum, confirm your understanding of the requirement.
 - When presenting a solution, briefly explain **why** you chose this approach over alternatives — especially for architecture decisions.
 - If a task is complex, **break it into steps and show me the plan** before executing. Don't build the whole thing in one shot.
+- **Call out model tier misuse.** If I'm running a simple lookup/search on Opus (waste of money), or asking for architecture/complex reasoning on Haiku/Sonnet (underpowered), give a quick nudge. One line, not a lecture.
 
 ---
 

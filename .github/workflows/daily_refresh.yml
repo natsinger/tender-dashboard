@@ -26,7 +26,14 @@ jobs:
         run: |
           pip install requests pandas python-dotenv
 
-      - name: Fetch tenders
+      - name: Fetch tenders and send alerts
+        env:
+          SMTP_HOST: smtp.office365.com
+          SMTP_PORT: "587"
+          SMTP_USER: ${{ secrets.M365_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.M365_PASSWORD }}
+          SMTP_FROM: ${{ secrets.M365_EMAIL }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
         run: python scripts/refresh_tenders.py
 
       - name: Commit and push snapshot

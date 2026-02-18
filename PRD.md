@@ -1,9 +1,9 @@
 # PRD — Israel Land Tender Intelligence Dashboard
 
-**Version**: 2.0  
-**Author**: Nathanael (Product Owner)  
-**Last Updated**: February 11, 2026  
-**Status**: Draft — Pending Review
+**Version**: 3.0
+**Author**: Nathanael (Product Owner)
+**Last Updated**: February 17, 2026
+**Status**: Active
 
 ---
 
@@ -35,11 +35,15 @@ Reshape the existing Streamlit dashboard into a focused executive view where a C
 
 ---
 
-## 4. Target User
+## 4. Target Users
 
-**Primary user**: CEO of a real estate development company.
+### Heavy User (Daily Operator)
+Team members who track tenders daily. They need the full dashboard: filters, detail viewer, document links, and the ability to **watch specific tenders** and get email alerts when new documents appear.
 
-This person needs high-level signals, not raw data. They make decisions based on region, timing, and scale (number of units). They may share the dashboard with CFO or investment committee. Usage is daily to weekly, spiking around tender deadlines.
+### Management User (Executive)
+CEO / CFO / investment committee. Needs a **30-second overview**: KPIs with week-over-week deltas, brochure coverage, regional distribution, and a closing-soon table. No detail viewer, watchlist, or data explorer.
+
+Both user types access the same Streamlit app via navigation tabs.
 
 ---
 
@@ -82,6 +86,25 @@ The following features are **already built and working** in the current Streamli
 | US-6 | As a CEO, I want the **table to default-sort by closing date** (soonest first) and **visually highlight** tenders closing within 7 days. | Must Have |
 | US-7 | As a CEO, I want the **Upcoming Deadlines section to actually work** — it currently shows "No upcoming deadlines found" which seems like a bug. | Must Have |
 | US-8 | As a CEO, I want the **dashboard to feel polished** — consistent styling, readable at presentation distance, no debug/dev elements in the main view. | Should Have |
+
+### Sprint 5 — Watchlist & Email Alerts
+
+| ID | Story | Priority |
+|----|-------|----------|
+| US-14 | As a heavy user, I want to **add tenders to a personal watchlist** by entering their tender ID (validated against the database), so I can track the tenders I care about. | Must Have |
+| US-15 | As a heavy user, I want to **receive email alerts** when new documents appear on my watched tenders, so I don't miss important updates. | Must Have |
+| US-16 | As a heavy user, I want to **see my watchlist** in the dashboard with tender details and the ability to remove entries. | Must Have |
+| US-17 | As a management user, I want a **simplified overview page** with KPIs (including week-over-week deltas), pie charts, and a closing-soon table — without the full detail viewer or data explorer. | Must Have |
+| US-18 | As a user, I want the dashboard to have **navigation tabs** so I can switch between the full dashboard and the management overview. | Must Have |
+
+#### Watchlist & Alert Implementation Details
+
+- **User identification**: `st.experimental_user.email` on Streamlit Cloud; `DEV_USER_EMAIL` env var for local dev.
+- **Tender validation**: Tender ID must exist in the `tenders` table before it can be added.
+- **Alert baseline**: Only documents with `first_seen > watchlist.created_at` trigger alerts (prevents historical flooding).
+- **Deduplication**: `UNIQUE(user_email, tender_id, doc_row_id)` in `alert_history` — each document is emailed at most once per user.
+- **Email**: Hebrew RTL HTML via Microsoft 365 SMTP (`smtp.office365.com:587`, TLS).
+- **Alert schedule**: Runs daily after document sync in the GitHub Actions cron job (non-fatal).
 
 ### Phase 2 — mavat.iplan.gov.il Integration
 
