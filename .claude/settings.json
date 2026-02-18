@@ -1,0 +1,186 @@
+{
+  "projectName": "Israel Land Tenders Dashboard",
+  "repository": "https://github.com/natsinger/tender-dashboard.git",
+  "primaryLanguage": "Hebrew (UI), English (code/docs)",
+
+  "hooks": {
+    "pre-commit": {
+      "enabled": true,
+      "checks": [
+        {
+          "name": "sensitive-data-guard",
+          "description": "Prevent committing sensitive data",
+          "patterns": [
+            "password\\s*=",
+            "api[_-]?key\\s*=",
+            "secret\\s*=",
+            "token\\s*=",
+            "private[_-]?key",
+            "DATABASE_URL",
+            "credentials\\.json"
+          ]
+        },
+        {
+          "name": "debug-code-check",
+          "description": "Warn about debug code in commits",
+          "patterns": [
+            "console\\.log\\(",
+            "print\\(.*debug",
+            "debugger;",
+            "TODO:",
+            "FIXME:",
+            "XXX:"
+          ],
+          "severity": "warning"
+        },
+        {
+          "name": "pii-phi-guard",
+          "description": "Prevent logging personal/health information",
+          "patterns": [
+            "social_security",
+            "ssn",
+            "credit_card",
+            "medical_record"
+          ]
+        }
+      ]
+    },
+
+    "pre-push": {
+      "enabled": true,
+      "checks": [
+        {
+          "name": "branch-protection",
+          "description": "Prevent direct push to main branch",
+          "blockedBranches": ["main", "master"],
+          "message": "Direct push to main/master is not allowed. Please create a PR."
+        },
+        {
+          "name": "test-validation",
+          "description": "Ensure tests pass before pushing",
+          "command": "pytest tests/",
+          "required": false
+        }
+      ]
+    },
+
+    "dangerous-commands": {
+      "enabled": true,
+      "requireConfirmation": [
+        "rm -rf",
+        "git reset --hard",
+        "git push --force",
+        "git push -f",
+        "git clean -fd",
+        "DROP TABLE",
+        "DROP DATABASE",
+        "DELETE FROM",
+        "TRUNCATE"
+      ],
+      "blocked": [
+        "git push --force main",
+        "git push --force master",
+        "git push -f main",
+        "git push -f master"
+      ]
+    }
+  },
+
+  "formatting": {
+    "python": {
+      "enabled": true,
+      "formatter": "black",
+      "lineLength": 100,
+      "sortImports": "isort",
+      "linter": "ruff"
+    },
+    "javascript": {
+      "enabled": true,
+      "formatter": "prettier",
+      "linter": "eslint"
+    },
+    "autoFormatOnSave": true
+  },
+
+  "testing": {
+    "python": {
+      "framework": "pytest",
+      "coverage": {
+        "enabled": true,
+        "minCoverage": 80
+      },
+      "testPattern": "test_*.py"
+    },
+    "javascript": {
+      "framework": "vitest",
+      "fallback": "jest"
+    }
+  },
+
+  "logging": {
+    "format": "[{timestamp}] [{level}] [{module}] {message}",
+    "levels": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    "sensitiveFields": [
+      "password",
+      "token",
+      "api_key",
+      "secret",
+      "ssn",
+      "credit_card"
+    ]
+  },
+
+  "git": {
+    "commitMessageFormat": "type(scope): description",
+    "types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "perf",
+      "test",
+      "chore"
+    ],
+    "requireCoAuthor": true,
+    "coAuthor": "Claude Sonnet 4.5 <noreply@anthropic.com>",
+    "signCommits": false,
+    "branchNaming": "feature/*, bugfix/*, hotfix/*"
+  },
+
+  "codeReview": {
+    "checklist": [
+      "Code follows project conventions and style guide",
+      "No sensitive data or credentials in code",
+      "All functions have appropriate error handling",
+      "Tests are included and passing",
+      "Documentation is updated if needed",
+      "No console.log or debug statements",
+      "Security best practices followed",
+      "Performance considerations addressed"
+    ],
+    "requireReview": true
+  },
+
+  "security": {
+    "treatAllDataAsSensitive": true,
+    "neverLogPII": true,
+    "neverLogPHI": true,
+    "inputValidation": "required",
+    "outputSanitization": "required"
+  },
+
+  "performance": {
+    "streamlit": {
+      "cacheExpensiveOperations": true,
+      "cacheTTL": 3600,
+      "minimizeRerenders": true,
+      "targetFilterResponseTime": 100
+    }
+  },
+
+  "documentation": {
+    "required": ["PRD.md", "TECH_SPEC.md", "STATUS.md"],
+    "updateOnChange": true
+  }
+}

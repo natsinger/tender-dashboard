@@ -1,0 +1,67 @@
+[LOAD] Loaded 10447 tenders from tenders_list_10_02_2026.json
+Detailed info for 10 location samples:
+================================================================================
+
+1. Location field (Shchuna): רחוב בית"ר 2
+   Tender ID: 20190687
+   City Code (KodYeshuv): 8500
+   Tender Name: 687/2019
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+2. Location field (Shchuna): הפרסה
+   Tender ID: 20030045
+   City Code (KodYeshuv): 874
+   Tender Name: 45/2003
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+3. Location field (Shchuna): קריית עקרון
+   Tender ID: 20000129
+   City Code (KodYeshuv): 469
+   Tender Name: 129/2000
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+4. Location field (Shchuna): מתחם הגולף
+   Tender ID: 20220324
+   City Code (KodYeshuv): 2600
+   Tender Name: 324/2022
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+5. Location field (Shchuna): אדמירליטי
+   Tender ID: 20090162
+   City Code (KodYeshuv): 4000
+   Tender Name: 162/2009
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+6. Location field (Shchuna): רמת טבריה שלב ג' שיכון ג'וד'
+   Tender ID: 20080323
+   City Code (KodYeshuv): 6700
+   Tender Name: 323/2008
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+7. Location field (Shchuna): רח' הראובני דוד מס' 14
+   Tender ID: 20070688
+   City Code (KodYeshuv): 5000
+   Tender Name: 688/2007
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+8. Location field (Shchuna): יפת 174
+   Tender ID: 20040083
+   City Code (KodYeshuv): 5000
+   Tender Name: 83/2004
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+9. Location field (Shchuna): פוריה
+   Tender ID: 20220263
+   City Code (KodYeshuv): 1313
+   Tender Name: 263/2022
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+10. Location field (Shchuna): מחנה אלנבי
+   Tender ID: 20020195
+   City Code (KodYeshuv): 3000
+   Tender Name: 195/2002
+   Available fields: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date']
+
+================================================================================
+Total columns in data: 23
+Column names: ['tender_id', 'tender_name', 'KodMerchav', 'status_code', 'purpose_code', 'city_code', 'tender_type_code', 'published_booklet', 'targeted', 'units', 'city', 'PirsumDate', 'publish_date', 'deadline', 'committee_date', 'ChoveretUpdateDate', 'KhalYaadRashi', 'status', 'tender_type', 'area_sqm', 'min_price', 'gush', 'helka']

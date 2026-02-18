@@ -849,15 +849,22 @@ else:
     watch_db = TenderDB()
 
     # ── Add to watchlist ──────────────────────────────────────────────
+    # Build label map from ALL tenders (not just filtered) so user can watch any tender
+    _watch_labels: dict[int, str] = {}
+    for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
+        _name = str(_r['tender_name'])[:50] if pd.notna(_r['tender_name']) else ''
+        _city = str(_r['city'])[:20] if pd.notna(_r['city']) else ''
+        _watch_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
+
     add_col, btn_col = st.columns([3, 1])
 
     with add_col:
-        watch_tender_id = st.number_input(
-            "מספר מכרז להוספה",
-            min_value=1,
-            step=1,
-            value=None,
-            placeholder="הקלד מספר מכרז...",
+        watch_tender_id = st.selectbox(
+            "בחר מכרז להוספה לרשימת מעקב",
+            options=list(_watch_labels.keys()),
+            index=None,
+            format_func=lambda tid: _watch_labels[tid],
+            placeholder="הקלד מספר מכרז או שם עיר...",
             key="watch_tender_input",
         )
 
@@ -865,19 +872,16 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         add_clicked = st.button("➕ הוסף למעקב", key="btn_add_watch")
 
-    if add_clicked and watch_tender_id:
-        tender_check = watch_db.get_tender_by_id(int(watch_tender_id))
-        if tender_check is None:
-            st.error(f"מכרז {int(watch_tender_id)} לא נמצא במאגר.")
+    if add_clicked and watch_tender_id is not None:
+        _label = _watch_labels[watch_tender_id]
+        added = watch_db.add_to_watchlist(user_email, int(watch_tender_id))
+        if added:
+            st.success(
+                f"מכרז {_label} נוסף לרשימת המעקב! "
+                f"תקבל/י התראה במייל כשיתווספו מסמכים חדשים."
+            )
         else:
-            added = watch_db.add_to_watchlist(user_email, int(watch_tender_id))
-            if added:
-                st.success(
-                    f"מכרז {int(watch_tender_id)} נוסף לרשימת המעקב! "
-                    f"תקבל/י התראה במייל כשיתווספו מסמכים חדשים."
-                )
-            else:
-                st.info(f"מכרז {int(watch_tender_id)} כבר נמצא ברשימת המעקב.")
+            st.info(f"מכרז {_label} כבר נמצא ברשימת המעקב.")
 
     # ── Display watchlist ─────────────────────────────────────────────
     watchlist_df = watch_db.get_user_watchlist(user_email)
@@ -886,13 +890,13 @@ else:
         st.markdown(f"##### מכרזים במעקב ({len(watchlist_df)})")
 
         for _, row in watchlist_df.iterrows():
-            w_cols = st.columns([1, 3, 2, 2, 1, 1])
+            w_cols = st.columns([2, 2, 2, 2, 1, 1])
             with w_cols[0]:
-                st.write(str(int(row['tender_id'])))
+                st.write(str(row.get('tender_name', row['tender_id'])))
             with w_cols[1]:
-                st.write(row.get('tender_name', '')[:40])
-            with w_cols[2]:
                 st.write(row.get('city', ''))
+            with w_cols[2]:
+                st.write(row.get('region', ''))
             with w_cols[3]:
                 deadline_val = row.get('deadline', '')
                 if pd.notna(deadline_val):

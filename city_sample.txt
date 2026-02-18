@@ -1,0 +1,15 @@
+[LOAD] Loaded 10447 tenders from tenders_list_10_02_2026.json
+Sample of 10 city/neighborhood values:
+============================================================
+1. מתחם D
+2. שכ' דרום מערבית
+3. רח'  יפו   מס'   73  א'
+4. חסן שוקרי
+5. ר"ח 5
+6. שכ' ביל"ו
+7. המשתלה
+8. רח' מאזה
+9. אזור תעשייה דרומי
+10. נווה נוף (צהלה)
+
+Total unique city/neighborhood values: 3581
