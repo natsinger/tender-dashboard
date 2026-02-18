@@ -120,3 +120,15 @@ RELEVANT_TENDER_TYPES: Set[int] = {1, 5, 8}
 NON_ACTIVE_STATUSES: list = [
     "נסגר", "בוטל", "לא אקטואלי", "תהליך מסתיים", "עוכב", "מכרז סגור",
 ]
+
+# ============================================================================
+# EMAIL ALERTS (Microsoft 365 SMTP)
+# ============================================================================
+
+SMTP_HOST: str = _get("SMTP_HOST", "smtp.office365.com")
+SMTP_PORT: int = _get_int("SMTP_PORT", 587)
+SMTP_USER: str = _get("SMTP_USER", "")
+SMTP_PASSWORD: str = _get("SMTP_PASSWORD", "")
+SMTP_FROM: str = _get("SMTP_FROM", "") or SMTP_USER
+DASHBOARD_URL: str = _get("DASHBOARD_URL", "")
+DEV_USER_EMAIL: str = _get("DEV_USER_EMAIL", "")

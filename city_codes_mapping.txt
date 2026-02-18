@@ -1,0 +1,17 @@
+City Code to City Name Mapping:
+================================================================================
+Code       City Name                                         
+--------------------------------------------------------------------------------
+8500       באר שבע (Beer Sheva)                              
+874        קרית מלאכי (Kiryat Malachi)                       
+469        קרית עקרון (Kiryat Ekron)                         
+2600       נתניה (Netanya)                                   
+4000       חיפה (Haifa)                                      
+6700       טבריה (Tiberias)                                  
+5000       תל אביב-יפו (Tel Aviv-Yafo)                       
+1313       כפר תבור (Kfar Tavor)                             
+3000       ירושלים (Jerusalem)                               
+
+These are official Israeli Central Bureau of Statistics (CBS) settlement codes.
+The "city" field (Shchuna) contains neighborhood/street/zone names,
+while city_code (KodYeshuv) contains the actual city identifier.

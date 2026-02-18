@@ -10,6 +10,7 @@ API base: https://apps.land.gov.il/MichrazimSite/api/
 import json
 import logging
 import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -557,6 +558,27 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
             df[field] = None
 
     return df
+
+
+def build_document_url(doc: Dict) -> str:
+    """Build a direct download URL for a tender document.
+
+    Args:
+        doc: Document dict from the API (with MichrazID, RowID, etc.).
+
+    Returns:
+        Full URL string for downloading the document.
+    """
+    params = {
+        "michrazId": doc.get("MichrazID", 0),
+        "rowId": doc.get("RowID", 0),
+        "size": doc.get("Size") or 0,
+        "typePirsum": doc.get("PirsumType", 0),
+        "fileName": doc.get("DocName", "document.pdf"),
+        "teur": doc.get("Teur", ""),
+        "fileType": doc.get("FileType", "application/pdf"),
+    }
+    return f"{DOCUMENT_DOWNLOAD_API}?{urllib.parse.urlencode(params)}"
 
 
 def generate_sample_data() -> pd.DataFrame:

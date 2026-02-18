@@ -1,17 +1,17 @@
 """
 SQLite database layer for the Land Tenders Dashboard.
 
-Provides persistent storage for tenders, historical snapshots, and document
-tracking. Replaces JSON snapshot files as the primary data source while
-keeping JSON as a backup.
+Provides persistent storage for tenders, historical snapshots, document
+tracking, user watchlists, and alert history. Replaces JSON snapshot
+files as the primary data source while keeping JSON as a backup.
 
 Schema:
     tenders          — current state of each tender (upserted daily)
     tender_history   — daily snapshots for trend analysis
     tender_documents — per-tender document tracking (detect additions)
     tender_scores    — scoring results (Sprint 4, created but unused)
-    alert_rules      — alert configuration (Sprint 5, created but unused)
-    alert_history    — sent notifications (Sprint 5, created but unused)
+    user_watchlist   — per-user tender watchlist for email alerts
+    alert_history    — sent notification log for deduplication
 
 Usage:
     from db import TenderDB
@@ -110,23 +110,25 @@ CREATE TABLE IF NOT EXISTS tender_scores (
 )
 """
 
-_CREATE_ALERT_RULES = """
-CREATE TABLE IF NOT EXISTS alert_rules (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT NOT NULL,
-    criteria  TEXT,
-    channel   TEXT,
-    recipient TEXT,
-    active    INTEGER DEFAULT 1
+_CREATE_WATCHLIST = """
+CREATE TABLE IF NOT EXISTS user_watchlist (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email  TEXT NOT NULL,
+    tender_id   INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(user_email, tender_id)
 )
 """
 
 _CREATE_ALERT_HISTORY = """
 CREATE TABLE IF NOT EXISTS alert_history (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    rule_id   INTEGER,
-    tender_id INTEGER,
-    sent_at   TEXT
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email  TEXT NOT NULL,
+    tender_id   INTEGER NOT NULL,
+    doc_row_id  INTEGER NOT NULL,
+    sent_at     TEXT NOT NULL,
+    UNIQUE(user_email, tender_id, doc_row_id)
 )
 """
 
@@ -139,6 +141,9 @@ _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_history_date ON tender_history(snapshot_date)",
     "CREATE INDEX IF NOT EXISTS idx_docs_tender ON tender_documents(tender_id)",
     "CREATE INDEX IF NOT EXISTS idx_docs_first_seen ON tender_documents(first_seen)",
+    "CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_watchlist(user_email)",
+    "CREATE INDEX IF NOT EXISTS idx_watchlist_tender ON user_watchlist(tender_id)",
+    "CREATE INDEX IF NOT EXISTS idx_alert_hist_user ON alert_history(user_email)",
 ]
 
 
@@ -176,7 +181,17 @@ class TenderDB:
             conn.execute(_CREATE_HISTORY)
             conn.execute(_CREATE_DOCUMENTS)
             conn.execute(_CREATE_SCORES)
-            conn.execute(_CREATE_ALERT_RULES)
+
+            # Migrate: drop old empty alert_rules table if it exists
+            conn.execute("DROP TABLE IF EXISTS alert_rules")
+
+            # Migrate: recreate alert_history with new schema if needed
+            col_check = conn.execute("PRAGMA table_info(alert_history)").fetchall()
+            col_names = {r["name"] for r in col_check} if col_check else set()
+            if col_check and "user_email" not in col_names:
+                conn.execute("DROP TABLE IF EXISTS alert_history")
+
+            conn.execute(_CREATE_WATCHLIST)
             conn.execute(_CREATE_ALERT_HISTORY)
             for idx_sql in _CREATE_INDEXES:
                 conn.execute(idx_sql)
@@ -505,6 +520,161 @@ class TenderDB:
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Watchlist methods
+    # ------------------------------------------------------------------
+
+    def add_to_watchlist(self, user_email: str, tender_id: int) -> bool:
+        """Add a tender to the user's watchlist.
+
+        Args:
+            user_email: The user's email address.
+            tender_id: The tender's MichrazID (must exist in tenders table).
+
+        Returns:
+            True if added, False if already on the watchlist.
+        """
+        conn = self._connect()
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO user_watchlist
+                   (user_email, tender_id, created_at, active)
+                   VALUES (?, ?, ?, 1)""",
+                (user_email, tender_id, date.today().isoformat()),
+            )
+            conn.commit()
+            return conn.total_changes > 0
+        finally:
+            conn.close()
+
+    def remove_from_watchlist(self, user_email: str, tender_id: int) -> None:
+        """Remove a tender from the user's watchlist.
+
+        Args:
+            user_email: The user's email address.
+            tender_id: The tender's MichrazID.
+        """
+        conn = self._connect()
+        try:
+            conn.execute(
+                "DELETE FROM user_watchlist WHERE user_email = ? AND tender_id = ?",
+                (user_email, tender_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_user_watchlist(self, user_email: str) -> pd.DataFrame:
+        """Get all watched tenders for a user, joined with tender details.
+
+        Args:
+            user_email: The user's email address.
+
+        Returns:
+            DataFrame with watchlist entries joined to tender info.
+        """
+        conn = self._connect()
+        try:
+            df = pd.read_sql_query(
+                """SELECT w.id AS watch_id, w.tender_id, w.created_at,
+                          t.tender_name, t.city, t.region, t.status,
+                          t.deadline, t.units, t.published_booklet
+                   FROM user_watchlist w
+                   JOIN tenders t ON w.tender_id = t.tender_id
+                   WHERE w.user_email = ? AND w.active = 1
+                   ORDER BY w.created_at DESC""",
+                conn,
+                params=(user_email,),
+            )
+            return df
+        finally:
+            conn.close()
+
+    def get_all_active_watchlists(self) -> list[dict]:
+        """Get all active watchlist entries grouped by user_email.
+
+        Returns:
+            List of dicts: [{user_email, tender_id, created_at}, ...].
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """SELECT user_email, tender_id, created_at
+                   FROM user_watchlist
+                   WHERE active = 1
+                   ORDER BY user_email""",
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    # Alert history methods
+    # ------------------------------------------------------------------
+
+    def record_alert_sent(
+        self, user_email: str, tender_id: int, doc_row_id: int,
+    ) -> None:
+        """Record that an alert email was sent for a document.
+
+        Uses INSERT OR IGNORE for deduplication — safe to call multiple times.
+
+        Args:
+            user_email: Recipient email.
+            tender_id: The tender's MichrazID.
+            doc_row_id: The document's RowID from the API.
+        """
+        conn = self._connect()
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO alert_history
+                   (user_email, tender_id, doc_row_id, sent_at)
+                   VALUES (?, ?, ?, ?)""",
+                (user_email, tender_id, doc_row_id, date.today().isoformat()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_unsent_docs_for_watch(
+        self,
+        user_email: str,
+        tender_id: int,
+        since_date: str,
+    ) -> list[dict]:
+        """Find new documents for a watched tender not yet emailed to this user.
+
+        Args:
+            user_email: The user's email.
+            tender_id: The watched tender ID.
+            since_date: Only consider documents with first_seen > this date
+                (typically the watchlist created_at date).
+
+        Returns:
+            List of document dicts with keys: row_id, doc_name, description,
+            file_type, size, pirsum_type, update_date, first_seen.
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """SELECT d.row_id, d.doc_name, d.description, d.file_type,
+                          d.size, d.pirsum_type, d.update_date, d.first_seen
+                   FROM tender_documents d
+                   WHERE d.tender_id = ?
+                     AND d.first_seen > ?
+                     AND NOT EXISTS (
+                         SELECT 1 FROM alert_history ah
+                         WHERE ah.user_email = ?
+                           AND ah.tender_id = d.tender_id
+                           AND ah.doc_row_id = d.row_id
+                     )
+                   ORDER BY d.first_seen DESC""",
+                (tender_id, since_date, user_email),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
     def get_stats(self) -> dict:
         """Get summary counts for logging/debugging.
 
@@ -514,7 +684,10 @@ class TenderDB:
         conn = self._connect()
         try:
             stats = {}
-            for table in ("tenders", "tender_history", "tender_documents"):
+            for table in (
+                "tenders", "tender_history", "tender_documents",
+                "user_watchlist", "alert_history",
+            ):
                 count = conn.execute(
                     f"SELECT COUNT(*) FROM {table}",  # noqa: S608
                 ).fetchone()[0]

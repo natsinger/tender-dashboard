@@ -2,7 +2,8 @@
 Daily tender data refresh script.
 
 Fetches all tenders from the Land Authority API, saves a JSON snapshot,
-persists to SQLite, and syncs documents for active tenders.
+persists to SQLite, syncs documents for active tenders, and sends
+watchlist alert emails for any new documents found.
 
 Designed to be run by GitHub Actions cron job.
 
@@ -80,6 +81,17 @@ def main() -> None:
         logger.info("DB stats: %s", stats)
     except Exception as exc:
         logger.warning("Could not read DB stats: %s", exc)
+
+    # 6. Check watchlist alerts and send emails (non-fatal)
+    try:
+        from alerts import AlertEngine
+        from db import TenderDB as _TenderDB
+
+        engine = AlertEngine(_TenderDB())
+        sent = engine.check_and_send()
+        logger.info("Alerts: %d email(s) sent", sent)
+    except Exception as exc:
+        logger.warning("Alert check failed (non-fatal): %s", exc)
 
     logger.info("Daily refresh complete.")
 
