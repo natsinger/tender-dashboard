@@ -418,12 +418,24 @@ st.markdown("""
 
 @st.cache_data(ttl=CACHE_TTL)
 def load_data(data_source: str = "latest_file") -> pd.DataFrame:
-    """Load tender data from API, JSON file, or sample data."""
-    client = LandTendersClient(data_dir=str(PROJECT_ROOT))
-
+    """Load tender data from SQLite DB, JSON file, or API (with fallbacks)."""
     if data_source == "sample":
         return generate_sample_data()
 
+    # Priority 1: SQLite database
+    try:
+        from db import TenderDB
+
+        db = TenderDB()
+        df = db.load_current_tenders()
+        if len(df) > 0:
+            return df
+        logger.info("Database is empty, trying JSON fallback")
+    except Exception as exc:
+        logger.warning("Could not load from database: %s", exc)
+
+    # Priority 2: JSON snapshot file
+    client = LandTendersClient(data_dir=str(PROJECT_ROOT))
     if data_source == "latest_file":
         df = client.load_latest_json_snapshot()
         if df is not None:
@@ -431,6 +443,7 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
         logger.warning("No JSON files found, fetching from API")
         st.warning("לא נמצאו קבצי JSON, טוען מהAPI...")
 
+    # Priority 3: Live API call
     df = client.fetch_tenders_list()
     if df is None:
         logger.error("Could not fetch from API, falling back to sample data")
