@@ -6,18 +6,16 @@
 
 ## Current State
 
-Sprint 1 (Stabilize & Deploy MVP) — **in progress**.
+Sprint 1 (Stabilize & Deploy MVP) — **complete**.
+Sprint 3 (SQLite Data Persistence) — **complete**.
 
-The codebase has been refactored for production deployment:
-- Centralized configuration via `config.py` (loads from st.secrets / .env / defaults)
-- All `print()` statements replaced with `logging` module
-- Retry logic with exponential backoff on all API calls (3 attempts, 2s base delay)
-- Pinned dependencies in `requirements.txt` with exact versions
-- Removed outdated `land_tenders_dashboard/` directory
-- GitHub Actions daily refresh workflow added
-- Streamlit Cloud theme configured in `.streamlit/config.toml`
+The dashboard now loads data from SQLite instead of JSON files, with JSON kept as fallback:
+- `db.py` — TenderDB class with 6 tables, WAL mode, upsert with change detection
+- 10,447 tenders, 30,997 history rows, 3,471 documents migrated from JSON + details_cache
+- Daily refresh saves to both SQLite and JSON, syncs documents for active tenders
+- `app.py` tries DB first → JSON fallback → API fallback → sample data
 
-**Next**: Push to GitHub, connect Streamlit Cloud, configure email allowlist auth.
+**Next**: Deploy to Streamlit Cloud, or start Sprint 4 (Analytical Engine).
 
 ---
 
@@ -25,6 +23,12 @@ The codebase has been refactored for production deployment:
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-17 | Sprint 3: SQLite database layer — TenderDB class with schema, upsert, queries | `db.py` (NEW), `config.py` |
+| 2026-02-17 | Sprint 3: Migration script — replay JSON snapshots + cached details into DB | `scripts/migrate_json_to_db.py` (NEW) |
+| 2026-02-17 | Sprint 3: DB persistence in data_client — save_to_db(), sync_documents_to_db() | `data_client.py` |
+| 2026-02-17 | Sprint 3: Refresh script — save to DB + sync documents for active tenders | `scripts/refresh_tenders.py` |
+| 2026-02-17 | Sprint 3: Dashboard loads from DB first with JSON fallback | `app.py` |
+| 2026-02-17 | Sprint 3: GitHub Actions commits tenders.db alongside JSON snapshots | `.github/workflows/daily_refresh.yml` |
 | 2026-02-17 | Sprint 1: Config management — extract hardcoded values into `config.py` | `config.py` (NEW), `app.py`, `data_client.py` |
 | 2026-02-17 | Sprint 1: Logging — replace all print() with logging module | `app.py`, `data_client.py` |
 | 2026-02-17 | Sprint 1: Retry logic — exponential backoff on API calls | `data_client.py` |
@@ -43,19 +47,34 @@ The codebase has been refactored for production deployment:
 
 ## Known Issues
 
-1. **No tests** — No test suite exists. pytest tests should be added for data_client functions.
+1. **No tests** — No test suite exists. pytest tests should be added for data_client and db functions.
 2. **Date range filter removed** — The urgency toggle replaces the old date range picker. May want to add it back as an "advanced" option.
 3. **Pie chart click-to-filter** — Plotly click events don't wire easily to Streamlit filters. Deferred.
 4. **Streamlit Cloud auth** — Not yet configured. Need org email domain.
+5. **DB file in git** — tenders.db (7.5 MB) is committed to git. May need git-lfs if it grows significantly.
 
 ---
 
 ## Next Steps
 
-1. **Push to GitHub** — Commit Sprint 1 changes on a feature branch.
-2. **Deploy to Streamlit Cloud** — Connect repo, configure email allowlist auth.
-3. **Verify deployment** — All sections render, data loads correctly.
-4. **Sprint 2** — User to define missing features.
+1. **Deploy to Streamlit Cloud** — Connect repo, configure email allowlist auth.
+2. **Verify deployment** — All sections render, data loads from DB correctly.
+3. **Sprint 2** — User to define missing features.
+4. **Sprint 4** — Analytical engine: scoring + market trends.
+5. **Sprint 5** — Alerts: Telegram + email notifications for new tenders/documents.
+
+---
+
+## Database Schema
+
+```
+tenders            — 10,447 rows — current state of each tender
+tender_history     — 30,997 rows — daily snapshots (4 dates)
+tender_documents   —  3,471 rows — document metadata from 444 tenders
+tender_scores      — (empty)     — Sprint 4: scoring results
+alert_rules        — (empty)     — Sprint 5: alert configuration
+alert_history      — (empty)     — Sprint 5: sent notifications
+```
 
 ---
 
@@ -64,8 +83,9 @@ The codebase has been refactored for production deployment:
 ```
 Gov tender projects/
 ├── app.py                          # Main Streamlit dashboard
-├── config.py                       # Centralized configuration (NEW)
-├── data_client.py                  # API client, data normalization, caching
+├── config.py                       # Centralized configuration
+├── db.py                           # SQLite database layer (NEW - Sprint 3)
+├── data_client.py                  # API client, data normalization, caching, DB persistence
 ├── tender_pdf_extractor.py         # PDF extraction: גוש, חלקה, תב"ע from brochure PDFs
 ├── mavat_client.py                 # Playwright client: search plans on mavat.iplan.gov.il
 ├── test_pdf_extractor.py           # Test script for PDF extractor (2 sample PDFs)
@@ -82,11 +102,13 @@ Gov tender projects/
 │   └── config.toml                 # Streamlit theme + server config
 ├── .github/
 │   └── workflows/
-│       └── daily_refresh.yml       # GitHub Actions: daily tender snapshot
+│       └── daily_refresh.yml       # GitHub Actions: daily tender snapshot + DB update
 ├── scripts/
-│   └── refresh_tenders.py          # Data refresh script (used by cron)
-├── tenders_list_*.json             # Daily API snapshots
+│   ├── refresh_tenders.py          # Data refresh script (used by cron)
+│   └── migrate_json_to_db.py       # One-time migration: JSON → SQLite (NEW - Sprint 3)
+├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
+│   ├── tenders.db                  # SQLite database (NEW - Sprint 3)
 │   └── details_cache/              # Cached tender detail JSON files
 ├── tmp/                            # Temporary files (gitignored)
 └── venv/                           # Python virtual environment (gitignored)

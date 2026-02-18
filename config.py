@@ -102,6 +102,7 @@ CACHE_TTL: int = _get_int("CACHE_TTL", 3600)  # seconds
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parent
 DATA_DIR: Path = PROJECT_ROOT / _get("DATA_DIR", "data")
+DB_PATH: Path = PROJECT_ROOT / _get("DB_PATH", "data/tenders.db")
 LOGS_DIR: Path = PROJECT_ROOT / "logs"
 
 # ============================================================================

@@ -433,6 +433,57 @@ class LandTendersClient:
 
         return pd.concat(dfs, ignore_index=True)
 
+    # ────────────────────────────────────────────────────────────────────────
+    # Database persistence
+    # ────────────────────────────────────────────────────────────────────────
+
+    def save_to_db(
+        self, df: pd.DataFrame, snapshot_date: Optional[str] = None,
+    ) -> int:
+        """Save tenders DataFrame to SQLite.
+
+        Args:
+            df: Normalized tenders DataFrame.
+            snapshot_date: ISO date string for the history entry.
+
+        Returns:
+            Number of tenders processed.
+        """
+        from db import TenderDB
+
+        db = TenderDB()
+        db.upsert_tenders(df, snapshot_date)
+        return len(df)
+
+    def sync_documents_to_db(self, tender_ids: List[int]) -> int:
+        """Fetch details for given tenders and save their documents to DB.
+
+        Args:
+            tender_ids: List of tender IDs to sync documents for.
+
+        Returns:
+            Count of new documents found.
+        """
+        from db import TenderDB
+
+        db = TenderDB()
+        new_doc_count = 0
+
+        for tid in tender_ids:
+            details = self.get_tender_details_cached(tid)
+            if not details:
+                continue
+
+            doc_list = list(details.get("MichrazDocList", []))
+            full_doc = details.get("MichrazFullDocument")
+            if full_doc and full_doc.get("RowID") is not None:
+                doc_list.append(full_doc)
+
+            new_docs = db.upsert_documents(tid, doc_list)
+            new_doc_count += len(new_docs)
+
+        return new_doc_count
+
 
 # ============================================================================
 # UTILITY FUNCTIONS
