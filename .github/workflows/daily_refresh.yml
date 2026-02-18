@@ -36,4 +36,5 @@ jobs:
           git add tenders_list_*.json data/tenders.db
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "data: daily tender snapshot $(date +%Y-%m-%d)"
+          git pull --rebase
           git push
