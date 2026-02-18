@@ -11,6 +11,7 @@ Usage:
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -44,18 +45,33 @@ def main() -> None:
     logger.info("JSON snapshot saved: %s (%d tenders)", filepath, len(df))
 
     # 3. Save to SQLite database
-    rows = client.save_to_db(df)
-    logger.info("Saved %d tenders to database", rows)
+    try:
+        rows = client.save_to_db(df)
+        logger.info("Saved %d tenders to database", rows)
+    except Exception as exc:
+        logger.warning("Failed to save to database (non-fatal): %s", exc)
 
-    # 4. Sync documents for active tenders (status 1=draft, 2=committee, 3=active)
-    if "status_code" in df.columns:
-        active_ids = df[df["status_code"].isin([1, 2, 3])]["tender_id"].tolist()
-    else:
-        active_ids = df["tender_id"].tolist()
+    # 4. Sync documents for active tenders (non-fatal — skipped if API is slow)
+    try:
+        if "status_code" in df.columns:
+            active_ids = df[df["status_code"].isin([1, 2, 3])]["tender_id"].tolist()
+        else:
+            active_ids = df["tender_id"].tolist()
 
-    logger.info("Syncing documents for %d active tenders...", len(active_ids))
-    new_docs = client.sync_documents_to_db(active_ids)
-    logger.info("Document sync complete: %d new documents found", new_docs)
+        # Limit batch size to avoid API rate limits in CI (no cache on fresh checkout)
+        max_doc_sync = int(os.environ.get("DOC_SYNC_LIMIT", "50"))
+        if len(active_ids) > max_doc_sync:
+            logger.info(
+                "Limiting doc sync to %d/%d tenders (set DOC_SYNC_LIMIT to change)",
+                max_doc_sync, len(active_ids),
+            )
+            active_ids = active_ids[:max_doc_sync]
+
+        logger.info("Syncing documents for %d active tenders...", len(active_ids))
+        new_docs = client.sync_documents_to_db(active_ids)
+        logger.info("Document sync complete: %d new documents found", new_docs)
+    except Exception as exc:
+        logger.warning("Document sync failed (non-fatal): %s", exc)
 
     # 5. Log summary
     try:
