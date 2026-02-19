@@ -211,6 +211,31 @@ st.markdown("""
         color: var(--mg-text-on-dark-muted) !important;
     }
 
+    /* Sidebar text inputs, password fields, auth forms — ensure ALL text visible */
+    section[data-testid="stSidebar"] input,
+    section[data-testid="stSidebar"] textarea {
+        color: var(--mg-text-on-dark) !important;
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
+        caret-color: var(--mg-primary) !important;
+    }
+    section[data-testid="stSidebar"] input::placeholder,
+    section[data-testid="stSidebar"] textarea::placeholder {
+        color: var(--mg-text-on-dark-muted) !important;
+        opacity: 0.7 !important;
+    }
+    /* Sidebar form containers and auth elements */
+    section[data-testid="stSidebar"] [data-testid="stTextInput"] > div,
+    section[data-testid="stSidebar"] [data-testid="stPasswordInput"] > div,
+    section[data-testid="stSidebar"] [data-testid="stForm"] input {
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stTextInput"] label,
+    section[data-testid="stSidebar"] [data-testid="stPasswordInput"] label {
+        color: var(--mg-text-on-dark) !important;
+    }
+
     /* Sidebar dividers */
     section[data-testid="stSidebar"] hr {
         border-color: var(--mg-border-dark) !important;
@@ -257,23 +282,34 @@ st.markdown("""
 
     /* ── Pill-style Radio Buttons (Main Area) ── */
     div[role="radiogroup"] {
-        background-color: #FFFFFF;
-        padding: 4px;
-        border-radius: 12px;
+        background-color: var(--mg-bg-card);
+        padding: 3px;
+        border-radius: 10px;
         display: inline-flex;
         border: 1px solid var(--mg-border);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
     div[role="radiogroup"] label {
-        padding: 6px 16px !important;
-        border-radius: 8px !important;
+        padding: 4px 12px !important;
+        border-radius: 7px !important;
         margin: 0 !important;
-        transition: all 0.2s;
+        transition: all 0.15s ease;
+        font-size: 0.8rem !important;
+        cursor: pointer;
     }
     div[role="radiogroup"] label:hover {
         background-color: #FFFBEB;
+    }
+    /* Active/selected radio pill */
+    div[role="radiogroup"] label[data-checked="true"],
+    div[role="radiogroup"] label:has(input:checked) {
+        background-color: var(--mg-primary) !important;
+        color: #111827 !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 3px rgba(212, 160, 23, 0.3);
     }
 
     /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
