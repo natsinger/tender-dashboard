@@ -132,6 +132,26 @@ CREATE TABLE IF NOT EXISTS alert_history (
 )
 """
 
+_CREATE_REVIEWS = """
+CREATE TABLE IF NOT EXISTS tender_reviews (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id   INTEGER NOT NULL UNIQUE,
+    status      TEXT NOT NULL DEFAULT 'לא נסקר',
+    updated_by  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    notes       TEXT
+)
+"""
+
+# Valid review stages (ordered)
+REVIEW_STAGES: list[str] = [
+    "לא נסקר",
+    "סקירה ראשונית",
+    "בדיקה מעמיקה",
+    "הוצג בפורום",
+    "אושר בפורום",
+]
+
 _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_tenders_city ON tenders(city)",
     "CREATE INDEX IF NOT EXISTS idx_tenders_region ON tenders(region)",
@@ -144,6 +164,7 @@ _CREATE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_watchlist(user_email)",
     "CREATE INDEX IF NOT EXISTS idx_watchlist_tender ON user_watchlist(tender_id)",
     "CREATE INDEX IF NOT EXISTS idx_alert_hist_user ON alert_history(user_email)",
+    "CREATE INDEX IF NOT EXISTS idx_reviews_tender ON tender_reviews(tender_id)",
 ]
 
 
@@ -193,6 +214,7 @@ class TenderDB:
 
             conn.execute(_CREATE_WATCHLIST)
             conn.execute(_CREATE_ALERT_HISTORY)
+            conn.execute(_CREATE_REVIEWS)
             for idx_sql in _CREATE_INDEXES:
                 conn.execute(idx_sql)
             conn.commit()
@@ -578,7 +600,8 @@ class TenderDB:
             df = pd.read_sql_query(
                 """SELECT w.id AS watch_id, w.tender_id, w.created_at,
                           t.tender_name, t.city, t.region, t.status,
-                          t.deadline, t.units, t.published_booklet
+                          t.deadline, t.units, t.published_booklet,
+                          t.tender_type
                    FROM user_watchlist w
                    JOIN tenders t ON w.tender_id = t.tender_id
                    WHERE w.user_email = ? AND w.active = 1
@@ -675,6 +698,96 @@ class TenderDB:
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Review status methods
+    # ------------------------------------------------------------------
+
+    def get_review_status(self, tender_id: int) -> Optional[dict]:
+        """Get the current review status for a tender.
+
+        Args:
+            tender_id: The tender's MichrazID.
+
+        Returns:
+            Dict with status, updated_by, updated_at, notes — or None.
+        """
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM tender_reviews WHERE tender_id = ?",
+                (tender_id,),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def set_review_status(
+        self,
+        tender_id: int,
+        status: str,
+        updated_by: str,
+        notes: Optional[str] = None,
+    ) -> str:
+        """Set or update the review status for a tender.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            status: One of REVIEW_STAGES.
+            updated_by: Email or name of the person updating.
+            notes: Optional free-text notes.
+
+        Returns:
+            The previous status (for notification purposes), or empty string.
+        """
+        now = datetime.now().isoformat(timespec="seconds")
+        conn = self._connect()
+        try:
+            # Get previous status
+            prev_row = conn.execute(
+                "SELECT status FROM tender_reviews WHERE tender_id = ?",
+                (tender_id,),
+            ).fetchone()
+            prev_status = prev_row["status"] if prev_row else ""
+
+            conn.execute(
+                """INSERT INTO tender_reviews (tender_id, status, updated_by, updated_at, notes)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(tender_id)
+                   DO UPDATE SET status = excluded.status,
+                                 updated_by = excluded.updated_by,
+                                 updated_at = excluded.updated_at,
+                                 notes = excluded.notes""",
+                (tender_id, status, updated_by, now, notes),
+            )
+            conn.commit()
+            return prev_status
+        finally:
+            conn.close()
+
+    def get_review_statuses_for_tenders(
+        self, tender_ids: list[int],
+    ) -> dict[int, dict]:
+        """Bulk-fetch review statuses for a list of tender IDs.
+
+        Args:
+            tender_ids: List of tender MichrazIDs.
+
+        Returns:
+            Dict mapping tender_id → review dict (status, updated_by, etc.).
+        """
+        if not tender_ids:
+            return {}
+        conn = self._connect()
+        try:
+            placeholders = ",".join("?" * len(tender_ids))
+            rows = conn.execute(
+                f"SELECT * FROM tender_reviews WHERE tender_id IN ({placeholders})",  # noqa: S608
+                tender_ids,
+            ).fetchall()
+            return {r["tender_id"]: dict(r) for r in rows}
+        finally:
+            conn.close()
+
     def get_stats(self) -> dict:
         """Get summary counts for logging/debugging.
 
@@ -686,7 +799,7 @@ class TenderDB:
             stats = {}
             for table in (
                 "tenders", "tender_history", "tender_documents",
-                "user_watchlist", "alert_history",
+                "user_watchlist", "alert_history", "tender_reviews",
             ):
                 count = conn.execute(
                     f"SELECT COUNT(*) FROM {table}",  # noqa: S608
