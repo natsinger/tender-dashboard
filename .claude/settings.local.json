@@ -46,7 +46,9 @@
       "Bash(taskkill:*)",
       "Bash(findstr:*)",
       "Bash(git add:*)",
-      "Bash(GIT_EDITOR=true git rebase:*)"
+      "Bash(GIT_EDITOR=true git rebase:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)"
     ]
   }
 }
