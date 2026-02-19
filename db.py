@@ -47,6 +47,9 @@ _PAGE_SIZE = 1000
 def _clean_val(val: object) -> object:
     """Convert NaN/NaT/inf to None for JSON-safe Supabase payloads.
 
+    Also converts booleans to int (0/1) because Supabase table columns
+    ``published_booklet`` and ``targeted`` are typed as integer.
+
     Args:
         val: Any Python value (from a pandas row or dict).
 
@@ -55,6 +58,15 @@ def _clean_val(val: object) -> object:
     """
     if val is None:
         return None
+    # bool check MUST come before numeric checks (bool is subclass of int)
+    if isinstance(val, (bool,)):
+        return int(val)
+    try:
+        import numpy as np
+        if isinstance(val, np.bool_):
+            return int(val)
+    except ImportError:
+        pass
     if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
         return None
     if isinstance(val, pd.Timestamp):
