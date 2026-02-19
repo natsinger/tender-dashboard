@@ -79,13 +79,12 @@ def load_tender_details(tender_id: int) -> Optional[Dict]:
 def get_user_email() -> str:
     """Get the current user's email address.
 
-    On Streamlit Cloud: uses st.user.email (requires viewer auth enabled).
-    Local development: uses DEV_USER_EMAIL from config/env.
+    Priority: st.user.email (Streamlit Cloud auth) → sidebar input → DEV_USER_EMAIL.
 
     Returns:
         Email string, or empty string if not available.
     """
-    # Try st.user (Streamlit >= 1.37) then st.experimental_user (legacy)
+    # 1. Try Streamlit Cloud auth (st.user / st.experimental_user)
     for attr in ("user", "experimental_user"):
         try:
             user_info = getattr(st, attr, None)
@@ -94,11 +93,24 @@ def get_user_email() -> str:
                 if not email:
                     email = user_info.get("email", "") if hasattr(user_info, "get") else ""
                 if email:
-                    logger.info("User identified via st.%s: %s", attr, email)
                     return email
-        except Exception as exc:
-            logger.debug("st.%s failed: %s", attr, exc)
+        except Exception:
+            pass
 
-    logger.warning("No user email detected (st.user=%s, DEV_USER_EMAIL=%s)",
-                    getattr(st, "user", "N/A"), DEV_USER_EMAIL or "empty")
-    return DEV_USER_EMAIL
+    # 2. Fall back to sidebar email input (persisted in session state)
+    if "user_email" not in st.session_state:
+        st.session_state["user_email"] = DEV_USER_EMAIL or ""
+
+    if not st.session_state["user_email"]:
+        with st.sidebar:
+            st.markdown("---")
+            entered = st.text_input(
+                "📧 הזן כתובת מייל לזיהוי",
+                placeholder="your.name@company.co.il",
+                key="_email_input",
+            )
+            if entered and "@" in entered:
+                st.session_state["user_email"] = entered.strip()
+                st.rerun()
+
+    return st.session_state.get("user_email", "")
