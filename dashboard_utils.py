@@ -76,15 +76,53 @@ def load_tender_details(tender_id: int) -> Optional[Dict]:
     return client.get_tender_details_cached(tender_id)
 
 
-def get_user_email() -> str:
-    """Get the current user's email address.
+def render_email_input() -> None:
+    """Render the sidebar email input widget (call ONCE per page).
 
-    Priority: st.user.email (Streamlit Cloud auth) → sidebar input → DEV_USER_EMAIL.
+    Must be called before any calls to get_user_email() so that
+    the user has a way to identify themselves when Streamlit Cloud
+    auth is not available.
+    """
+    if "user_email" not in st.session_state:
+        st.session_state["user_email"] = DEV_USER_EMAIL or ""
+
+    if not st.session_state["user_email"]:
+        # Check Streamlit Cloud auth first — skip widget if authenticated
+        for attr in ("user", "experimental_user"):
+            try:
+                user_info = getattr(st, attr, None)
+                if user_info is not None:
+                    email = getattr(user_info, "email", "") or ""
+                    if not email:
+                        email = user_info.get("email", "") if hasattr(user_info, "get") else ""
+                    if email:
+                        st.session_state["user_email"] = email
+                        return
+            except Exception:
+                pass
+
+        with st.sidebar:
+            st.markdown("---")
+            entered = st.text_input(
+                "📧 הזן כתובת מייל לזיהוי",
+                placeholder="your.name@company.co.il",
+                key="_email_input",
+            )
+            if entered and "@" in entered:
+                st.session_state["user_email"] = entered.strip()
+                st.rerun()
+
+
+def get_user_email() -> str:
+    """Get the current user's email address (no widgets rendered).
+
+    Returns the email from Streamlit Cloud auth or session state.
+    Call render_email_input() once per page before using this.
 
     Returns:
         Email string, or empty string if not available.
     """
-    # 1. Try Streamlit Cloud auth (st.user / st.experimental_user)
+    # 1. Try Streamlit Cloud auth
     for attr in ("user", "experimental_user"):
         try:
             user_info = getattr(st, attr, None)
@@ -97,22 +135,5 @@ def get_user_email() -> str:
         except Exception:
             pass
 
-    # 2. Fall back to sidebar email input (persisted in session state)
-    if "user_email" not in st.session_state:
-        st.session_state["user_email"] = DEV_USER_EMAIL or ""
-
-    # Only render the input widget once per page run (avoid duplicate key error)
-    if not st.session_state["user_email"] and not st.session_state.get("_email_input_rendered"):
-        st.session_state["_email_input_rendered"] = True
-        with st.sidebar:
-            st.markdown("---")
-            entered = st.text_input(
-                "📧 הזן כתובת מייל לזיהוי",
-                placeholder="your.name@company.co.il",
-                key="_email_input",
-            )
-            if entered and "@" in entered:
-                st.session_state["user_email"] = entered.strip()
-                st.rerun()
-
+    # 2. Session state (populated by render_email_input)
     return st.session_state.get("user_email", "")
