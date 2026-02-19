@@ -114,7 +114,7 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+    .block-container { padding-top: 0.5rem; padding-bottom: 1rem; }
 
     /* ── Sort Icon Fix: Force Font & Align ── */
     [data-testid="stIconMaterial"] {
@@ -131,10 +131,10 @@ st.markdown("""
     /* ── Metric Cards (MEGIDO Executive) ── */
     [data-testid="stMetric"] {
         background-color: var(--mg-bg-card) !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         border: 1px solid var(--mg-border) !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06) !important;
-        padding: 20px !important;
+        padding: 12px 16px !important;
         position: relative;
     }
     /* Gold accent stripe on right (RTL) */
@@ -151,12 +151,12 @@ st.markdown("""
     [data-testid="stMetricValue"] {
         color: var(--mg-text-heading) !important;
         font-weight: 700 !important;
-        font-size: 26px !important;
+        font-size: 22px !important;
     }
     [data-testid="stMetricLabel"] {
         color: var(--mg-text-muted) !important;
         font-weight: 500 !important;
-        font-size: 14px !important;
+        font-size: 12px !important;
     }
 
     /* ── Sidebar (Dark Executive) ── */
@@ -387,12 +387,12 @@ st.markdown("""
     /* ── Section headers with accent border ── */
     .section-header {
         font-family: 'Inter', 'Heebo', sans-serif;
-        font-size: 1.2rem;
+        font-size: 1rem;
         font-weight: 700;
         color: var(--mg-text-heading);
-        padding: 8px 12px 8px 0;
+        padding: 4px 10px 4px 0;
         border-right: 3px solid var(--mg-primary);
-        margin: 1.5rem 0 1rem 0;
+        margin: 0.5rem 0 0.5rem 0;
         direction: rtl;
     }
 
@@ -400,9 +400,14 @@ st.markdown("""
     .new-tenders-card {
         background: #ECFDF5;
         border: 1px solid #6EE7B7;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    /* ── Compact toggle for deadlines ── */
+    [data-testid="stToggle"] label {
+        font-size: 0.8rem !important;
     }
 
     /* ── Expander styling ── */
@@ -422,12 +427,12 @@ st.markdown("""
         unicode-bidi: plaintext;
     }
     h2, h3 {
-        margin-top: 0.8rem;
-        margin-bottom: 0.6rem;
+        margin-top: 0.4rem;
+        margin-bottom: 0.3rem;
     }
     h4, h5, h6 {
-        margin-top: 0.5rem;
-        margin-bottom: 0.4rem;
+        margin-top: 0.3rem;
+        margin-bottom: 0.2rem;
     }
 
     /* ── Prevent text overflow globally ── */
@@ -458,13 +463,16 @@ st.markdown("""
         overflow: visible !important;
     }
 
-    /* ── Divider colour ── */
-    hr { border-color: var(--mg-border) !important; }
+    /* ── Divider colour + compact ── */
+    hr {
+        border-color: var(--mg-border) !important;
+        margin: 0.5rem 0 !important;
+    }
 
     /* ── Subheader spacing fix ── */
     [data-testid="stSubheader"] {
-        padding-bottom: 0.3rem;
-        margin-bottom: 0.5rem;
+        padding-bottom: 0.1rem;
+        margin-bottom: 0.3rem;
     }
 
     /* ── Radio buttons inline fix ── */

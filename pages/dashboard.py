@@ -1,9 +1,10 @@
 """
 Full dashboard page — daily user view.
 
-Includes: new tenders, KPIs, pie charts, deadlines table, data explorer,
-tender detail viewer, watchlist management, detailed analytics, and admin/debug.
-Branded for MEGIDO BY AURA (מגידו י.ק.).
+Compact executive layout: pre-filtered to 5 relevant tender types + active only.
+Sections: header, new tenders + KPIs, pies + deadlines, data explorer,
+tender detail, watchlist, review status, analytics, debug.
+Branded for MEGIDO BY AURA.
 """
 
 from datetime import datetime, timedelta
@@ -22,6 +23,7 @@ from config import (
     DOCUMENT_DOWNLOAD_API,
     LAND_AUTHORITY_API,
     NON_ACTIVE_STATUSES,
+    RELEVANT_TENDER_TYPES,
     RMI_SITE_URL,
     TEAM_EMAIL,
     TENDER_DETAIL_API,
@@ -30,90 +32,41 @@ from dashboard_utils import get_user_email, load_data, load_tender_details, rend
 from data_client import LandTendersClient, build_document_url
 from user_db import REVIEW_STAGES, UserDB
 
-# ── MEGIDO brand constants ─────────────────────────────────────────────────
+# ── Constants ────────────────────────────────────────────────────────────────
 MEGIDO_CHART_COLORS = ["#D4A017", "#3B82F6", "#1B2A4A", "#10B981", "#EF4444", "#8B5CF6"]
 MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
+PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#111827")
+PLOTLY_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
+today = datetime.now()
 
-# ============================================================================
-# SIDEBAR
-# ============================================================================
-
-# Render email input widget once (before any get_user_email() calls)
+# ── Load & pre-filter data ───────────────────────────────────────────────────
 render_email_input()
+
+df_all = load_data(data_source="latest_file")
+# Pre-filter: only 5 relevant types
+df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
+# Active-only base
+active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
+
+
+# ============================================================================
+# SIDEBAR — brand + team watchlist + stats (no filters)
+# ============================================================================
 
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
-        st.image(str(logo_path), width=140)
-    st.markdown("""
-    <div class="sidebar-header">
-        <h2>MEGIDO</h2>
-        <p>מגידו י.ק. | מכרזי קרקע</p>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("---")
-
-    data_source = "latest_file"
-    df = load_data(data_source=data_source)
-    today = datetime.now()
-
-    st.markdown("---")
-
-    # ── Filters ──────────────────────────────────────────────────────────
-    st.markdown("### 🔍 סינון")
-
-    # Region filter
-    if 'region' in df.columns:
-        regions = sorted(df['region'].dropna().unique().tolist())
-        selected_regions = st.multiselect(
-            "אזור / מחוז",
-            regions,
-            default=[],
-            placeholder="בחר אזורים (ריק = הכל)"
-        )
-    else:
-        selected_regions = []
-
-    # City filter — cascades from region
-    if selected_regions:
-        cities_in_regions = df[df['region'].isin(selected_regions)]['city'].dropna().unique()
-        cities = sorted(cities_in_regions.tolist())
-        city_placeholder = f"ערים באזורים שנבחרו ({len(cities)})"
-    else:
-        cities = sorted(df['city'].dropna().unique().tolist())
-        city_placeholder = "בחר ערים (ריק = הכל)"
-
-    selected_cities = st.multiselect(
-        "עיר / יישוב",
-        cities,
-        default=[],
-        placeholder=city_placeholder
+        st.image(str(logo_path), width=120)
+    st.markdown(
+        '<div class="sidebar-header">'
+        "<h2>MEGIDO</h2>"
+        "<p>מגידו י.ק. | מכרזי קרקע</p>"
+        "</div>",
+        unsafe_allow_html=True,
     )
 
-    # Tender type filter
-    types = sorted(df['tender_type'].dropna().unique().tolist())
-    selected_types = st.multiselect(
-        "סוג מכרז",
-        types,
-        default=[],
-        placeholder="בחר סוגים (ריק = הכל)"
-    )
-
-    # Status filter
-    statuses = sorted(df['status'].dropna().unique().tolist())
-    selected_statuses = st.multiselect(
-        "סטטוס",
-        statuses,
-        default=[],
-        placeholder="בחר סטטוסים (ריק = הכל)"
-    )
-
-    st.markdown("---")
-    st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
-    st.caption(f"סה\"כ רשומות: {len(df):,}")
-
-    # ── Team watchlist management (requires login) ────────────────────
+    # ── Team watchlist management ────────────────────────────────────────
     st.markdown("---")
     st.markdown("#### 📋 מכרזים נבחרים (צוות)")
 
@@ -123,12 +76,11 @@ with st.sidebar:
     if not _sidebar_email:
         st.caption("יש להזדהות כדי לנהל מכרזים נבחרים")
     else:
-        # Build searchable label map
         _team_labels: dict[int, str] = {}
-        for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
-            _name = str(_r['tender_name'])[:40] if pd.notna(_r['tender_name']) else ''
-            _city = str(_r['city'])[:15] if pd.notna(_r['city']) else ''
-            _team_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
+        for _, _r in df[["tender_id", "tender_name", "city"]].iterrows():
+            _name = str(_r["tender_name"])[:40] if pd.notna(_r["tender_name"]) else ""
+            _city = str(_r["city"])[:15] if pd.notna(_r["city"]) else ""
+            _team_labels[int(_r["tender_id"])] = f"{_name} — {_city}" if _city else _name
 
         _team_tid = st.selectbox(
             "חיפוש מכרז",
@@ -148,15 +100,13 @@ with st.sidebar:
                 else:
                     st.info("כבר ברשימה.")
 
-        # Current team watchlist with remove buttons
         _team_wl = _team_db.get_watchlist_rows(TEAM_EMAIL)
         if _team_wl:
-            _tlookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
+            _tlookup = df.set_index("tender_id").to_dict("index") if not df.empty else {}
             for _tw in _team_wl:
-                _ttid = int(_tw['tender_id'])
+                _ttid = int(_tw["tender_id"])
                 _tt = _tlookup.get(_ttid, {})
-                _tdisplay = str(_tt.get('tender_name', _ttid))[:25]
-
+                _tdisplay = str(_tt.get("tender_name", _ttid))[:25]
                 _tc1, _tc2 = st.columns([5, 1])
                 with _tc1:
                     st.caption(_tdisplay)
@@ -167,890 +117,597 @@ with st.sidebar:
         else:
             st.caption("אין מכרזים נבחרים")
 
+    # ── Stats footer ─────────────────────────────────────────────────────
+    st.markdown("---")
+    st.caption(f"עדכון: {today.strftime('%d/%m/%Y %H:%M')}")
+    st.caption(f"רשומות: {len(df):,} (מ-{len(df_all):,})")
+
 
 # ============================================================================
-# APPLY FILTERS
+# ROW 0: COMPACT HEADER — logo + title in one line
 # ============================================================================
 
-filtered_df = df.copy()
+st.markdown(
+    '<div style="display:flex;align-items:center;gap:12px;padding:0 0 4px 0;margin:0;">'
+    '<span style="font-size:1.4rem;font-weight:700;color:#111827;">'
+    "MEGIDO | לוח מכרזי קרקע"
+    "</span>"
+    f'<span style="font-size:0.8rem;color:#9CA3AF;margin-right:auto;">{today.strftime("%d/%m/%Y")}</span>'
+    "</div>",
+    unsafe_allow_html=True,
+)
 
-if selected_regions:
-    filtered_df = filtered_df[filtered_df['region'].isin(selected_regions)]
-
-if selected_cities:
-    filtered_df = filtered_df[filtered_df['city'].isin(selected_cities)]
-
-if selected_types:
-    filtered_df = filtered_df[filtered_df['tender_type'].isin(selected_types)]
-
-if selected_statuses:
-    filtered_df = filtered_df[filtered_df['status'].isin(selected_statuses)]
-
-# Default active-only filter (unless user explicitly selected statuses)
-if not selected_statuses:
-    filtered_df = filtered_df[~filtered_df['status'].isin(NON_ACTIVE_STATUSES)]
 
 # ============================================================================
-# SECTION 0: NEW TENDERS THIS WEEK (since last Sunday)
+# ROW 1: NEW TENDERS (left) + KPIs 2×2 (right)
 # ============================================================================
 
 
 def _last_sunday(ref_date: datetime) -> datetime:
     """Return the most recent Sunday (00:00) on or before ref_date."""
-    days_since_sunday = ref_date.weekday() + 1
-    if days_since_sunday == 7:
-        days_since_sunday = 0
-    return (ref_date - timedelta(days=days_since_sunday)).replace(
-        hour=0, minute=0, second=0, microsecond=0,
-    )
+    days_since = ref_date.weekday() + 1
+    if days_since == 7:
+        days_since = 0
+    return (ref_date - timedelta(days=days_since)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 sunday_cutoff = _last_sunday(today)
 
-# Filter: brochure available + still open
-new_tenders_df = filtered_df[
-    (filtered_df['published_booklet'] == True) &
-    (filtered_df['deadline'].notna()) &
-    (filtered_df['deadline'] >= today)
+# New tenders: have brochure + still open + published this week
+new_tenders_df = active_df[
+    (active_df["published_booklet"] == True)
+    & (active_df["deadline"].notna())
+    & (active_df["deadline"] >= today)
 ].copy()
 
-# Use publish_date as the "new since" indicator
 date_col = None
-for candidate in ['created_date', 'publish_date', 'published_date']:
+for candidate in ["created_date", "publish_date", "published_date"]:
     if candidate in new_tenders_df.columns:
         date_col = candidate
         break
-
 if date_col:
     new_tenders_df = new_tenders_df[new_tenders_df[date_col] >= sunday_cutoff]
 
-st.markdown('<div class="section-header" style="font-size:1.6rem; margin-top:0;">מכרזי קרקע</div>', unsafe_allow_html=True)
-st.caption(f"MEGIDO | מעקב מכרזי קרקע  •  מעודכן: {today.strftime('%d/%m/%Y')}")
+col_new, col_kpi = st.columns([3, 2])
 
-if len(new_tenders_df) > 0:
-    st.markdown('<div class="new-tenders-card">', unsafe_allow_html=True)
-    st.markdown(f"### 🆕 מכרזים חדשים מיום ראשון ({sunday_cutoff.strftime('%d/%m')})")
-    new_display = new_tenders_df[[
-        'tender_name', 'city', 'units', 'tender_type', 'deadline'
-    ]].copy()
-    new_display.columns = ['שם מכרז', 'עיר', 'יח"ד', 'סוג', 'מועד אחרון']
-    new_display['מועד אחרון'] = pd.to_datetime(new_display['מועד אחרון']).dt.strftime('%d/%m/%Y')
-    new_display = new_display.sort_values('יח"ד', ascending=False)
-    st.dataframe(
-        new_display,
-        use_container_width=True,
-        hide_index=True,
-        height=min(38 * len(new_display) + 40, 250),
+with col_new:
+    st.markdown(
+        f'<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">'
+        f"🆕 מכרזים חדשים מיום ראשון ({sunday_cutoff.strftime('%d/%m')})"
+        f"</div>",
+        unsafe_allow_html=True,
     )
-    st.markdown('</div>', unsafe_allow_html=True)
-else:
-    st.info(f"אין מכרזים חדשים עם חוברת מאז יום ראשון ({sunday_cutoff.strftime('%d/%m')})")
-
-st.markdown("---")
-
-# ============================================================================
-# SECTION 1: EXECUTIVE KPIs
-# ============================================================================
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric("🟢 מכרזים פתוחים", f"{len(filtered_df):,}")
-
-with col2:
-    total_units = int(filtered_df['units'].sum())
-    st.metric("🏠 יח\"ד", f"{total_units:,}")
-
-with col3:
-    unique_cities = filtered_df['city'].nunique()
-    st.metric("🏙️ ערים", f"{unique_cities}")
-
-with col4:
-    closing_soon = len(filtered_df[
-        (filtered_df['deadline'].notna()) &
-        (filtered_df['deadline'] >= today) &
-        (filtered_df['deadline'] <= today + timedelta(days=CLOSING_SOON_DAYS))
-    ])
-    st.metric(f"⏰ נסגרים ב-{CLOSING_SOON_DAYS} יום", closing_soon)
-
-st.markdown("---")
-
-
-# ============================================================================
-# SECTION 2: THREE PIE CHARTS (side by side)
-# ============================================================================
-
-PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=12, color="#111827")
-PLOTLY_TRANSPARENT_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-
-col_pie1, col_pie2, col_pie3 = st.columns(3)
-
-# ── Pie Chart 1: Brochure Availability ────────────────────────────────────
-with col_pie1:
-    st.markdown('<p class="pie-title">📋 חוברת מכרז</p>', unsafe_allow_html=True)
-
-    if 'published_booklet' in filtered_df.columns and len(filtered_df) > 0:
-        booklet_counts = filtered_df['published_booklet'].value_counts()
-        available = int(booklet_counts.get(True, 0))
-        not_available = int(booklet_counts.get(False, 0))
-
-        fig_booklet = px.pie(
-            values=[available, not_available],
-            names=["חוברת זמינה", "חוברת לא זמינה"],
-            color_discrete_sequence=["#D4A017", "#E5E7EB"],
-            hole=0.55,
+    if len(new_tenders_df) > 0:
+        new_display = new_tenders_df[["tender_name", "city", "units", "tender_type", "deadline"]].copy()
+        new_display.columns = ["שם מכרז", "עיר", 'יח"ד', "סוג", "מועד אחרון"]
+        new_display["מועד אחרון"] = pd.to_datetime(new_display["מועד אחרון"]).dt.strftime("%d/%m/%Y")
+        new_display = new_display.sort_values('יח"ד', ascending=False)
+        st.dataframe(
+            new_display,
+            use_container_width=True,
+            hide_index=True,
+            height=min(35 * len(new_display) + 38, 220),
         )
-        fig_booklet.update_traces(
-            textinfo='value',
-            textposition='inside',
-            textfont_size=14,
-            hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
-        )
-        fig_booklet.update_layout(
-            height=220,
-            margin=dict(t=10, b=30, l=5, r=5),
-            legend=dict(
-                orientation="h", yanchor="top", y=-0.08,
-                xanchor="center", x=0.5, font=dict(size=11),
-            ),
-            showlegend=True,
-            font=PLOTLY_FONT,
-            uniformtext_minsize=10, uniformtext_mode='hide',
-            **PLOTLY_TRANSPARENT_BG,
-        )
-        st.plotly_chart(fig_booklet, use_container_width=True, key="pie_booklet")
     else:
-        st.info("אין נתוני חוברת מכרז")
+        st.info("אין מכרזים חדשים עם חוברת השבוע")
 
-# ── Pie Chart 2: Brochure-only tenders by District + Urgency Toggle ──────
-with col_pie2:
-    st.markdown('<p class="pie-title">חוברות לפי מחוז</p>', unsafe_allow_html=True)
+with col_kpi:
+    closing_soon_count = len(
+        active_df[
+            (active_df["deadline"].notna())
+            & (active_df["deadline"] >= today)
+            & (active_df["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS))
+        ]
+    )
+    k1, k2 = st.columns(2)
+    with k1:
+        st.metric("🟢 פעילים", f"{len(active_df):,}")
+    with k2:
+        st.metric("🏠 יח\"ד", f"{int(active_df['units'].sum()):,}")
+    k3, k4 = st.columns(2)
+    with k3:
+        st.metric("🏙️ ערים", f"{active_df['city'].nunique()}")
+    with k4:
+        st.metric(f"⏰ נסגרים {CLOSING_SOON_DAYS}י'", closing_soon_count)
 
-    pie2_days_options = {"1W": 7, "2W": 14, "4W": 28}
-    urgency_pie2 = st.session_state.get('urgency_pie2', '4W')
-    pie2_days = pie2_days_options.get(urgency_pie2, 28)
 
-    pie2_df = filtered_df[filtered_df['published_booklet'] == True].copy()
-    pie2_cutoff = today + timedelta(days=pie2_days)
-    pie2_df = pie2_df[
-        (pie2_df['deadline'].notna()) &
-        (pie2_df['deadline'] >= today) &
-        (pie2_df['deadline'] <= pie2_cutoff)
-    ]
+# ============================================================================
+# ROW 2: PIE CHARTS (left) + CLOSING DEADLINES (right)
+# ============================================================================
 
-    if 'region' in pie2_df.columns and len(pie2_df) > 0:
-        brochure_by_region = (
-            pie2_df.groupby('region')
-            .size()
-            .reset_index(name='count')
-            .sort_values('count', ascending=False)
-        )
-        if not brochure_by_region.empty:
-            fig_brochure_region = px.pie(
-                brochure_by_region,
-                values='count',
-                names='region',
+col_pies, col_deadlines = st.columns([3, 2])
+
+with col_pies:
+    p1, p2, p3 = st.columns(3)
+
+    # ── Pie 1: Brochure availability ─────────────────────────────────────
+    with p1:
+        st.markdown('<p class="pie-title" style="font-size:13px;">📋 חוברת מכרז</p>', unsafe_allow_html=True)
+        if "published_booklet" in active_df.columns and len(active_df) > 0:
+            bc = active_df["published_booklet"].value_counts()
+            avail = int(bc.get(True, 0))
+            not_avail = int(bc.get(False, 0))
+            fig1 = px.pie(
+                values=[avail, not_avail],
+                names=["זמינה", "לא זמינה"],
+                color_discrete_sequence=["#D4A017", "#E5E7EB"],
                 hole=0.55,
-                color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
-            fig_brochure_region.update_traces(
-                textinfo='value',
-                textposition='inside',
-                textfont_size=14,
-                hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
+            fig1.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+            fig1.update_layout(
+                height=180, margin=dict(t=5, b=5, l=5, r=5),
+                showlegend=False, font=PLOTLY_FONT, **PLOTLY_BG,
             )
-            fig_brochure_region.update_layout(
-                height=220,
-                margin=dict(t=10, b=10, l=5, r=5),
-                showlegend=False,
-                uniformtext_minsize=10, uniformtext_mode='hide',
-                font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
-                **PLOTLY_TRANSPARENT_BG,
-            )
-            st.plotly_chart(fig_brochure_region, use_container_width=True, key="pie_brochure_region")
+            st.plotly_chart(fig1, use_container_width=True, key="pie_booklet")
         else:
-            st.info("אין מכרזים עם חוברת בטווח שנבחר")
-    else:
-        st.info("אין נתונים")
+            st.info("אין נתונים")
 
-    # Week toggle below chart (legend-like placement)
-    st.radio(
-        "טווח",
-        list({"1W": 7, "2W": 14, "4W": 28}.keys()),
-        index=2,
-        horizontal=True,
-        key="urgency_pie2",
-        label_visibility="collapsed",
+    # ── Pie 2: Brochures by region (with urgency toggle) ─────────────────
+    with p2:
+        st.markdown('<p class="pie-title" style="font-size:13px;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
+        pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
+        urg = st.session_state.get("urgency_pie2", "4W")
+        pie2_days = pie2_opts.get(urg, 28)
+        pie2_df = active_df[active_df["published_booklet"] == True].copy()
+        pie2_cut = today + timedelta(days=pie2_days)
+        pie2_df = pie2_df[(pie2_df["deadline"].notna()) & (pie2_df["deadline"] >= today) & (pie2_df["deadline"] <= pie2_cut)]
+
+        if "region" in pie2_df.columns and len(pie2_df) > 0:
+            br = pie2_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
+            if not br.empty:
+                fig2 = px.pie(br, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
+                fig2.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                fig2.update_layout(
+                    height=180, margin=dict(t=5, b=5, l=5, r=5),
+                    showlegend=False, font=PLOTLY_FONT, **PLOTLY_BG,
+                )
+                st.plotly_chart(fig2, use_container_width=True, key="pie_brochure_region")
+            else:
+                st.info("אין מכרזים בטווח")
+        else:
+            st.info("אין נתונים")
+        st.radio("טווח", list(pie2_opts.keys()), index=2, horizontal=True, key="urgency_pie2", label_visibility="collapsed")
+
+    # ── Pie 3: Active tenders by region ──────────────────────────────────
+    with p3:
+        st.markdown('<p class="pie-title" style="font-size:13px;">פעילים לפי מחוז</p>', unsafe_allow_html=True)
+        if "region" in active_df.columns and len(active_df) > 0:
+            tr = active_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
+            if not tr.empty:
+                fig3 = px.pie(tr, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
+                fig3.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                fig3.update_layout(
+                    height=180, margin=dict(t=5, b=5, l=5, r=5),
+                    showlegend=False, font=PLOTLY_FONT, **PLOTLY_BG,
+                )
+                st.plotly_chart(fig3, use_container_width=True, key="pie_region")
+            else:
+                st.info("אין נתונים")
+        else:
+            st.info("אין נתוני אזור")
+
+with col_deadlines:
+    st.markdown(
+        '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">⏰ מועדי סגירה</div>',
+        unsafe_allow_html=True,
     )
 
-# ── Pie Chart 3: All tenders by District ──────────────────────────────────
-with col_pie3:
-    st.markdown('<p class="pie-title">מכרזים פעילים</p>', unsafe_allow_html=True)
+    # Toggle: 2 weeks / all
+    show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
 
-    if 'region' in filtered_df.columns and len(filtered_df) > 0:
-        tenders_by_region = (
-            filtered_df.groupby('region')
-            .size()
-            .reset_index(name='count')
-            .sort_values('count', ascending=False)
+    upcoming = active_df[
+        (active_df["deadline"].notna())
+        & (active_df["deadline"] >= today)
+    ].sort_values("deadline")
+
+    if not show_all_deadlines:
+        upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
+
+    if len(upcoming) > 0:
+        up_disp = upcoming[["tender_name", "city", "units", "deadline"]].copy()
+        up_disp["days_left"] = (up_disp["deadline"] - today).dt.days
+
+        def _urgency(d: int) -> str:
+            if d <= 7:
+                return "🔴"
+            if d <= 14:
+                return "🟡"
+            return "🟢"
+
+        up_disp.insert(0, "urg", up_disp["days_left"].apply(_urgency))
+        up_disp["deadline"] = up_disp["deadline"].dt.strftime("%d/%m")
+
+        st.dataframe(
+            up_disp,
+            column_config={
+                "urg": st.column_config.TextColumn("", width="small"),
+                "tender_name": st.column_config.TextColumn("שם", width="medium"),
+                "city": st.column_config.TextColumn("עיר", width="small"),
+                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
+                "deadline": st.column_config.TextColumn("סגירה", width="small"),
+                "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
+            },
+            hide_index=True,
+            use_container_width=True,
+            height=min(35 * len(up_disp) + 38, 350),
         )
-
-        if not tenders_by_region.empty:
-            fig_region = px.pie(
-                tenders_by_region,
-                values='count',
-                names='region',
-                hole=0.55,
-                color_discrete_sequence=MEGIDO_CHART_COLORS,
-            )
-            fig_region.update_traces(
-                textinfo='value',
-                textposition='inside',
-                textfont_size=14,
-                hovertemplate='%{label}: %{value} מכרזים (%{percent})<extra></extra>',
-            )
-            fig_region.update_layout(
-                height=220,
-                margin=dict(t=10, b=10, l=5, r=5),
-                showlegend=False,
-                uniformtext_minsize=10, uniformtext_mode='hide',
-                font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
-                **PLOTLY_TRANSPARENT_BG,
-            )
-            st.plotly_chart(fig_region, use_container_width=True, key="pie_region_units")
-
-            with st.expander("📋 פירוט לפי מחוז"):
-                for region_name in tenders_by_region['region'].tolist():
-                    region_subset = filtered_df[filtered_df['region'] == region_name]
-                    region_units = int(region_subset['units'].sum())
-                    with st.expander(f"{region_name} — {region_units:,} יח\"ד ({len(region_subset)} מכרזים)"):
-                        detail = region_subset.nlargest(8, 'units')[['tender_name', 'city', 'units', 'tender_type']].copy()
-                        detail.columns = ['שם מכרז', 'עיר', 'יח"ד', 'סוג']
-                        st.dataframe(detail, use_container_width=True, hide_index=True, height=min(38 * len(detail) + 40, 200))
-        else:
-            st.info("אין נתוני יח\"ד להצגה")
+        st.caption(f"{len(up_disp)} מכרזים")
     else:
-        st.info("אין נתוני אזור")
+        st.info("אין מכרזים קרובים לסגירה")
 
 st.markdown("---")
 
 
 # ============================================================================
-# SECTION 3: UPCOMING DEADLINES TABLE (enhanced)
+# ROW 3: DATA EXPLORER — 4 inline filters, pre-filtered
 # ============================================================================
 
-st.subheader("⏰ מכרזים קרובים לסגירה")
-
-EXCLUDED_STATUSES = {"בוטל", "נסגר"}
-upcoming = filtered_df[
-    (filtered_df['deadline'].notna()) &
-    (filtered_df['deadline'] >= today) &
-    (~filtered_df['status'].isin(EXCLUDED_STATUSES))
-].sort_values('deadline')
-
-if len(upcoming) > 0:
-    upcoming_display = upcoming[[
-        'tender_name', 'city', 'units', 'deadline', 'published_booklet'
-    ]].copy()
-
-    upcoming_display['days_left'] = (upcoming_display['deadline'] - today).dt.days
-
-    def urgency_indicator(days: int) -> str:
-        """Return urgency emoji based on days remaining."""
-        if days <= 7:
-            return '🔴'
-        elif days <= 14:
-            return '🟡'
-        return '🟢'
-
-    upcoming_display['urgency'] = upcoming_display['days_left'].apply(urgency_indicator)
-    upcoming_display['booklet'] = upcoming_display['published_booklet'].apply(
-        lambda x: '✅' if x else '❌'
-    )
-    upcoming_display['deadline'] = upcoming_display['deadline'].dt.strftime('%d/%m')
-
-    display_upcoming = upcoming_display[[
-        'urgency', 'tender_name', 'city', 'units', 'deadline', 'days_left', 'booklet'
-    ]].copy()
-
-    st.caption(f"מציג {len(display_upcoming)} מכרזים עם מועד סגירה עתידי")
-
-    st.dataframe(
-        display_upcoming,
-        column_config={
-            "urgency": st.column_config.TextColumn("", width="small"),
-            "tender_name": st.column_config.TextColumn("שם", width="medium"),
-            "city": st.column_config.TextColumn("עיר", width="small"),
-            "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
-            "deadline": st.column_config.TextColumn("סגירה", width="small"),
-            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
-            "booklet": st.column_config.TextColumn("📋", width="small"),
-        },
-        hide_index=True,
-        use_container_width=True,
-    )
-else:
-    st.info("אין מכרזים קרובים לסגירה בטווח שנבחר.")
-
-st.markdown("---")
-
-
-# ============================================================================
-# SECTION 4: FULL DATA EXPLORER
-# ============================================================================
-
-st.subheader("📋 כל המכרזים")
-
-COLUMN_LABELS = {
-    "tender_id": "מס' מכרז",
-    "tender_name": "שם מכרז",
-    "city": "עיר",
-    "region": "מחוז",
-    "tender_type": "סוג מכרז",
-    "purpose": "ייעוד",
-    "units": "יח\"ד",
-    "deadline": "מועד סגירה",
-    "publish_date": "תאריך פרסום",
-    "committee_date": "תאריך ועדה",
-    "status": "סטטוס",
-    "published_booklet": "חוברת מכרז",
-    "location": "מיקום",
-    "targeted": "מכוון",
-}
-
-HIDDEN_COLUMNS = {
-    'city_code', 'status_code', 'purpose_code', 'tender_type_code',
-    'KodMerchav', 'KhalYaadRashi', 'PirsumDate', 'ChoveretUpdateDate',
-    'area_sqm', 'min_price', 'gush', 'helka',
-}
-
-user_cols = [c for c in filtered_df.columns if c not in HIDDEN_COLUMNS]
-default_cols = [
-    'tender_name', 'city', 'tender_type',
-    'units', 'deadline', 'status', 'published_booklet'
-]
-display_cols = [c for c in default_cols if c in user_cols]
-
-selected_cols = st.multiselect(
-    "בחר עמודות להצגה",
-    user_cols,
-    default=display_cols,
-    format_func=lambda c: COLUMN_LABELS.get(c, c),
+st.markdown(
+    '<div class="section-header" style="font-size:1rem;margin:0 0 6px 0;">📋 סייר מכרזים</div>',
+    unsafe_allow_html=True,
 )
 
-# ── Per-column filters ──────────────────────────────────────────────────
-st.markdown("##### סינון לפי עמודה")
-filter_cols = st.columns(4)
+# Start from active_df (already filtered to 5 types + active)
+explorer_df = active_df.copy()
 
-table_df = filtered_df.copy()
+f1, f2, f3, f4 = st.columns(4)
+with f1:
+    _cities = sorted(explorer_df["city"].dropna().unique().tolist())
+    sel_cities = st.multiselect("עיר", _cities, default=[], key="exp_city", placeholder="הכל")
+    if sel_cities:
+        explorer_df = explorer_df[explorer_df["city"].isin(sel_cities)]
 
-with filter_cols[0]:
-    if 'city' in table_df.columns:
-        city_vals = sorted(table_df['city'].dropna().unique().tolist())
-        tbl_city = st.multiselect(
-            "עיר", city_vals, default=[], key="tbl_city",
-            placeholder="הכל",
-        )
-        if tbl_city:
-            table_df = table_df[table_df['city'].isin(tbl_city)]
+with f2:
+    _regions = sorted(explorer_df["region"].dropna().unique().tolist()) if "region" in explorer_df.columns else []
+    sel_regions = st.multiselect("מחוז", _regions, default=[], key="exp_region", placeholder="הכל")
+    if sel_regions:
+        explorer_df = explorer_df[explorer_df["region"].isin(sel_regions)]
 
-with filter_cols[1]:
-    if 'region' in table_df.columns:
-        region_vals = sorted(table_df['region'].dropna().unique().tolist())
-        tbl_region = st.multiselect(
-            "מחוז", region_vals, default=[], key="tbl_region",
-            placeholder="הכל",
-        )
-        if tbl_region:
-            table_df = table_df[table_df['region'].isin(tbl_region)]
+with f3:
+    _purposes = sorted(explorer_df["purpose"].dropna().unique().tolist()) if "purpose" in explorer_df.columns else []
+    sel_purpose = st.multiselect("ייעוד", _purposes, default=[], key="exp_purpose", placeholder="הכל")
+    if sel_purpose:
+        explorer_df = explorer_df[explorer_df["purpose"].isin(sel_purpose)]
 
-with filter_cols[2]:
-    if 'purpose' in table_df.columns:
-        purpose_vals = sorted(table_df['purpose'].dropna().unique().tolist())
-        tbl_purpose = st.multiselect(
-            "ייעוד", purpose_vals, default=[], key="tbl_purpose",
-            placeholder="הכל",
-        )
-        if tbl_purpose:
-            table_df = table_df[table_df['purpose'].isin(tbl_purpose)]
+with f4:
+    _statuses = sorted(explorer_df["status"].dropna().unique().tolist())
+    sel_status = st.multiselect("סטטוס", _statuses, default=[], key="exp_status", placeholder="הכל")
+    if sel_status:
+        explorer_df = explorer_df[explorer_df["status"].isin(sel_status)]
 
-with filter_cols[3]:
-    if 'status' in table_df.columns:
-        status_vals = sorted(table_df['status'].dropna().unique().tolist())
-        tbl_status = st.multiselect(
-            "סטטוס", status_vals, default=[], key="tbl_status",
-            placeholder="הכל",
-        )
-        if tbl_status:
-            table_df = table_df[table_df['status'].isin(tbl_status)]
+# Fixed display columns
+EXP_COLS = ["tender_name", "city", "region", "tender_type", "purpose", "units", "deadline", "status", "published_booklet"]
+display_cols = [c for c in EXP_COLS if c in explorer_df.columns]
 
-search_term = st.text_input(
-    "🔍 חיפוש חופשי", placeholder="הקלד לחיפוש בכל העמודות..."
-)
+if display_cols:
+    exp_display = explorer_df[display_cols].copy()
+    if "deadline" in exp_display.columns:
+        exp_display = exp_display.sort_values("deadline", ascending=True, na_position="last")
 
-if selected_cols:
-    display_df = table_df[selected_cols].copy()
+    for col in ["publish_date", "deadline", "committee_date"]:
+        if col in exp_display.columns:
+            exp_display[col] = pd.to_datetime(exp_display[col], errors="coerce")
 
-    if search_term:
-        mask = display_df.astype(str).apply(
-            lambda row: row.str.contains(search_term, case=False, na=False).any(),
-            axis=1
-        )
-        display_df = display_df[mask]
-
-    st.caption(f"מציג {len(display_df):,} רשומות")
-
-    if 'deadline' in display_df.columns:
-        display_df = display_df.sort_values(
-            'deadline', ascending=True, na_position='last'
-        )
-
-    display_df_formatted = display_df.copy()
-
-    for col in ['publish_date', 'deadline', 'committee_date']:
-        if col in display_df_formatted.columns:
-            display_df_formatted[col] = pd.to_datetime(
-                display_df_formatted[col], errors='coerce'
-            )
-
-    if 'tender_id' in display_df_formatted.columns:
-        display_df_formatted['tender_id'] = (
-            display_df_formatted['tender_id'].astype(str)
-        )
-
+    st.caption(f"{len(exp_display):,} רשומות")
     st.dataframe(
-        display_df_formatted,
+        exp_display,
         hide_index=True,
         use_container_width=True,
         column_config={
-            "tender_id": st.column_config.TextColumn("מס' מכרז", width="medium"),
             "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
             "city": st.column_config.TextColumn("עיר", width="medium"),
             "region": st.column_config.TextColumn("מחוז", width="small"),
             "tender_type": st.column_config.TextColumn("סוג", width="medium"),
             "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
-            "units": st.column_config.NumberColumn("יח\"ד", format="%d"),
+            "units": st.column_config.NumberColumn('יח"ד', format="%d"),
             "deadline": st.column_config.DateColumn("מועד סגירה", format="YYYY-MM-DD"),
-            "publish_date": st.column_config.DateColumn("תאריך פרסום", format="YYYY-MM-DD"),
-            "committee_date": st.column_config.DateColumn("תאריך ועדה", format="YYYY-MM-DD"),
             "status": st.column_config.TextColumn("סטטוס", width="small"),
             "published_booklet": st.column_config.CheckboxColumn("חוברת"),
-            "location": st.column_config.TextColumn("מיקום", width="medium"),
         },
     )
 
-    csv = display_df.to_csv(index=False, encoding='utf-8-sig')
+    csv = explorer_df[display_cols].to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
         label="📥 הורד CSV",
         data=csv,
         file_name=f"land_tenders_{today.strftime('%Y%m%d')}.csv",
-        mime="text/csv"
+        mime="text/csv",
     )
-
-st.markdown("---")
 
 
 # ============================================================================
-# SECTION 5: TENDER DETAIL VIEWER
+# ROW 4: TENDER DETAIL VIEWER (expander)
 # ============================================================================
 
-st.subheader("🔍 צפייה בפרטי מכרז")
+with st.expander("🔍 צפייה בפרטי מכרז", expanded=False):
+    col_select, col_refresh = st.columns([4, 1])
 
-col_select, col_refresh, col_fetch = st.columns([3, 1, 1])
+    with col_select:
+        detail_candidates = active_df.copy()
+        if len(detail_candidates) == 0:
+            detail_candidates = df.head(50)
+        detail_candidates = detail_candidates.sort_values("deadline", ascending=False)
 
-with col_select:
-    detail_candidates = filtered_df.copy()
-    if len(detail_candidates) == 0:
-        detail_candidates = df.head(50)
+        def _fmt_label(row: pd.Series) -> str:
+            name = row["tender_name"][:50] if pd.notna(row["tender_name"]) else "N/A"
+            city = row["city"][:20] if pd.notna(row["city"]) else "N/A"
+            return f"{row['tender_id']} - {name} ({city})"
 
-    detail_candidates = detail_candidates.sort_values('deadline', ascending=False)
+        detail_candidates["_label"] = detail_candidates.apply(_fmt_label, axis=1)
 
-    def format_tender_label(row: pd.Series) -> str:
-        """Format tender row for selectbox display."""
-        name = row['tender_name'][:50] if pd.notna(row['tender_name']) else 'N/A'
-        city = row['city'][:20] if pd.notna(row['city']) else 'N/A'
-        return f"{row['tender_id']} - {name} ({city})"
+        selected_tender_id = st.selectbox(
+            "בחר מכרז",
+            options=detail_candidates["tender_id"].tolist(),
+            format_func=lambda tid: detail_candidates[detail_candidates["tender_id"] == tid]["_label"].values[0],
+            key="detail_select",
+        )
 
-    detail_candidates['display_label'] = detail_candidates.apply(format_tender_label, axis=1)
+    with col_refresh:
+        force_refresh = st.checkbox("רענן", value=False, help="עקוף מטמון")
 
-    selected_tender_id = st.selectbox(
-        "בחר מכרז לצפייה",
-        options=detail_candidates['tender_id'].tolist(),
-        format_func=lambda tid: detail_candidates[
-            detail_candidates['tender_id'] == tid
-        ]['display_label'].values[0]
-    )
+    if selected_tender_id:
+        with st.spinner(f"טוען פרטי מכרז {selected_tender_id}..."):
+            details = load_tender_details(selected_tender_id)
+            list_data = active_df[active_df["tender_id"] == selected_tender_id]
+            list_data = list_data.iloc[0].to_dict() if len(list_data) > 0 else None
 
-with col_refresh:
-    force_refresh = st.checkbox(
-        "רענן מהAPI",
-        value=False,
-        help="עקוף מטמון וטען נתונים חדשים"
-    )
-
-with col_fetch:
-    if st.button(
-        "📥 טען הכל",
-        help=f"טען פרטים עבור {len(detail_candidates)} מכרזים"
-    ):
-        with st.spinner(f"טוען פרטים עבור {len(detail_candidates)} מכרזים..."):
-            client = LandTendersClient(data_dir=str(DATA_DIR))
-            tender_ids = detail_candidates['tender_id'].tolist()
-            details_dict = client.fetch_multiple_details(
-                tender_ids,
-                max_workers=DEFAULT_FETCH_WORKERS,
-                delay_seconds=DEFAULT_FETCH_DELAY,
-            )
-            st.success(f"נטענו פרטים עבור {len(details_dict)} מכרזים!")
-
-# Display selected tender details
-if selected_tender_id:
-    st.markdown("---")
-
-    with st.spinner(f"טוען פרטי מכרז {selected_tender_id}..."):
-        details = load_tender_details(selected_tender_id)
-
-        list_data = filtered_df[filtered_df['tender_id'] == selected_tender_id]
-        if len(list_data) > 0:
-            list_data = list_data.iloc[0].to_dict()
-        else:
-            list_data = None
-
-    if details:
-        with st.expander(f"📋 מכרז {selected_tender_id} — פרטים מלאים", expanded=True):
-
+        if details:
             st.markdown("### סקירה כללית")
             ov1, ov2, ov3, ov4 = st.columns(4)
-
             with ov1:
-                st.metric("מס' מכרז", details.get('MichrazID', selected_tender_id))
+                st.metric("מס' מכרז", details.get("MichrazID", selected_tender_id))
             with ov2:
-                st.metric("סטטוס", list_data.get('status', 'N/A') if list_data else 'N/A')
+                st.metric("סטטוס", list_data.get("status", "N/A") if list_data else "N/A")
             with ov3:
-                units = details.get(
-                    'YechidotDiur',
-                    list_data.get('units', 0) if list_data else 0
-                )
-                st.metric("יח\"ד", f"{int(units):,}" if units else "N/A")
+                units = details.get("YechidotDiur", list_data.get("units", 0) if list_data else 0)
+                st.metric('יח"ד', f"{int(units):,}" if units else "N/A")
             with ov4:
-                deadline_dt = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
+                deadline_dt = pd.to_datetime(details.get("SgiraDate"), errors="coerce")
                 if pd.notna(deadline_dt):
-                    deadline_naive = (
-                        deadline_dt.tz_localize(None) if deadline_dt.tzinfo else deadline_dt
-                    )
-                    days_until = (deadline_naive - today).days
-                    st.metric("ימים לסגירה", days_until)
+                    deadline_naive = deadline_dt.tz_localize(None) if deadline_dt.tzinfo else deadline_dt
+                    st.metric("ימים לסגירה", (deadline_naive - today).days)
                 else:
                     st.metric("מועד סגירה", "N/A")
 
             st.markdown("---")
             st.markdown("### פרטי מכרז")
-
             info_left, info_right = st.columns(2)
 
             with info_left:
-                tender_name = details.get('MichrazName', 'N/A')
-                city_val = list_data.get('city', 'N/A') if list_data else 'N/A'
-                location = details.get('Shchuna', list_data.get('location', '') if list_data else '')
-                tender_type_val = list_data.get('tender_type', 'N/A') if list_data else 'N/A'
-                purpose_val = list_data.get('purpose', 'N/A') if list_data else 'N/A'
-
-                info_html = f'''
-                <div class="detail-field">
-                    <strong>שם מכרז:</strong> {tender_name}<br>
-                    <strong>עיר:</strong> {city_val}<br>
-                    {'<strong>מיקום:</strong> ' + str(location) + '<br>' if location else ''}
-                    <strong>סוג:</strong> {tender_type_val}<br>
-                    <strong>ייעוד:</strong> {purpose_val}
-                </div>
-                '''
-                st.markdown(info_html, unsafe_allow_html=True)
+                tender_name = details.get("MichrazName", "N/A")
+                city_val = list_data.get("city", "N/A") if list_data else "N/A"
+                location = details.get("Shchuna", list_data.get("location", "") if list_data else "")
+                tender_type_val = list_data.get("tender_type", "N/A") if list_data else "N/A"
+                purpose_val = list_data.get("purpose", "N/A") if list_data else "N/A"
+                st.markdown(
+                    f'<div class="detail-field">'
+                    f"<strong>שם מכרז:</strong> {tender_name}<br>"
+                    f"<strong>עיר:</strong> {city_val}<br>"
+                    + (f"<strong>מיקום:</strong> {location}<br>" if location else "")
+                    + f"<strong>סוג:</strong> {tender_type_val}<br>"
+                    f"<strong>ייעוד:</strong> {purpose_val}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
             with info_right:
-                publish = pd.to_datetime(details.get('PtichaDate'), errors='coerce')
-                publish_str = publish.strftime('%Y-%m-%d') if pd.notna(publish) else 'N/A'
-                deadline_dt = pd.to_datetime(details.get('SgiraDate'), errors='coerce')
-                deadline_str = deadline_dt.strftime('%Y-%m-%d %H:%M') if pd.notna(deadline_dt) else 'N/A'
-                committee = pd.to_datetime(details.get('VaadaDate'), errors='coerce')
-                committee_str = committee.strftime('%Y-%m-%d') if pd.notna(committee) else 'N/A'
+                publish = pd.to_datetime(details.get("PtichaDate"), errors="coerce")
+                publish_str = publish.strftime("%Y-%m-%d") if pd.notna(publish) else "N/A"
+                deadline_dt2 = pd.to_datetime(details.get("SgiraDate"), errors="coerce")
+                deadline_str = deadline_dt2.strftime("%Y-%m-%d %H:%M") if pd.notna(deadline_dt2) else "N/A"
+                committee = pd.to_datetime(details.get("VaadaDate"), errors="coerce")
+                committee_str = committee.strftime("%Y-%m-%d") if pd.notna(committee) else "N/A"
+                st.markdown(
+                    f'<div class="detail-field">'
+                    f"<strong>תאריך פרסום:</strong> {publish_str}<br>"
+                    f"<strong>מועד סגירה:</strong> {deadline_str}<br>"
+                    f"<strong>תאריך ועדה:</strong> {committee_str}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-                dates_html = f'''
-                <div class="detail-field">
-                    <strong>תאריך פרסום:</strong> {publish_str}<br>
-                    <strong>מועד סגירה:</strong> {deadline_str}<br>
-                    <strong>תאריך ועדה:</strong> {committee_str}
-                </div>
-                '''
-                st.markdown(dates_html, unsafe_allow_html=True)
-
+            # ── Bids ─────────────────────────────────────────────────────
             st.markdown("---")
             st.markdown("### 💰 הצעות ומציעים")
-
-            plots = details.get('Tik', [])
-
+            plots = details.get("Tik", [])
             if plots:
                 for plot_idx, plot in enumerate(plots, 1):
                     st.markdown(f"#### מגרש {plot_idx}: {plot.get('TikID', 'N/A')}")
-
-                    winner_name = (plot.get('ShemZoche') or '').strip()
-                    winner_amount = plot.get('SchumZchiya', 0)
-
+                    winner_name = (plot.get("ShemZoche") or "").strip()
+                    winner_amount = plot.get("SchumZchiya", 0)
                     if winner_name:
                         st.success(f"🏆 **זוכה:** {winner_name}")
-                        winner_amount_str = f"₪{winner_amount:,.2f}" if winner_amount else 'N/A'
-                        area_str = f"{plot.get('Shetach', 0):,} מ\"ר"
-                        threshold_str = f"₪{plot.get('MechirSaf', 0):,.2f}"
-                        bid_html = f'''
-                        <div class="detail-field">
-                            <strong>סכום זכייה:</strong> {winner_amount_str} &nbsp;|&nbsp;
-                            <strong>שטח:</strong> {area_str} &nbsp;|&nbsp;
-                            <strong>מחיר סף:</strong> {threshold_str}
-                        </div>
-                        '''
-                        st.markdown(bid_html, unsafe_allow_html=True)
-
-                    bidders = plot.get('mpHatzaaotMitcham', [])
+                        st.markdown(
+                            f'<div class="detail-field">'
+                            f"<strong>סכום זכייה:</strong> ₪{winner_amount:,.2f} | "
+                            f"<strong>שטח:</strong> {plot.get('Shetach', 0):,} מ\"ר | "
+                            f"<strong>מחיר סף:</strong> ₪{plot.get('MechirSaf', 0):,.2f}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    bidders = plot.get("mpHatzaaotMitcham", [])
                     if bidders:
                         st.info(f"📊 **סה\"כ הצעות:** {len(bidders)}")
-
-                        bidder_df = pd.DataFrame(bidders)
-                        bidder_df = bidder_df.sort_values('HatzaaSum', ascending=False)
-
-                        display_bidder_df = bidder_df.copy()
-                        display_bidder_df['HatzaaSum'] = display_bidder_df['HatzaaSum'].apply(
-                            lambda x: f"₪{x:,.2f}" if pd.notna(x) else 'N/A'
+                        bidder_df = pd.DataFrame(bidders).sort_values("HatzaaSum", ascending=False)
+                        disp_bid = bidder_df.copy()
+                        disp_bid["HatzaaSum"] = disp_bid["HatzaaSum"].apply(
+                            lambda x: f"₪{x:,.2f}" if pd.notna(x) else "N/A"
                         )
-                        display_bidder_df = display_bidder_df.rename(columns={
-                            'HatzaaID': 'מס\' הצעה',
-                            'HatzaaSum': 'סכום',
-                            'HatzaaDescription': 'תיאור'
+                        disp_bid = disp_bid.rename(columns={
+                            "HatzaaID": "מס' הצעה", "HatzaaSum": "סכום", "HatzaaDescription": "תיאור"
                         })
-
-                        st.dataframe(
-                            display_bidder_df,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-
-                        csv_bid = bidder_df.to_csv(index=False, encoding='utf-8-sig')
-                        st.download_button(
-                            label=f"📥 הורד CSV מציעים (מגרש {plot_idx})",
-                            data=csv_bid,
-                            file_name=f"bidders_{selected_tender_id}_plot{plot_idx}.csv",
-                            mime="text/csv"
-                        )
+                        st.dataframe(disp_bid, use_container_width=True, hide_index=True)
                     else:
                         st.info("אין הצעות למגרש זה")
-
                     if plot_idx < len(plots):
                         st.markdown("---")
             else:
                 st.info("אין מידע על הצעות למכרז זה")
 
+            # ── Documents ────────────────────────────────────────────────
             st.markdown("---")
             st.markdown("### 📄 מסמכים")
-
-            full_doc = details.get('MichrazFullDocument')
-            if full_doc and full_doc.get('RowID') is not None:
-                doc_name = full_doc.get('DocName', 'מסמך פרסום מלא.pdf')
+            full_doc = details.get("MichrazFullDocument")
+            if full_doc and full_doc.get("RowID") is not None:
+                doc_name = full_doc.get("DocName", "מסמך פרסום מלא.pdf")
                 doc_url = build_document_url(full_doc)
-                st.markdown(
-                    f"#### 📕 מסמך פרסום מלא\n\n"
-                    f"[📥 **הורד: {doc_name}**]({doc_url})"
-                )
+                st.markdown(f"📕 [**הורד: {doc_name}**]({doc_url})")
 
-            docs = details.get('MichrazDocList', [])
+            docs = details.get("MichrazDocList", [])
             if docs:
                 st.markdown(f"#### 📁 מסמכים נוספים ({len(docs)})")
                 for doc in docs[:15]:
-                    doc_name = doc.get('DocName', doc.get('Teur', 'Unknown'))
-                    doc_desc = doc.get('Teur', '')
-                    doc_date = doc.get('UpdateDate', '')
-                    if doc_date:
-                        date_formatted = pd.to_datetime(doc_date, errors='coerce')
-                        if pd.notna(date_formatted):
-                            doc_date = date_formatted.strftime('%Y-%m-%d')
-
-                    doc_url = build_document_url(doc)
-                    st.markdown(
-                        f"- [{doc_name}]({doc_url}) — {doc_desc} ({doc_date})"
-                    )
-
+                    d_name = doc.get("DocName", doc.get("Teur", "Unknown"))
+                    d_desc = doc.get("Teur", "")
+                    d_date = doc.get("UpdateDate", "")
+                    if d_date:
+                        dt = pd.to_datetime(d_date, errors="coerce")
+                        if pd.notna(dt):
+                            d_date = dt.strftime("%Y-%m-%d")
+                    d_url = build_document_url(doc)
+                    st.markdown(f"- [{d_name}]({d_url}) — {d_desc} ({d_date})")
                 if len(docs) > 15:
                     st.caption(f"... ועוד {len(docs) - 15} מסמכים")
-
             elif not full_doc:
                 st.info("אין מסמכים זמינים")
 
             st.markdown("---")
-            official_url = f"{RMI_SITE_URL}/{selected_tender_id}"
-            st.markdown(f"🔗 [צפה באתר רמ\"י הרשמי]({official_url})")
+            st.markdown(f"🔗 [צפה באתר רמ\"י]({RMI_SITE_URL}/{selected_tender_id})")
+        else:
+            st.error(f"לא ניתן לטעון פרטים למכרז {selected_tender_id}")
 
+
+# ============================================================================
+# ROW 5: WATCHLIST (compact expander)
+# ============================================================================
+
+with st.expander("🔔 רשימת מעקב", expanded=False):
+    user_email = get_user_email()
+
+    if not user_email:
+        st.warning("לא זוהה משתמש. הגדר DEV_USER_EMAIL בקובץ .env.")
     else:
-        st.error(f"לא ניתן לטעון פרטים למכרז {selected_tender_id}")
-        st.info("יתכן שמזהה המכרז לא קיים, או שהAPI אינו זמין.")
+        st.caption(f"משתמש: {user_email}")
+        watch_db = UserDB()
 
-st.markdown("---")
+        if not watch_db.available:
+            st.warning("Supabase לא מוגדר — רשימת המעקב לא תישמר.")
+
+        # Add to watchlist
+        _watch_labels: dict[int, str] = {}
+        for _, _r in df[["tender_id", "tender_name", "city"]].iterrows():
+            _name = str(_r["tender_name"])[:50] if pd.notna(_r["tender_name"]) else ""
+            _city = str(_r["city"])[:20] if pd.notna(_r["city"]) else ""
+            _watch_labels[int(_r["tender_id"])] = f"{_name} — {_city}" if _city else _name
+
+        add_col, btn_col = st.columns([3, 1])
+        with add_col:
+            watch_tender_id = st.selectbox(
+                "בחר מכרז להוספה",
+                options=list(_watch_labels.keys()),
+                index=None,
+                format_func=lambda tid: _watch_labels[tid],
+                placeholder="הקלד שם מכרז או עיר...",
+                key="watch_tender_input",
+            )
+        with btn_col:
+            st.markdown("<br>", unsafe_allow_html=True)
+            add_clicked = st.button("➕ הוסף למעקב", key="btn_add_watch")
+
+        if add_clicked and watch_tender_id is not None:
+            added = watch_db.add_to_watchlist(user_email, int(watch_tender_id))
+            if added:
+                st.success(f"מכרז נוסף! תקבל/י התראה במייל כשיתווספו מסמכים.")
+                st.rerun()
+            else:
+                st.info("מכרז כבר ברשימת המעקב.")
+
+        watchlist_rows = watch_db.get_watchlist_rows(user_email)
+        if watchlist_rows:
+            st.markdown(f"##### מכרזים במעקב ({len(watchlist_rows)})")
+            _tender_lookup = df.set_index("tender_id").to_dict("index") if not df.empty else {}
+            for row in watchlist_rows:
+                tid = int(row["tender_id"])
+                t = _tender_lookup.get(tid, {})
+                w_cols = st.columns([2, 2, 2, 2, 1, 1])
+                with w_cols[0]:
+                    st.write(str(t.get("tender_name", tid))[:50])
+                with w_cols[1]:
+                    st.write(str(t.get("city", "")))
+                with w_cols[2]:
+                    st.write(str(t.get("region", "")))
+                with w_cols[3]:
+                    dl = t.get("deadline", "")
+                    if dl and pd.notna(dl):
+                        dt = pd.to_datetime(dl, errors="coerce")
+                        st.write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "")
+                    else:
+                        st.write("")
+                with w_cols[4]:
+                    st.write(str(t.get("status", "")))
+                with w_cols[5]:
+                    if st.button("🗑️", key=f"rm_watch_{row['id']}"):
+                        watch_db.remove_from_watchlist(user_email, tid)
+                        st.rerun()
+            st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים.")
+        else:
+            st.info("רשימת המעקב ריקה.")
 
 
 # ============================================================================
-# SECTION 5.5: WATCHLIST MANAGEMENT
+# ROW 6: TEAM REVIEW STATUS (compact expander)
 # ============================================================================
 
-st.subheader("🔔 רשימת מעקב")
+with st.expander("📋 מכרזים נבחרים — סטטוס סקירה", expanded=False):
+    _review_email = get_user_email()
+    _review_db = UserDB()
 
-user_email = get_user_email()
+    _team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
+    _team_df = df[df["tender_id"].astype(int).isin(_team_ids)].copy() if _team_ids else pd.DataFrame()
 
-if not user_email:
-    st.warning(
-        "לא זוהה משתמש. "
-        "בסביבת פיתוח, הגדר DEV_USER_EMAIL בקובץ .env."
-    )
-else:
-    st.caption(f"משתמש: {user_email}")
+    _REVIEW_EMOJI: dict[str, str] = {
+        "לא נסקר": "⬜",
+        "סקירה ראשונית": "🔵",
+        "בדיקה מעמיקה": "🟣",
+        "הוצג בפורום": "🟠",
+        "אושר בפורום": "🟢",
+    }
 
-    watch_db = UserDB()
+    if len(_team_df) > 0:
+        _rev_tbl = _team_df[["tender_name", "city", "tender_type", "units"]].copy()
+        _rev_ids = _team_df["tender_id"].astype(int).tolist()
+        _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
 
-    if not watch_db.available:
-        st.warning("אחסון מרוחק (Supabase) לא מוגדר — רשימת המעקב לא תישמר בין כניסות.")
+        _rev_tbl["review"] = [
+            _REVIEW_EMOJI.get(
+                _rev_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
+            )
+            + " "
+            + _rev_map.get(int(tid), {}).get("status", "לא נסקר")
+            for tid in _team_df["tender_id"]
+        ]
 
-    # ── Add to watchlist ──────────────────────────────────────────────
-    # Build label map from ALL tenders so user can watch any tender
-    _watch_labels: dict[int, str] = {}
-    for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
-        _name = str(_r['tender_name'])[:50] if pd.notna(_r['tender_name']) else ''
-        _city = str(_r['city'])[:20] if pd.notna(_r['city']) else ''
-        _watch_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
-
-    add_col, btn_col = st.columns([3, 1])
-
-    with add_col:
-        watch_tender_id = st.selectbox(
-            "בחר מכרז להוספה לרשימת מעקב",
-            options=list(_watch_labels.keys()),
-            index=None,
-            format_func=lambda tid: _watch_labels[tid],
-            placeholder="הקלד מספר מכרז או שם עיר...",
-            key="watch_tender_input",
+        st.dataframe(
+            _rev_tbl,
+            column_config={
+                "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
+                "city": st.column_config.TextColumn("עיר", width="small"),
+                "tender_type": st.column_config.TextColumn("סוג", width="small"),
+                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
+                "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
+            },
+            hide_index=True,
+            use_container_width=True,
         )
 
-    with btn_col:
-        st.markdown("<br>", unsafe_allow_html=True)
-        add_clicked = st.button("➕ הוסף למעקב", key="btn_add_watch")
-
-    if add_clicked and watch_tender_id is not None:
-        _label = _watch_labels[watch_tender_id]
-        added = watch_db.add_to_watchlist(user_email, int(watch_tender_id))
-        if added:
-            st.success(
-                f"מכרז {_label} נוסף לרשימת המעקב! "
-                f"תקבל/י התראה במייל כשיתווספו מסמכים חדשים."
-            )
-            st.rerun()
+        if not _review_email:
+            st.info("יש להזדהות כדי לעדכן סטטוס סקירה.")
         else:
-            st.info(f"מכרז {_label} כבר נמצא ברשימת המעקב.")
-
-    # ── Display watchlist (join Supabase IDs with local tender data) ──
-    watchlist_rows = watch_db.get_watchlist_rows(user_email)
-
-    if watchlist_rows:
-        st.markdown(f"##### מכרזים במעקב ({len(watchlist_rows)})")
-
-        # Build a lookup from the loaded df for tender details
-        _tender_lookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
-
-        for row in watchlist_rows:
-            tid = int(row['tender_id'])
-            t = _tender_lookup.get(tid, {})
-            watch_id = row['id']
-
-            w_cols = st.columns([2, 2, 2, 2, 1, 1])
-            with w_cols[0]:
-                st.write(str(t.get('tender_name', tid))[:50])
-            with w_cols[1]:
-                st.write(str(t.get('city', '')))
-            with w_cols[2]:
-                st.write(str(t.get('region', '')))
-            with w_cols[3]:
-                deadline_val = t.get('deadline', '')
-                if deadline_val and pd.notna(deadline_val):
-                    dl = pd.to_datetime(deadline_val, errors='coerce')
-                    st.write(dl.strftime('%d/%m/%Y') if pd.notna(dl) else '')
-                else:
-                    st.write('')
-            with w_cols[4]:
-                st.write(str(t.get('status', '')))
-            with w_cols[5]:
-                if st.button("🗑️", key=f"rm_watch_{watch_id}"):
-                    watch_db.remove_from_watchlist(user_email, tid)
-                    st.rerun()
-
-        st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים למכרזים שברשימה.")
-    else:
-        st.info("רשימת המעקב ריקה. הוסף/י מכרזים לפי מספר כדי לקבל התראות.")
-
-st.markdown("---")
-
-
-# ============================================================================
-# SECTION 5.6: TEAM SELECTED TENDERS — REVIEW STATUS
-# ============================================================================
-
-st.subheader("📋 מכרזים נבחרים — סטטוס סקירה")
-
-_review_email = get_user_email()
-_review_db = UserDB()
-
-_team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
-if _team_ids:
-    _team_df = df[df['tender_id'].astype(int).isin(_team_ids)].copy()
-else:
-    _team_df = pd.DataFrame()
-
-_REVIEW_EMOJI: dict[str, str] = {
-    "לא נסקר": "⬜",
-    "סקירה ראשונית": "🔵",
-    "בדיקה מעמיקה": "🟣",
-    "הוצג בפורום": "🟠",
-    "אושר בפורום": "🟢",
-}
-
-if len(_team_df) > 0:
-    # Build compact display table
-    _rev_tbl = _team_df[['tender_name', 'city', 'tender_type', 'units']].copy()
-    _rev_ids = _team_df['tender_id'].astype(int).tolist()
-    _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
-
-    _rev_tbl['review'] = [
-        _REVIEW_EMOJI.get(
-            _rev_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
-        ) + " " + _rev_map.get(int(tid), {}).get("status", "לא נסקר")
-        for tid in _team_df['tender_id']
-    ]
-
-    st.dataframe(
-        _rev_tbl,
-        column_config={
-            "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
-            "city": st.column_config.TextColumn("עיר", width="small"),
-            "tender_type": st.column_config.TextColumn("סוג", width="small"),
-            "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
-            "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
-        },
-        hide_index=True,
-        use_container_width=True,
-    )
-
-    # ── Review status update controls ──────────────────────────────────
-    if not _review_email:
-        st.info("יש להזדהות כדי לעדכן סטטוס סקירה.")
-    else:
-        with st.expander("🔄 עדכון סטטוס סקירה", expanded=False):
             _rev_labels: dict[int, str] = {}
             for _, _r in _team_df.iterrows():
-                _rname = str(_r.get('tender_name', ''))[:30]
-                _rcity = str(_r.get('city', ''))[:15]
-                _rev_labels[int(_r['tender_id'])] = f"{_rname} — {_rcity}"
+                _rname = str(_r.get("tender_name", ""))[:30]
+                _rcity = str(_r.get("city", ""))[:15]
+                _rev_labels[int(_r["tender_id"])] = f"{_rname} — {_rcity}"
 
             _rc1, _rc2 = st.columns([2, 2])
             with _rc1:
@@ -1061,13 +718,8 @@ if len(_team_df) > 0:
                     key="dash_review_tender_select",
                 )
             with _rc2:
-                _cur_status = _rev_map.get(
-                    _rev_tid, {},
-                ).get("status", REVIEW_STAGES[0])
-                _cur_idx = (
-                    REVIEW_STAGES.index(_cur_status)
-                    if _cur_status in REVIEW_STAGES else 0
-                )
+                _cur_status = _rev_map.get(_rev_tid, {}).get("status", REVIEW_STAGES[0])
+                _cur_idx = REVIEW_STAGES.index(_cur_status) if _cur_status in REVIEW_STAGES else 0
                 _new_status = st.selectbox(
                     "סטטוס חדש",
                     options=REVIEW_STAGES,
@@ -1075,9 +727,7 @@ if len(_team_df) > 0:
                     key="dash_review_status_select",
                 )
 
-            _rev_notes = st.text_input(
-                "הערות (אופציונלי)", key="dash_review_notes", placeholder="..."
-            )
+            _rev_notes = st.text_input("הערות (אופציונלי)", key="dash_review_notes", placeholder="...")
 
             if st.button("💾 עדכן סטטוס", key="dash_btn_update_review"):
                 _prev = _review_db.set_review_status(
@@ -1086,131 +736,108 @@ if len(_team_df) > 0:
                     updated_by=_review_email,
                     notes=_rev_notes or None,
                 )
-                _rev_label = _rev_labels.get(_rev_tid, str(_rev_tid))
-                st.success(f"מכרז {_rev_label}: {_prev or 'חדש'} → {_new_status}")
+                st.success(f"מכרז {_rev_labels.get(_rev_tid, _rev_tid)}: {_prev or 'חדש'} → {_new_status}")
                 st.rerun()
-else:
-    st.info("אין מכרזים נבחרים. הוסף מכרזים דרך התפריט הצדדי ←")
-
-st.markdown("---")
+    else:
+        st.info("אין מכרזים נבחרים. הוסף מכרזים דרך התפריט הצדדי ←")
 
 
 # ============================================================================
-# SECTION 6: DETAILED ANALYTICS (collapsible)
+# ROW 7: DETAILED ANALYTICS (compact expander)
 # ============================================================================
 
 with st.expander("📊 ניתוח מפורט", expanded=False):
-
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
-        st.subheader("📍 מכרזים לפי עיר")
-        city_counts = filtered_df['city'].value_counts().head(10)
-
+        st.markdown("**📍 מכרזים לפי עיר**")
+        city_counts = active_df["city"].value_counts().head(10)
         if len(city_counts) > 0:
             fig_city = px.bar(
-                x=city_counts.values,
-                y=city_counts.index,
-                orientation='h',
-                labels={'x': 'מספר מכרזים', 'y': 'עיר'},
-                color=city_counts.values,
-                color_continuous_scale=MEGIDO_GOLD_SCALE,
+                x=city_counts.values, y=city_counts.index, orientation="h",
+                labels={"x": "מספר מכרזים", "y": "עיר"},
+                color=city_counts.values, color_continuous_scale=MEGIDO_GOLD_SCALE,
             )
             fig_city.update_layout(
-                showlegend=False, height=280,
+                showlegend=False, height=260,
                 margin=dict(t=10, b=30, l=10, r=10),
-                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+                font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig_city, use_container_width=True)
         else:
-            st.info("אין נתונים להצגה")
+            st.info("אין נתונים")
 
     with chart_col2:
-        st.subheader("🏷️ מכרזים לפי סוג")
-        type_counts = filtered_df['tender_type'].value_counts()
-
+        st.markdown("**🏷️ מכרזים לפי סוג**")
+        type_counts = active_df["tender_type"].value_counts()
         if len(type_counts) > 0:
             fig_type = px.pie(
-                values=type_counts.values,
-                names=type_counts.index,
-                hole=0.4,
-                color_discrete_sequence=MEGIDO_CHART_COLORS,
+                values=type_counts.values, names=type_counts.index,
+                hole=0.4, color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
             fig_type.update_layout(
-                height=280,
-                margin=dict(t=10, b=30, l=10, r=10),
-                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+                height=260, margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig_type, use_container_width=True)
         else:
-            st.info("אין נתונים להצגה")
+            st.info("אין נתונים")
 
     chart_col3, chart_col4 = st.columns(2)
 
     with chart_col3:
-        st.subheader("📈 מכרזים לאורך זמן")
-        timeline_df = filtered_df.copy()
-
-        if len(timeline_df) > 0 and timeline_df['publish_date'].notna().any():
-            timeline_df['month'] = timeline_df['publish_date'].dt.to_period('M').astype(str)
-            monthly_counts = timeline_df.groupby('month').size().reset_index(name='count')
-
-            fig_timeline = px.line(
-                monthly_counts,
-                x='month',
-                y='count',
-                markers=True,
-                labels={'month': 'חודש', 'count': 'מספר מכרזים'},
-                color_discrete_sequence=['#1B2A4A'],
+        st.markdown("**📈 מכרזים לאורך זמן**")
+        timeline_df = active_df.copy()
+        if len(timeline_df) > 0 and timeline_df["publish_date"].notna().any():
+            timeline_df["month"] = timeline_df["publish_date"].dt.to_period("M").astype(str)
+            monthly = timeline_df.groupby("month").size().reset_index(name="count")
+            fig_tl = px.line(
+                monthly, x="month", y="count", markers=True,
+                labels={"month": "חודש", "count": "מספר"},
+                color_discrete_sequence=["#1B2A4A"],
             )
-            fig_timeline.update_layout(
-                height=280,
-                margin=dict(t=10, b=30, l=10, r=10),
-                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            fig_tl.update_layout(
+                height=260, margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_BG,
             )
-            st.plotly_chart(fig_timeline, use_container_width=True)
+            st.plotly_chart(fig_tl, use_container_width=True)
         else:
-            st.info("אין נתוני תאריכים להצגה")
+            st.info("אין נתוני תאריכים")
 
     with chart_col4:
-        st.subheader("🏠 יח\"ד לפי סוג מכרז")
-        units_by_type = filtered_df.groupby('tender_type')['units'].sum().reset_index()
-        units_by_type = units_by_type[units_by_type['units'] > 0]
-
+        st.markdown('**🏠 יח"ד לפי סוג**')
+        units_by_type = active_df.groupby("tender_type")["units"].sum().reset_index()
+        units_by_type = units_by_type[units_by_type["units"] > 0]
         if not units_by_type.empty:
-            fig_units = px.bar(
-                units_by_type,
-                x='tender_type',
-                y='units',
-                labels={'units': 'סה\"כ יח\"ד', 'tender_type': 'סוג מכרז'},
-                color_discrete_sequence=['#D4A017'],
+            fig_u = px.bar(
+                units_by_type, x="tender_type", y="units",
+                labels={"units": 'סה"כ יח"ד', "tender_type": "סוג"},
+                color_discrete_sequence=["#D4A017"],
             )
-            fig_units.update_layout(
-                height=280,
-                margin=dict(t=10, b=30, l=10, r=10),
-                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            fig_u.update_layout(
+                height=260, margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_BG,
             )
-            st.plotly_chart(fig_units, use_container_width=True)
+            st.plotly_chart(fig_u, use_container_width=True)
         else:
-            st.info("אין נתוני יח\"ד להצגה")
+            st.info("אין נתוני יח\"ד")
 
 
 # ============================================================================
-# SECTION 7: ADMIN / DEBUG (collapsible)
+# ROW 8: DEBUG (compact expander)
 # ============================================================================
 
 with st.expander("🔧 ניהול ודיבוג", expanded=False):
     st.markdown("### סטטוס מערכת")
-    st.code(f"""
-    מקור נתונים: {data_source}
-    רשומות שנטענו: {len(df):,}
-    רשומות מסוננות: {len(filtered_df):,}
-    סוגי מכרז: {', '.join(df['tender_type'].unique().tolist())}
-    """)
-
+    st.code(
+        f"רשומות שנטענו: {len(df_all):,}\n"
+        f"לאחר סינון סוג: {len(df):,}\n"
+        f"פעילים: {len(active_df):,}\n"
+        f"סוגי מכרז: {', '.join(df['tender_type'].unique().tolist())}",
+    )
     st.markdown("### API Endpoints")
-    st.code(f"""
-    List: {LAND_AUTHORITY_API} (POST)
-    Detail: {TENDER_DETAIL_API}?michrazID=
-    Docs: {DOCUMENT_DOWNLOAD_API}
-    """)
+    st.code(
+        f"List: {LAND_AUTHORITY_API} (POST)\n"
+        f"Detail: {TENDER_DETAIL_API}?michrazID=\n"
+        f"Docs: {DOCUMENT_DOWNLOAD_API}",
+    )
