@@ -101,7 +101,9 @@ def get_user_email() -> str:
     if "user_email" not in st.session_state:
         st.session_state["user_email"] = DEV_USER_EMAIL or ""
 
-    if not st.session_state["user_email"]:
+    # Only render the input widget once per page run (avoid duplicate key error)
+    if not st.session_state["user_email"] and not st.session_state.get("_email_input_rendered"):
+        st.session_state["_email_input_rendered"] = True
         with st.sidebar:
             st.markdown("---")
             entered = st.text_input(
