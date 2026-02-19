@@ -85,12 +85,20 @@ def get_user_email() -> str:
     Returns:
         Email string, or empty string if not available.
     """
-    try:
-        user_info = st.user
-        email = getattr(user_info, "email", "") or ""
-        if email:
-            return email
-    except Exception:
-        pass
+    # Try st.user (Streamlit >= 1.37) then st.experimental_user (legacy)
+    for attr in ("user", "experimental_user"):
+        try:
+            user_info = getattr(st, attr, None)
+            if user_info is not None:
+                email = getattr(user_info, "email", "") or ""
+                if not email:
+                    email = user_info.get("email", "") if hasattr(user_info, "get") else ""
+                if email:
+                    logger.info("User identified via st.%s: %s", attr, email)
+                    return email
+        except Exception as exc:
+            logger.debug("st.%s failed: %s", attr, exc)
 
+    logger.warning("No user email detected (st.user=%s, DEV_USER_EMAIL=%s)",
+                    getattr(st, "user", "N/A"), DEV_USER_EMAIL or "empty")
     return DEV_USER_EMAIL
