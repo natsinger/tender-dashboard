@@ -51,22 +51,14 @@ st.markdown("""
         text-align: right;
     }
 
-    /* ── CRITICAL: Hide ALL Streamlit keyboard/input instruction overlays ── */
-    [data-testid*="nstruction"],
-    [class*="nstruction"],
-    [class*="InputInstruction"],
+    /* ── Hide Streamlit keyboard shortcut hints (narrow selectors to avoid
+         breaking dataframe column filter/search popups) ── */
     [data-testid="InputInstructions"],
-    [data-testid="StyledThumbValue"],
-    div[class*="InputInstruction"],
-    div[class*="instruction"] {
+    [data-testid="StyledThumbValue"] {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
-        width: 0 !important;
         overflow: hidden !important;
-        position: absolute !important;
-        pointer-events: none !important;
-        opacity: 0 !important;
     }
 
     /* ── Fix bidirectional text (Hebrew + numbers mix) ── */
@@ -367,33 +359,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── JavaScript: Force-remove keyboard instruction overlays from DOM ──────
-st.markdown("""
-<script>
-(function() {
-    function removeInstructions() {
-        document.querySelectorAll('[data-testid*="nstruction"]').forEach(el => el.remove());
-        document.querySelectorAll('[data-testid="StyledThumbValue"]').forEach(el => el.remove());
-        document.querySelectorAll('[class*="nstruction"]').forEach(el => el.remove());
-        document.querySelectorAll('[class*="InputInstruction"]').forEach(el => el.remove());
-        document.querySelectorAll('div, span, p, small').forEach(el => {
-            const t = (el.textContent || '').trim().toLowerCase();
-            if (t && (t.includes('keyboard') || t.includes('press ') ||
-                t === 'double_arrow_left' || t === 'double_arrow_right' ||
-                t.includes('\u2318') || t.includes('ctrl'))) {
-                if (el.querySelectorAll('input, select, textarea, button, table, [data-testid="stDataFrame"]').length === 0) {
-                    el.style.cssText = 'display:none!important;height:0!important;overflow:hidden!important;visibility:hidden!important;';
-                }
-            }
-        });
-    }
-    removeInstructions();
-    const observer = new MutationObserver(removeInstructions);
-    observer.observe(document.body, { childList: true, subtree: true });
-    [300, 800, 1500, 3000, 5000, 8000].forEach(ms => setTimeout(removeInstructions, ms));
-})();
-</script>
-""", unsafe_allow_html=True)
 
 
 # ============================================================================
