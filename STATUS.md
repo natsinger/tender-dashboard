@@ -1,33 +1,38 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-19 (session 2)
+**Last updated:** 2026-02-19 (session 3)
 
 ---
 
 ## Current State
 
 Sprint 1 (Stabilize & Deploy MVP) — **complete**.
-Sprint 3 (SQLite Data Persistence) — **complete**.
+Sprint 3 (SQLite Data Persistence) — **complete** → superseded by Sprint 6.
 Sprint 5 (Watchlist & Email Alerts) — **complete** (deployed to Streamlit Cloud, SMTP pending).
+Sprint 6 (Full Supabase Migration) — **complete** (pending: run SQL schema + migration script + add GitHub secrets).
 Management Page Redesign (Features #1-4) — **complete**.
 MEGIDO Brand Redesign — **complete**.
-Supabase Integration (user data persistence) — **complete** (watchlist, reviews, alert_history).
+
+**All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
 The app is now **multipage** with two views:
-- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), analytics, debug
-- **Management** (`pages/management.py`) — Team operational dashboard:
-  1. **Selected Tenders** — shared team watchlist with review status tracking (5 stages)
+- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), team watchlist controls (sidebar), review status editing, analytics, debug
+- **Management** (`pages/management.py`) — Team operational dashboard (read-only):
+  1. **Selected Tenders** — shared team watchlist with review status display
   2. **Closing Soon** — active tenders closing within 14 days, with popup detail dialog
   3. **Tender Type Tabs** — dedicated views for "מכרז ייזום" and "דיור להשכרה"
   4. **Compact KPIs** — single row with key metrics
 
-Review tracking has 5 stages: לא נסקר → סקירה ראשונית → בדיקה מעמיקה → הוצג בפורום → אושר בפורום. Any team member can update. WhatsApp notification is stubbed (TODO: integrate WhatsApp Business API).
+Review tracking has 5 stages: לא נסקר → סקירה ראשונית → בדיקה מעמיקה → הוצג בפורום → אושר בפורום. Editing is in the Dashboard (requires login). Management is read-only.
 
-Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document sync. Sends Hebrew RTL HTML emails via M365 SMTP when new documents appear on watched tenders.
+Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document sync. Sends Hebrew RTL HTML emails via SMTP2GO when new documents appear on watched tenders.
 
-**To activate alerts**: Add `M365_EMAIL` and `M365_PASSWORD` to GitHub repo secrets. Optionally set `DASHBOARD_URL` secret.
-
-**Next**: Verify multipage app works locally, test review status tracking, configure WhatsApp API.
+**To activate (one-time setup)**:
+1. Run the SQL schema in Supabase SQL Editor (creates tables + indexes + GRANTs)
+2. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
+3. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
+4. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
+5. Add Supabase + SMTP secrets to Streamlit Cloud secrets
 
 ---
 
@@ -35,8 +40,8 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-19 | **Sprint 6: Full Supabase migration** — rewrite db.py from SQLite to Supabase REST API, migration script, fix AlertEngine bug, update CI workflow | `db.py`, `scripts/migrate_sqlite_to_supabase.py` (NEW), `scripts/refresh_tenders.py`, `.github/workflows/daily_refresh.yml`, `user_db.py`, `dashboard_utils.py`, `.gitignore` |
 | 2026-02-19 | Move team watchlist + review editing to Dashboard; Management now read-only | `pages/dashboard.py`, `pages/management.py` |
-| 2026-02-19 | Sprint 6 roadmap: full Supabase migration (move ALL tables off SQLite) | `STATUS.md` |
 | 2026-02-19 | Supabase persistence — user_watchlist, tender_reviews, alert_history now in Supabase PostgreSQL | `user_db.py` (NEW), `config.py`, `requirements.txt`, `pages/dashboard.py`, `pages/management.py`, `alerts.py`, `db.py` |
 | 2026-02-19 | Fix: complete PURPOSE_MAP (26 codes from API table -1), restore dataframe column filtering (narrow CSS/JS) | `data_client.py`, `app.py`, `data/tenders.db` |
 | 2026-02-19 | Fix: st.experimental_user → st.user + sidebar email fallback for Streamlit Cloud auth | `dashboard_utils.py` |
@@ -54,26 +59,11 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 | 2026-02-17 | Sprint 5: SMTP config + build_document_url extraction | `config.py`, `data_client.py` |
 | 2026-02-17 | Sprint 5: Cron integration — alert check after doc sync (non-fatal) | `scripts/refresh_tenders.py` |
 | 2026-02-17 | Sprint 5: GitHub Actions — pass M365 secrets as env vars | `.github/workflows/daily_refresh.yml` |
-| 2026-02-17 | Sprint 5: PRD v3.0 — added user personas + watchlist/alert feature spec | `PRD.md` |
 | 2026-02-17 | Sprint 3: SQLite database layer — TenderDB class with schema, upsert, queries | `db.py` (NEW), `config.py` |
 | 2026-02-17 | Sprint 3: Migration script — replay JSON snapshots + cached details into DB | `scripts/migrate_json_to_db.py` (NEW) |
 | 2026-02-17 | Sprint 3: DB persistence in data_client — save_to_db(), sync_documents_to_db() | `data_client.py` |
-| 2026-02-17 | Sprint 3: Refresh script — save to DB + sync documents for active tenders | `scripts/refresh_tenders.py` |
-| 2026-02-17 | Sprint 3: Dashboard loads from DB first with JSON fallback | `app.py` |
-| 2026-02-17 | Sprint 3: GitHub Actions commits tenders.db alongside JSON snapshots | `.github/workflows/daily_refresh.yml` |
 | 2026-02-17 | Sprint 1: Config management — extract hardcoded values into `config.py` | `config.py` (NEW), `app.py`, `data_client.py` |
-| 2026-02-17 | Sprint 1: Logging — replace all print() with logging module | `app.py`, `data_client.py` |
-| 2026-02-17 | Sprint 1: Retry logic — exponential backoff on API calls | `data_client.py` |
-| 2026-02-17 | Sprint 1: Code cleanup — delete `land_tenders_dashboard/`, pin deps, update .gitignore | `requirements.txt`, `.gitignore` |
 | 2026-02-17 | Sprint 1: GitHub Actions daily refresh cron job | `.github/workflows/daily_refresh.yml` (NEW), `scripts/refresh_tenders.py` (NEW) |
-| 2026-02-17 | Sprint 1: Streamlit Cloud theme config | `.streamlit/config.toml` |
-| 2026-02-17 | Mavat client: Playwright-based module to search plans and download הוראות PDFs from mavat.iplan.gov.il | `mavat_client.py` |
-| 2026-02-16 | Executive UI Polish: Fixed sidebar icons (Unicode), table sort icons (Material fonts), CSS overlays | `app.py`, `.streamlit/config.toml` |
-| 2026-02-12 | PDF extractor: 50-tender batch test, fix combined column spaces, Q&A doc filtering, text-based gush fallback | `tender_pdf_extractor.py`, `test_pdf_extractor_batch.py` |
-| 2026-02-11 | Build PDF extraction module for גוש/חלקה/תב"ע from tender brochures | `tender_pdf_extractor.py`, `test_pdf_extractor.py`, `requirements.txt` |
-| 2026-02-11 | Add clickable document download links (GET URL with all params) | `app.py`, `data_client.py` |
-| 2026-02-11 | Phase 1 executive redesign — full app.py rewrite | `app.py` |
-| 2026-02-11 | Fix tender type codes, add purpose mapping, filter to types 1/5/8 | `data_client.py` |
 
 ---
 
@@ -83,33 +73,36 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 2. **Date range filter removed** — The urgency toggle replaces the old date range picker. May want to add it back as an "advanced" option.
 3. **Pie chart click-to-filter** — Plotly click events don't wire easily to Streamlit filters. Deferred.
 4. **Streamlit Cloud auth** — Viewer auth not enforced. Using sidebar email input as fallback (works but self-reported).
-5. **DB file in git** — tenders.db (8 MB) is committed to git. Sprint 6 will move to Supabase and remove from git.
-6. **SMTP not configured** — Need working SMTP credentials (M365 or SMTP2GO) for alert emails.
-7. **Supabase anon key permissions** — Need to run GRANT SQL for the anon role to write to tables.
+5. **SMTP not configured** — Need working SMTP credentials (SMTP2GO) for alert emails.
+6. **Supabase setup pending** — Need to run SQL schema creation + GRANT SQL + migrate data before app will load from Supabase.
 
 ---
 
 ## Next Steps
 
-1. **Verify Supabase integration** — Add tenders to watchlist on deployed app, close and reopen, confirm data persists.
-2. **Run Supabase GRANT SQL** — `GRANT ALL ON user_watchlist, alert_history, tender_reviews TO anon;` + sequences.
-3. **Configure SMTP** — Add `SMTP_USER` + `SMTP_PASSWORD` to Streamlit Cloud secrets.
-4. **Sprint 4** — Analytical engine: scoring + market trends.
-5. **Sprint 6** — Full Supabase migration: move ALL data (tenders, history, documents) from SQLite to Supabase PostgreSQL. Remove `data/tenders.db` from git. Rewrite `db.py` to use Supabase REST client. Update daily cron to write directly to Supabase.
-
+1. **Run Supabase SQL schema** — Create tenders, tender_history, tender_documents tables + indexes + GRANTs in SQL Editor.
+2. **Run migration script** — `python scripts/migrate_sqlite_to_supabase.py` to populate Supabase with existing data.
+3. **Add GitHub secrets** — `SUPABASE_URL`, `SUPABASE_KEY` in repo Settings → Secrets.
+4. **Add Streamlit Cloud secrets** — Same Supabase + SMTP credentials.
+5. **Verify app** — Confirm dashboard loads from Supabase, watchlist persists, review status works.
+6. **Remove tenders.db from git** — `git rm --cached data/tenders.db` after confirming Supabase works.
+7. **Sprint 4** — Analytical engine: scoring + market trends.
+8. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
 
 ---
 
-## Database Schema
+## Database Schema (Supabase PostgreSQL)
 
 ```
-tenders            — 10,447 rows — current state of each tender
-tender_history     — 30,997 rows — daily snapshots (4 dates)
-tender_documents   —  3,471 rows — document metadata from 444 tenders
-tender_scores      — (empty)     — Sprint 4: scoring results
-user_watchlist     — (empty)     — per-user tender watchlist for email alerts
-alert_history      — (empty)     — sent alert log for deduplication
-tender_reviews     — (empty)     — review status tracking (5-stage workflow)
+-- Tender data (managed by db.py)
+tenders            — ~10,447 rows — current state of each tender
+tender_history     — ~30,997 rows — daily snapshots for trend analysis
+tender_documents   —  ~3,471 rows — document metadata from 444 tenders
+
+-- User data (managed by user_db.py)
+user_watchlist     — per-user tender watchlist for email alerts
+tender_reviews     — review status tracking (5-stage workflow)
+alert_history      — sent alert log for deduplication
 ```
 
 ---
@@ -119,9 +112,9 @@ tender_reviews     — (empty)     — review status tracking (5-stage workflow)
 ```
 Gov tender projects/
 ├── app.py                          # Multipage navigation router + shared CSS
-├── config.py                       # Centralized configuration (API, SMTP, paths)
-├── db.py                           # SQLite database layer (tender data only since Supabase migration)
-├── user_db.py                      # Supabase client: watchlist, reviews, alert_history (NEW)
+├── config.py                       # Centralized configuration (API, SMTP, Supabase, paths)
+├── db.py                           # Supabase database layer (tender data: tenders, history, documents)
+├── user_db.py                      # Supabase client: watchlist, reviews, alert_history
 ├── data_client.py                  # API client, normalization, caching, DB persistence
 ├── dashboard_utils.py              # Shared data loading functions for pages
 ├── alerts.py                       # Email alert engine: watchlist → SMTP
@@ -138,10 +131,10 @@ Gov tender projects/
 ├── DATA_FLOW_EXPLANATION.md        # Data pipeline documentation
 ├── .gitignore                      # Git ignore rules
 ├── assets/                         # Brand assets (logo, images)
-│   └── logo.jpg                    # MEGIDO BY AURA brand logo
-├── pages/                          # Streamlit multipage app pages (NEW - Sprint 5)
-│   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist
-│   └── management.py               # Team dashboard: watchlist, review tracking, type tabs, KPIs
+│   └── logo megido.jpg             # MEGIDO BY AURA brand logo
+├── pages/                          # Streamlit multipage app pages
+│   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist, review editing
+│   └── management.py               # Team dashboard (read-only): watchlist, review display, type tabs, KPIs
 ├── .streamlit/
 │   └── config.toml                 # Streamlit theme + server config
 ├── .github/
@@ -149,10 +142,11 @@ Gov tender projects/
 │       └── daily_refresh.yml       # GitHub Actions: daily refresh + alert emails
 ├── scripts/
 │   ├── refresh_tenders.py          # Data refresh script (used by cron)
-│   └── migrate_json_to_db.py       # One-time migration: JSON → SQLite
+│   ├── migrate_json_to_db.py       # One-time migration: JSON → SQLite (historical)
+│   └── migrate_sqlite_to_supabase.py  # One-time migration: SQLite → Supabase (Sprint 6)
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
-│   ├── tenders.db                  # SQLite database
+│   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)
 │   └── details_cache/              # Cached tender detail JSON files
 ├── tmp/                            # Temporary files (gitignored)
 └── venv/                           # Python virtual environment (gitignored)

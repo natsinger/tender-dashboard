@@ -1,12 +1,13 @@
 """
 Supabase-backed persistent storage for user data.
 
-Handles the three tables that must survive app redeploys:
+Handles the three user-facing tables:
   - user_watchlist    (per-user tender watchlist)
   - tender_reviews    (shared team review status)
   - alert_history     (deduplication for email alerts)
 
-Tender data itself stays in local SQLite (db.py).
+Tender data tables (tenders, tender_history, tender_documents) are in db.py,
+which also uses Supabase (migrated from SQLite in Sprint 6).
 
 Usage:
     from user_db import UserDB

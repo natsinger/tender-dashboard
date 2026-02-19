@@ -86,8 +86,9 @@ def main() -> None:
     try:
         from alerts import AlertEngine
         from db import TenderDB as _TenderDB
+        from user_db import UserDB as _UserDB
 
-        engine = AlertEngine(_TenderDB())
+        engine = AlertEngine(_TenderDB(), _UserDB())
         sent = engine.check_and_send()
         logger.info("Alerts: %d email(s) sent", sent)
     except Exception as exc:

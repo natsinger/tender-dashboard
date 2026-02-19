@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @st.cache_data(ttl=CACHE_TTL)
 def load_data(data_source: str = "latest_file") -> pd.DataFrame:
-    """Load tender data from SQLite DB, JSON file, or API (with fallbacks).
+    """Load tender data from Supabase DB, JSON file, or API (with fallbacks).
 
     Args:
         data_source: One of "latest_file", "sample". Controls fallback chain.
@@ -30,7 +30,7 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
     if data_source == "sample":
         return generate_sample_data()
 
-    # Priority 1: SQLite database
+    # Priority 1: Supabase database
     try:
         from db import TenderDB
 

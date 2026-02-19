@@ -24,10 +24,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pandas python-dotenv
+          pip install requests pandas python-dotenv supabase
 
       - name: Fetch tenders and send alerts
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SMTP_HOST: mail.smtp2go.com
           SMTP_PORT: "587"
           SMTP_USER: ${{ secrets.SMTP2GO_USER }}
@@ -40,7 +42,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add tenders_list_*.json data/tenders.db
+          git add tenders_list_*.json
           # Only commit if there are changes
           git diff --cached --quiet || git commit -m "data: daily tender snapshot $(date +%Y-%m-%d)"
           git pull --rebase

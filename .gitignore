@@ -25,6 +25,7 @@ logs/
 # Data (raw/sensitive)
 data/raw/
 data/details_cache/
+data/tenders.db
 
 # IDE
 .vscode/
