@@ -248,8 +248,8 @@ with col_pie1:
             hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
         )
         fig_booklet.update_layout(
-            height=300,
-            margin=dict(t=30, b=50, l=20, r=20),
+            height=220,
+            margin=dict(t=10, b=30, l=5, r=5),
             legend=dict(
                 orientation="h", yanchor="top", y=-0.08,
                 xanchor="center", x=0.5, font=dict(size=11),
@@ -265,7 +265,19 @@ with col_pie1:
 
 # ── Pie Chart 2: Brochure-only tenders by District + Urgency Toggle ──────
 with col_pie2:
-    st.markdown('<p class="pie-title">📋🗺️ חוברות לפי מחוז</p>', unsafe_allow_html=True)
+    # Title + week toggle in one row
+    _pie2_title_col, _pie2_radio_col = st.columns([2, 1])
+    with _pie2_title_col:
+        st.markdown('<p class="pie-title" style="margin-bottom:0;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
+    with _pie2_radio_col:
+        st.radio(
+            "טווח",
+            list({"1W": 7, "2W": 14, "4W": 28}.keys()),
+            index=2,
+            horizontal=True,
+            key="urgency_pie2",
+            label_visibility="collapsed",
+        )
 
     pie2_days_options = {"1W": 7, "2W": 14, "4W": 28}
     urgency_pie2 = st.session_state.get('urgency_pie2', '4W')
@@ -301,8 +313,8 @@ with col_pie2:
                 hovertemplate='%{label}: %{value} (%{percent})<extra></extra>',
             )
             fig_brochure_region.update_layout(
-                height=300,
-                margin=dict(t=30, b=20, l=10, r=10),
+                height=220,
+                margin=dict(t=10, b=10, l=5, r=5),
                 showlegend=False,
                 uniformtext_minsize=10, uniformtext_mode='hide',
                 font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
@@ -313,14 +325,6 @@ with col_pie2:
             st.info("אין מכרזים עם חוברת בטווח שנבחר")
     else:
         st.info("אין נתונים")
-
-    st.radio(
-        "חלון סגירה:",
-        list(pie2_days_options.keys()),
-        index=2,
-        horizontal=True,
-        key="urgency_pie2",
-    )
 
 # ── Pie Chart 3: All tenders by District ──────────────────────────────────
 with col_pie3:
@@ -349,8 +353,8 @@ with col_pie3:
                 hovertemplate='%{label}: %{value} מכרזים (%{percent})<extra></extra>',
             )
             fig_region.update_layout(
-                height=300,
-                margin=dict(t=30, b=20, l=10, r=10),
+                height=220,
+                margin=dict(t=10, b=10, l=5, r=5),
                 showlegend=False,
                 uniformtext_minsize=10, uniformtext_mode='hide',
                 font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
@@ -389,8 +393,7 @@ upcoming = filtered_df[
 
 if len(upcoming) > 0:
     upcoming_display = upcoming[[
-        'tender_id', 'tender_name', 'city', 'region', 'tender_type',
-        'purpose', 'units', 'deadline', 'published_booklet'
+        'tender_name', 'city', 'units', 'deadline', 'published_booklet'
     ]].copy()
 
     upcoming_display['days_left'] = (upcoming_display['deadline'] - today).dt.days
@@ -407,29 +410,24 @@ if len(upcoming) > 0:
     upcoming_display['booklet'] = upcoming_display['published_booklet'].apply(
         lambda x: '✅' if x else '❌'
     )
+    upcoming_display['deadline'] = upcoming_display['deadline'].dt.strftime('%d/%m')
 
     display_upcoming = upcoming_display[[
-        'urgency', 'tender_id', 'tender_name', 'city', 'region',
-        'tender_type', 'purpose', 'units', 'deadline', 'days_left', 'booklet'
+        'urgency', 'tender_name', 'city', 'units', 'deadline', 'days_left', 'booklet'
     ]].copy()
-    display_upcoming['deadline'] = display_upcoming['deadline'].dt.strftime('%Y-%m-%d')
 
-    st.info(f"מציג **{len(display_upcoming)}** מכרזים עם מועד סגירה עתידי")
+    st.caption(f"מציג {len(display_upcoming)} מכרזים עם מועד סגירה עתידי")
 
     st.dataframe(
         display_upcoming,
         column_config={
             "urgency": st.column_config.TextColumn("", width="small"),
-            "tender_id": st.column_config.NumberColumn("מס' מכרז", format="%d"),
             "tender_name": st.column_config.TextColumn("שם", width="medium"),
-            "city": st.column_config.TextColumn("עיר", width="medium"),
-            "region": st.column_config.TextColumn("מחוז", width="small"),
-            "tender_type": st.column_config.TextColumn("סוג", width="medium"),
-            "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
-            "units": st.column_config.NumberColumn("יח\"ד", format="%d"),
-            "deadline": st.column_config.TextColumn("מועד סגירה"),
-            "days_left": st.column_config.NumberColumn("ימים", format="%d"),
-            "booklet": st.column_config.TextColumn("חוברת", width="small"),
+            "city": st.column_config.TextColumn("עיר", width="small"),
+            "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
+            "deadline": st.column_config.TextColumn("סגירה", width="small"),
+            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
+            "booklet": st.column_config.TextColumn("📋", width="small"),
         },
         hide_index=True,
         use_container_width=True,
@@ -471,8 +469,8 @@ HIDDEN_COLUMNS = {
 
 user_cols = [c for c in filtered_df.columns if c not in HIDDEN_COLUMNS]
 default_cols = [
-    'tender_id', 'tender_name', 'city', 'region', 'tender_type',
-    'purpose', 'units', 'deadline', 'status', 'published_booklet'
+    'tender_name', 'city', 'tender_type',
+    'units', 'deadline', 'status', 'published_booklet'
 ]
 display_cols = [c for c in default_cols if c in user_cols]
 
@@ -949,7 +947,8 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 color_continuous_scale=MEGIDO_GOLD_SCALE,
             )
             fig_city.update_layout(
-                showlegend=False, height=400,
+                showlegend=False, height=280,
+                margin=dict(t=10, b=30, l=10, r=10),
                 font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_city, use_container_width=True)
@@ -968,7 +967,9 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
             fig_type.update_layout(
-                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+                height=280,
+                margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_type, use_container_width=True)
         else:
@@ -993,7 +994,9 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 color_discrete_sequence=['#1B2A4A'],
             )
             fig_timeline.update_layout(
-                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+                height=280,
+                margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_timeline, use_container_width=True)
         else:
@@ -1013,7 +1016,9 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 color_discrete_sequence=['#D4A017'],
             )
             fig_units.update_layout(
-                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+                height=280,
+                margin=dict(t=10, b=30, l=10, r=10),
+                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_units, use_container_width=True)
         else:
