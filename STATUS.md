@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-18
+**Last updated:** 2026-02-19
 
 ---
 
@@ -10,6 +10,7 @@ Sprint 1 (Stabilize & Deploy MVP) — **complete**.
 Sprint 3 (SQLite Data Persistence) — **complete**.
 Sprint 5 (Watchlist & Email Alerts) — **complete** (code written, pending deployment + SMTP credentials).
 Management Page Redesign (Features #1-4) — **complete**.
+MEGIDO Brand Redesign — **complete**.
 
 The app is now **multipage** with two views:
 - **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), analytics, debug
@@ -33,6 +34,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-19 | MEGIDO rebrand — dark & modern executive UI, navy+gold palette, Inter/Heebo fonts, dark sidebar, gold accent cards, chart restyling | `app.py`, `.streamlit/config.toml`, `pages/dashboard.py`, `pages/management.py`, `assets/` (NEW) |
 | 2026-02-18 | Feature #4: Tender type tabs — dedicated views for מכרז ייזום + דיור להשכרה | `pages/management.py`, `config.py` |
 | 2026-02-18 | Feature #3: Close deadline popup — @st.dialog modal for tender details | `pages/management.py` |
 | 2026-02-18 | Feature #2: Review status tracking — 5-stage workflow, any team member can update | `db.py`, `pages/management.py` |
@@ -127,6 +129,8 @@ Gov tender projects/
 ├── STATUS.md                       # This file — living project state
 ├── DATA_FLOW_EXPLANATION.md        # Data pipeline documentation
 ├── .gitignore                      # Git ignore rules
+├── assets/                         # Brand assets (logo, images)
+│   └── logo.jpg                    # MEGIDO BY AURA brand logo
 ├── pages/                          # Streamlit multipage app pages (NEW - Sprint 5)
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist
 │   └── management.py               # Team dashboard: watchlist, review tracking, type tabs, KPIs

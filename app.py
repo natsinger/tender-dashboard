@@ -1,8 +1,9 @@
 """
-Israel Land Tenders Dashboard (מכרזי קרקע)
-==========================================
+MEGIDO Tender Intelligence Dashboard (מגידו | מכרזי קרקע)
+==========================================================
 Multipage Streamlit dashboard for tracking land tenders from רמ"י.
 Two views: full dashboard for daily users, management overview for executives.
+Branded for MEGIDO BY AURA (מגידו י.ק.).
 
 Run with: streamlit run app.py
 """
@@ -22,25 +23,26 @@ logging.basicConfig(
 # ============================================================================
 
 st.set_page_config(
-    page_title="מכרזים",
-    page_icon="🏗️",
+    page_title="MEGIDO | מגידו",
+    page_icon="M",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Load ALL Material fonts (Icons + Symbols) so dataframe sort arrows render ──
+# ── Load fonts: Inter + Heebo (typography), Material (dataframe sort arrows) ──
 st.markdown("""
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 """, unsafe_allow_html=True)
 
 
 # ============================================================================
-# SHARED CSS (Horizon Design System)
+# SHARED CSS (MEGIDO Executive Design System)
 # ============================================================================
 
 st.markdown("""
@@ -83,25 +85,41 @@ st.markdown("""
     /* Keep LTR for code / numbers where needed */
     code, pre, [data-testid="stMetricValue"] { direction: ltr; }
 
-    /* ── Horizon Design Tokens ── */
+    /* ── MEGIDO Design Tokens ── */
     :root {
-        --horizon-bg-main: #F4F7FE;
-        --horizon-bg-card: #FFFFFF;
-        --horizon-primary: #4318FF;
-        --horizon-text-heading: #2B3674;
-        --horizon-text-secondary: #A3AED0;
+        --mg-bg-main: #F0F2F5;
+        --mg-bg-card: #FFFFFF;
+        --mg-bg-sidebar: #111827;
+        --mg-sidebar-header: #0D1321;
+        --mg-primary: #D4A017;
+        --mg-primary-hover: #B8860B;
+        --mg-navy: #1B2A4A;
+        --mg-text-heading: #111827;
+        --mg-text-body: #374151;
+        --mg-text-muted: #9CA3AF;
+        --mg-text-on-dark: #E5E7EB;
+        --mg-text-on-dark-muted: #6B7280;
+        --mg-border: #E5E7EB;
+        --mg-border-dark: #1F2937;
+        --mg-success: #10B981;
+        --mg-warning: #F59E0B;
+        --mg-danger: #EF4444;
     }
 
     /* ── Typography & Foundation ── */
     html, body, [class*="st-"], [data-testid="stAppViewContainer"] {
-        font-family: 'DM Sans', sans-serif !important;
-        background-color: var(--horizon-bg-main) !important;
-        color: var(--horizon-text-heading);
+        font-family: 'Inter', 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        background-color: var(--mg-bg-main) !important;
+        color: var(--mg-text-body);
     }
 
     h1, h2, h3, h4, h5, h6, .stTabs button {
-        font-family: 'DM Sans', sans-serif !important;
-        color: var(--horizon-text-heading) !important;
+        font-family: 'Inter', 'Heebo', -apple-system, sans-serif !important;
+        color: var(--mg-text-heading) !important;
+    }
+
+    code, pre {
+        font-family: 'JetBrains Mono', monospace !important;
     }
 
     .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
@@ -118,84 +136,127 @@ st.markdown("""
         float: left !important;
     }
 
-    /* ── Metric Cards (Horizon Style) ── */
+    /* ── Metric Cards (MEGIDO Executive) ── */
     [data-testid="stMetric"] {
-        background-color: var(--horizon-bg-card) !important;
-        border-radius: 20px !important;
-        border: none !important;
-        box-shadow: 0px 18px 40px 0px rgba(112, 144, 176, 0.12) !important;
+        background-color: var(--mg-bg-card) !important;
+        border-radius: 12px !important;
+        border: 1px solid var(--mg-border) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06) !important;
         padding: 20px !important;
+        position: relative;
+    }
+    /* Gold accent stripe on right (RTL) */
+    [data-testid="stMetric"]::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        background: var(--mg-primary);
+        border-radius: 3px;
     }
     [data-testid="stMetricValue"] {
-        color: var(--horizon-text-heading) !important;
+        color: var(--mg-text-heading) !important;
         font-weight: 700 !important;
         font-size: 26px !important;
     }
     [data-testid="stMetricLabel"] {
-        color: var(--horizon-text-secondary) !important;
+        color: var(--mg-text-muted) !important;
         font-weight: 500 !important;
         font-size: 14px !important;
     }
 
-    /* ── Sidebar (Horizon Style) ── */
+    /* ── Sidebar (Dark Executive) ── */
     section[data-testid="stSidebar"] > div {
         direction: rtl;
         text-align: right;
     }
     section[data-testid="stSidebar"] {
-        background-color: var(--horizon-bg-card) !important;
+        background-color: var(--mg-bg-sidebar) !important;
         background-image: none !important;
         min-width: 285px !important;
         width: 285px !important;
-        box-shadow: 1px 0px 20px rgba(0,0,0,0.02);
+        box-shadow: 1px 0 0 var(--mg-border-dark);
     }
 
-    /* Default sidebar text */
+    /* Default sidebar text (light on dark) */
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] label {
-        color: var(--horizon-text-secondary) !important;
+        color: var(--mg-text-on-dark-muted) !important;
     }
 
     /* Headers in sidebar */
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
-        color: var(--horizon-text-heading) !important;
+        color: var(--mg-text-on-dark) !important;
     }
 
     /* Navigation/Inputs in sidebar */
     section[data-testid="stSidebar"] .stRadio label,
     section[data-testid="stSidebar"] .stMultiSelect label {
-        color: var(--horizon-text-secondary) !important;
+        color: var(--mg-text-on-dark-muted) !important;
         font-weight: 500;
     }
 
-    /* ── Tables (Horizon Borderless) ── */
-    [data-testid="stDataFrame"], .stDataFrame {
-        border: none !important;
+    /* Dark sidebar widget overrides */
+    section[data-testid="stSidebar"] [data-baseweb="select"],
+    section[data-testid="stSidebar"] [data-baseweb="input"] {
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
+    }
+    section[data-testid="stSidebar"] [data-baseweb="select"] input,
+    section[data-testid="stSidebar"] [data-baseweb="input"] input {
+        color: var(--mg-text-on-dark) !important;
+    }
+    section[data-testid="stSidebar"] [data-baseweb="tag"] {
+        background-color: var(--mg-primary) !important;
+        color: #111827 !important;
+    }
+    section[data-testid="stSidebar"] [data-baseweb="select"] [data-baseweb="icon"] {
+        color: var(--mg-text-on-dark-muted) !important;
     }
 
-    /* ── Buttons (Horizon Pill) ── */
+    /* Sidebar dividers */
+    section[data-testid="stSidebar"] hr {
+        border-color: var(--mg-border-dark) !important;
+    }
+
+    /* Sidebar captions */
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: var(--mg-text-on-dark-muted) !important;
+    }
+
+    /* ── Tables (Clean bordered) ── */
+    [data-testid="stDataFrame"], .stDataFrame {
+        border: 1px solid var(--mg-border) !important;
+        border-radius: 8px !important;
+        overflow: hidden;
+    }
+
+    /* ── Buttons (MEGIDO Gold) ── */
     .stButton button {
-        background-color: var(--horizon-primary) !important;
-        color: #FFFFFF !important;
-        border-radius: 20px !important;
+        background-color: var(--mg-primary) !important;
+        color: #111827 !important;
+        border-radius: 8px !important;
         border: none !important;
         padding: 10px 24px !important;
-        font-weight: 500 !important;
-        box-shadow: 0px 4px 10px rgba(67, 24, 255, 0.2) !important;
-        transition: all 0.2s ease-in-out;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(212, 160, 23, 0.2) !important;
+        transition: all 0.15s ease;
     }
     .stButton button:hover {
-        box-shadow: 0px 8px 16px rgba(67, 24, 255, 0.3) !important;
+        background-color: var(--mg-primary-hover) !important;
+        box-shadow: 0 4px 12px rgba(212, 160, 23, 0.3) !important;
         transform: translateY(-1px);
     }
 
     /* ── Chart Titles ── */
     .pie-title {
-        font-family: 'DM Sans', sans-serif !important;
-        color: var(--horizon-text-heading) !important;
+        font-family: 'Inter', 'Heebo', sans-serif !important;
+        color: var(--mg-text-heading) !important;
         font-weight: 700 !important;
         font-size: 16px !important;
         margin-bottom: 10px !important;
@@ -208,7 +269,7 @@ st.markdown("""
         padding: 4px;
         border-radius: 12px;
         display: inline-flex;
-        border: 1px solid #E0E5F2;
+        border: 1px solid var(--mg-border);
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
@@ -220,7 +281,7 @@ st.markdown("""
         transition: all 0.2s;
     }
     div[role="radiogroup"] label:hover {
-        background-color: #F4F7FE;
+        background-color: #FFFBEB;
     }
 
     /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
@@ -241,17 +302,17 @@ st.markdown("""
     button[kind="header"]::after {
         content: "\2630";
         font-size: 1.8rem;
-        color: #1a1a2e;
+        color: var(--mg-text-heading);
         display: block;
         line-height: 1;
         cursor: pointer;
     }
 
-    /* Expanded state (Close X) */
+    /* Expanded state (Close X) — light for dark sidebar */
     [data-testid="stSidebarCollapseButton"] button::after {
         content: "\2715";
         font-size: 1.5rem;
-        color: #b8c4d4;
+        color: var(--mg-text-on-dark-muted);
         display: block;
         line-height: 1;
         cursor: pointer;
@@ -265,31 +326,47 @@ st.markdown("""
     .streamlit-expanderHeader {
         padding-right: 0px !important;
     }
-    /* ── Sidebar custom header ── */
+
+    /* ── Sidebar custom header (MEGIDO branding) ── */
     .sidebar-header {
-        background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+        background-color: var(--mg-sidebar-header);
         border-radius: 12px;
-        padding: 20px 16px;
+        padding: 24px 16px 20px;
         text-align: center;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--mg-border-dark);
     }
     .sidebar-header h2 {
-        color: #ffffff !important;
-        font-size: 1.4rem;
+        color: var(--mg-primary) !important;
+        font-size: 1.5rem;
+        font-weight: 700;
         margin: 0;
+        letter-spacing: 0.05em;
         text-align: center !important;
     }
     .sidebar-header p {
-        color: #b8c4d4 !important;
-        font-size: 0.85rem;
+        color: var(--mg-text-on-dark-muted) !important;
+        font-size: 0.82rem;
         margin: 6px 0 0 0;
         text-align: center !important;
     }
 
+    /* ── Section headers with accent border ── */
+    .section-header {
+        font-family: 'Inter', 'Heebo', sans-serif;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--mg-text-heading);
+        padding: 8px 12px 8px 0;
+        border-right: 3px solid var(--mg-primary);
+        margin: 1.5rem 0 1rem 0;
+        direction: rtl;
+    }
+
     /* ── New tenders highlight table ── */
     .new-tenders-card {
-        background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
-        border: 1px solid #a5d6a7;
+        background: #ECFDF5;
+        border: 1px solid #6EE7B7;
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 16px;
@@ -329,7 +406,7 @@ st.markdown("""
         direction: rtl;
         unicode-bidi: plaintext;
     }
-    .detail-field strong { color: #1a1a2e; }
+    .detail-field strong { color: var(--mg-text-heading); }
 
     /* ── Column containers: prevent clipping ── */
     [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
@@ -349,7 +426,7 @@ st.markdown("""
     }
 
     /* ── Divider colour ── */
-    hr { border-color: #e0e3eb !important; }
+    hr { border-color: var(--mg-border) !important; }
 
     /* ── Subheader spacing fix ── */
     [data-testid="stSubheader"] {
@@ -363,6 +440,15 @@ st.markdown("""
     }
     .stRadio label {
         font-size: 0.85rem !important;
+    }
+
+    /* ── Tabs styling ── */
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'Inter', 'Heebo', sans-serif !important;
+    }
+    .stTabs [aria-selected="true"] {
+        border-bottom-color: var(--mg-primary) !important;
+        color: var(--mg-primary) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -400,7 +486,7 @@ st.markdown("""
 # MULTIPAGE NAVIGATION
 # ============================================================================
 
-dashboard = st.Page("pages/dashboard.py", title="לוח מכרזים", icon="🏗️", default=True)
+dashboard = st.Page("pages/dashboard.py", title="לוח מכרזים", icon="📋", default=True)
 management = st.Page("pages/management.py", title="סקירה ניהולית", icon="📊")
 
 pg = st.navigation([dashboard, management])
