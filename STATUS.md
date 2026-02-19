@@ -34,6 +34,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-19 | fix(ui): align pie charts by moving week toggle below chart, update logo path to "logo megido.jpeg" | `pages/dashboard.py`, `pages/management.py`, `app.py` |
 | 2026-02-19 | MEGIDO rebrand — dark & modern executive UI, navy+gold palette, Inter/Heebo fonts, dark sidebar, gold accent cards, chart restyling | `app.py`, `.streamlit/config.toml`, `pages/dashboard.py`, `pages/management.py`, `assets/` (NEW) |
 | 2026-02-18 | Feature #4: Tender type tabs — dedicated views for מכרז ייזום + דיור להשכרה | `pages/management.py`, `config.py` |
 | 2026-02-18 | Feature #3: Close deadline popup — @st.dialog modal for tender details | `pages/management.py` |
@@ -130,7 +131,7 @@ Gov tender projects/
 ├── DATA_FLOW_EXPLANATION.md        # Data pipeline documentation
 ├── .gitignore                      # Git ignore rules
 ├── assets/                         # Brand assets (logo, images)
-│   └── logo.jpg                    # MEGIDO BY AURA brand logo
+│   └── logo megido.jpeg             # MEGIDO BY AURA brand logo
 ├── pages/                          # Streamlit multipage app pages (NEW - Sprint 5)
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist
 │   └── management.py               # Team dashboard: watchlist, review tracking, type tabs, KPIs
