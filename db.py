@@ -350,10 +350,12 @@ class TenderDB:
         df = pd.DataFrame(rows)
         logger.info("Loaded %d tenders from Supabase", len(df))
 
-        # Convert date columns to datetime
+        # Convert date columns to tz-naive datetime (Supabase returns UTC-aware
+        # strings, but the dashboard uses datetime.now() which is tz-naive).
         for col in ("publish_date", "deadline", "committee_date"):
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors="coerce")
+                df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+                df[col] = df[col].dt.tz_localize(None)
 
         # Convert boolean-like columns
         if "published_booklet" in df.columns:
