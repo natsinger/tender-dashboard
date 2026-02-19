@@ -1,17 +1,16 @@
 """
-SQLite database layer for the Land Tenders Dashboard.
+Supabase database layer for the Land Tenders Dashboard.
 
-Provides persistent storage for tenders, historical snapshots, document
-tracking, user watchlists, and alert history. Replaces JSON snapshot
-files as the primary data source while keeping JSON as a backup.
+Provides persistent storage for tenders, historical snapshots, and document
+tracking via Supabase PostgreSQL. Replaces the original SQLite implementation
+(Sprint 6 migration).
 
-Schema:
+Tables managed by this module:
     tenders          — current state of each tender (upserted daily)
     tender_history   — daily snapshots for trend analysis
     tender_documents — per-tender document tracking (detect additions)
-    tender_scores    — scoring results (Sprint 4, created but unused)
-    user_watchlist   — per-user tender watchlist for email alerts
-    alert_history    — sent notification log for deduplication
+
+User-facing tables (watchlist, reviews, alert_history) are in user_db.py.
 
 Usage:
     from db import TenderDB
@@ -21,14 +20,11 @@ Usage:
 """
 
 import logging
-import sqlite3
+import math
 from datetime import date, datetime
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-
-from config import DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -41,185 +37,118 @@ TENDER_COLUMNS = [
     "area_sqm", "min_price", "gush", "helka",
 ]
 
-# SQL statements -----------------------------------------------------------
+# Batch size for Supabase upsert operations.
+_BATCH_SIZE = 500
 
-_CREATE_TENDERS = """
-CREATE TABLE IF NOT EXISTS tenders (
-    tender_id        INTEGER PRIMARY KEY,
-    tender_name      TEXT,
-    city_code        INTEGER,
-    city             TEXT,
-    region           TEXT,
-    location         TEXT,
-    tender_type_code INTEGER,
-    tender_type      TEXT,
-    purpose_code     INTEGER,
-    purpose          TEXT,
-    status_code      INTEGER,
-    status           TEXT,
-    units            INTEGER,
-    publish_date     TEXT,
-    deadline         TEXT,
-    committee_date   TEXT,
-    published_booklet INTEGER,
-    targeted         INTEGER,
-    area_sqm         REAL,
-    min_price        REAL,
-    gush             TEXT,
-    helka            TEXT,
-    first_seen       TEXT,
-    last_updated     TEXT
-)
-"""
+# Page size for paginated reads (Supabase default limit is 1000).
+_PAGE_SIZE = 1000
 
-_CREATE_HISTORY = """
-CREATE TABLE IF NOT EXISTS tender_history (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    tender_id     INTEGER NOT NULL,
-    snapshot_date TEXT NOT NULL,
-    status_code   INTEGER,
-    status        TEXT,
-    units         INTEGER,
-    deadline      TEXT,
-    UNIQUE(tender_id, snapshot_date)
-)
-"""
 
-_CREATE_DOCUMENTS = """
-CREATE TABLE IF NOT EXISTS tender_documents (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    tender_id   INTEGER NOT NULL,
-    row_id      INTEGER NOT NULL,
-    doc_name    TEXT,
-    description TEXT,
-    file_type   TEXT,
-    size        INTEGER,
-    pirsum_type INTEGER,
-    update_date TEXT,
-    first_seen  TEXT,
-    UNIQUE(tender_id, row_id)
-)
-"""
+def _clean_val(val: object) -> object:
+    """Convert NaN/NaT/inf to None for JSON-safe Supabase payloads.
 
-_CREATE_SCORES = """
-CREATE TABLE IF NOT EXISTS tender_scores (
-    tender_id   INTEGER PRIMARY KEY,
-    total_score REAL,
-    breakdown   TEXT,
-    scored_at   TEXT
-)
-"""
+    Args:
+        val: Any Python value (from a pandas row or dict).
 
-_CREATE_WATCHLIST = """
-CREATE TABLE IF NOT EXISTS user_watchlist (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_email  TEXT NOT NULL,
-    tender_id   INTEGER NOT NULL,
-    created_at  TEXT NOT NULL,
-    active      INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(user_email, tender_id)
-)
-"""
+    Returns:
+        The value, or None if it's NaN/NaT/inf/empty-string.
+    """
+    if val is None:
+        return None
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        return None
+    if isinstance(val, pd.Timestamp):
+        if pd.isna(val):
+            return None
+        return val.isoformat()
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return val
 
-_CREATE_ALERT_HISTORY = """
-CREATE TABLE IF NOT EXISTS alert_history (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_email  TEXT NOT NULL,
-    tender_id   INTEGER NOT NULL,
-    doc_row_id  INTEGER NOT NULL,
-    sent_at     TEXT NOT NULL,
-    UNIQUE(user_email, tender_id, doc_row_id)
-)
-"""
 
-_CREATE_REVIEWS = """
-CREATE TABLE IF NOT EXISTS tender_reviews (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    tender_id   INTEGER NOT NULL UNIQUE,
-    status      TEXT NOT NULL DEFAULT 'לא נסקר',
-    updated_by  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    notes       TEXT
-)
-"""
-
-# Valid review stages (ordered)
-REVIEW_STAGES: list[str] = [
-    "לא נסקר",
-    "סקירה ראשונית",
-    "בדיקה מעמיקה",
-    "הוצג בפורום",
-    "אושר בפורום",
-]
-
-_CREATE_INDEXES = [
-    "CREATE INDEX IF NOT EXISTS idx_tenders_city ON tenders(city)",
-    "CREATE INDEX IF NOT EXISTS idx_tenders_region ON tenders(region)",
-    "CREATE INDEX IF NOT EXISTS idx_tenders_status ON tenders(status_code)",
-    "CREATE INDEX IF NOT EXISTS idx_tenders_deadline ON tenders(deadline)",
-    "CREATE INDEX IF NOT EXISTS idx_history_tender ON tender_history(tender_id)",
-    "CREATE INDEX IF NOT EXISTS idx_history_date ON tender_history(snapshot_date)",
-    "CREATE INDEX IF NOT EXISTS idx_docs_tender ON tender_documents(tender_id)",
-    "CREATE INDEX IF NOT EXISTS idx_docs_first_seen ON tender_documents(first_seen)",
-    "CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_watchlist(user_email)",
-    "CREATE INDEX IF NOT EXISTS idx_watchlist_tender ON user_watchlist(tender_id)",
-    "CREATE INDEX IF NOT EXISTS idx_alert_hist_user ON alert_history(user_email)",
-    "CREATE INDEX IF NOT EXISTS idx_reviews_tender ON tender_reviews(tender_id)",
-]
+def _clean_dict(d: dict) -> dict:
+    """Apply _clean_val to every value in a dict."""
+    return {k: _clean_val(v) for k, v in d.items()}
 
 
 class TenderDB:
-    """SQLite database for tender data persistence and history tracking."""
+    """Supabase-backed database for tender data persistence and history tracking.
 
-    def __init__(self, db_path: Optional[Path] = None) -> None:
-        """Open (or create) the database and ensure all tables exist.
+    Maintains the same public API as the original SQLite implementation so
+    callers (data_client, dashboard_utils, alerts, management page) don't
+    need changes.
+    """
+
+    def __init__(self) -> None:
+        """Connect to Supabase. Falls back to no-ops if not configured."""
+        from user_db import _get_client
+
+        self._client = _get_client()
+        if self._client:
+            logger.debug("TenderDB connected to Supabase")
+        else:
+            logger.warning("TenderDB: no Supabase connection — data operations will fail")
+
+    # ------------------------------------------------------------------
+    # Paginated read helper
+    # ------------------------------------------------------------------
+
+    def _paginated_select(
+        self,
+        table: str,
+        select: str = "*",
+        filters: Optional[dict] = None,
+        order_col: Optional[str] = None,
+        order_desc: bool = False,
+    ) -> list[dict]:
+        """Fetch all rows from a table using pagination.
+
+        Supabase REST API returns at most 1000 rows per request.
+        This method pages through until all rows are retrieved.
 
         Args:
-            db_path: Path to the SQLite file. Defaults to config.DB_PATH.
+            table: Table name.
+            select: Column selection string.
+            filters: Dict of {column: value} equality filters.
+            order_col: Column to order by. Required for stable pagination.
+            order_desc: If True, order descending.
+
+        Returns:
+            List of row dicts.
         """
-        self.db_path = db_path or DB_PATH
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_schema()
-        logger.debug("TenderDB ready at %s", self.db_path)
+        if not self._client:
+            return []
 
-    # ------------------------------------------------------------------
-    # Connection helper
-    # ------------------------------------------------------------------
+        all_rows: list[dict] = []
+        offset = 0
 
-    def _connect(self) -> sqlite3.Connection:
-        """Create a new connection with WAL mode and row factory."""
-        conn = sqlite3.connect(str(self.db_path), timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.row_factory = sqlite3.Row
-        return conn
+        while True:
+            query = self._client.table(table).select(select)
 
-    def _init_schema(self) -> None:
-        """Create tables and indexes if they don't exist."""
-        conn = self._connect()
-        try:
-            conn.execute(_CREATE_TENDERS)
-            conn.execute(_CREATE_HISTORY)
-            conn.execute(_CREATE_DOCUMENTS)
-            conn.execute(_CREATE_SCORES)
+            if filters:
+                for col, val in filters.items():
+                    query = query.eq(col, val)
 
-            # Migrate: drop old empty alert_rules table if it exists
-            conn.execute("DROP TABLE IF EXISTS alert_rules")
+            if order_col:
+                query = query.order(order_col, desc=order_desc)
 
-            # Migrate: recreate alert_history with new schema if needed
-            col_check = conn.execute("PRAGMA table_info(alert_history)").fetchall()
-            col_names = {r["name"] for r in col_check} if col_check else set()
-            if col_check and "user_email" not in col_names:
-                conn.execute("DROP TABLE IF EXISTS alert_history")
+            query = query.range(offset, offset + _PAGE_SIZE - 1)
 
-            conn.execute(_CREATE_WATCHLIST)
-            conn.execute(_CREATE_ALERT_HISTORY)
-            conn.execute(_CREATE_REVIEWS)
-            for idx_sql in _CREATE_INDEXES:
-                conn.execute(idx_sql)
-            conn.commit()
-        finally:
-            conn.close()
+            try:
+                result = query.execute()
+            except Exception as exc:
+                logger.error("Paginated select from %s failed: %s", table, exc)
+                break
+
+            rows = result.data or []
+            all_rows.extend(rows)
+
+            if len(rows) < _PAGE_SIZE:
+                break  # Last page
+
+            offset += _PAGE_SIZE
+
+        return all_rows
 
     # ------------------------------------------------------------------
     # Tender upsert
@@ -240,102 +169,86 @@ class TenderDB:
         if df is None or df.empty:
             logger.warning("upsert_tenders called with empty DataFrame")
             return
+        if not self._client:
+            logger.error("upsert_tenders: no Supabase connection")
+            return
 
         snapshot_date = snapshot_date or date.today().isoformat()
         now = datetime.now().isoformat()
 
-        conn = self._connect()
-        try:
-            cursor = conn.cursor()
-            inserted = 0
-            updated = 0
+        # Build tender rows + history rows
+        tender_rows: list[dict] = []
+        history_rows: list[dict] = []
 
-            for _, row in df.iterrows():
-                tender_id = int(row.get("tender_id", 0))
-                if not tender_id:
-                    continue
+        for _, row in df.iterrows():
+            tender_id = int(row.get("tender_id", 0))
+            if not tender_id:
+                continue
 
-                # Check if tender exists to preserve first_seen
-                existing = cursor.execute(
-                    "SELECT first_seen FROM tenders WHERE tender_id = ?",
-                    (tender_id,),
-                ).fetchone()
+            tender_row = {
+                "tender_id": tender_id,
+                "tender_name": _clean_val(row.get("tender_name")),
+                "city_code": _clean_val(row.get("city_code")),
+                "city": _clean_val(row.get("city")),
+                "region": _clean_val(row.get("region")),
+                "location": _clean_val(row.get("location")),
+                "tender_type_code": _clean_val(row.get("tender_type_code")),
+                "tender_type": _clean_val(row.get("tender_type")),
+                "purpose_code": _clean_val(row.get("purpose_code")),
+                "purpose": _clean_val(row.get("purpose")),
+                "status_code": _clean_val(row.get("status_code")),
+                "status": _clean_val(row.get("status")),
+                "units": _clean_val(row.get("units")),
+                "publish_date": _clean_val(row.get("publish_date")),
+                "deadline": _clean_val(row.get("deadline")),
+                "committee_date": _clean_val(row.get("committee_date")),
+                "published_booklet": _clean_val(row.get("published_booklet")),
+                "targeted": _clean_val(row.get("targeted")),
+                "area_sqm": _clean_val(row.get("area_sqm")),
+                "min_price": _clean_val(row.get("min_price")),
+                "gush": _clean_val(row.get("gush")),
+                "helka": _clean_val(row.get("helka")),
+                "last_updated": now,
+            }
+            tender_rows.append(tender_row)
 
-                first_seen = existing["first_seen"] if existing else snapshot_date
+            history_rows.append({
+                "tender_id": tender_id,
+                "snapshot_date": snapshot_date,
+                "status_code": _clean_val(row.get("status_code")),
+                "status": _clean_val(row.get("status")),
+                "units": _clean_val(row.get("units")),
+                "deadline": _clean_val(row.get("deadline")),
+            })
 
-                # Prepare values for all columns
-                values = {
-                    "tender_id": tender_id,
-                    "tender_name": _to_str(row.get("tender_name")),
-                    "city_code": _to_int(row.get("city_code")),
-                    "city": _to_str(row.get("city")),
-                    "region": _to_str(row.get("region")),
-                    "location": _to_str(row.get("location")),
-                    "tender_type_code": _to_int(row.get("tender_type_code")),
-                    "tender_type": _to_str(row.get("tender_type")),
-                    "purpose_code": _to_int(row.get("purpose_code")),
-                    "purpose": _to_str(row.get("purpose")),
-                    "status_code": _to_int(row.get("status_code")),
-                    "status": _to_str(row.get("status")),
-                    "units": _to_int(row.get("units")),
-                    "publish_date": _to_date_str(row.get("publish_date")),
-                    "deadline": _to_date_str(row.get("deadline")),
-                    "committee_date": _to_date_str(row.get("committee_date")),
-                    "published_booklet": _to_int(row.get("published_booklet")),
-                    "targeted": _to_int(row.get("targeted")),
-                    "area_sqm": _to_float(row.get("area_sqm")),
-                    "min_price": _to_float(row.get("min_price")),
-                    "gush": _to_str(row.get("gush")),
-                    "helka": _to_str(row.get("helka")),
-                    "first_seen": first_seen,
-                    "last_updated": now,
-                }
+        # Batch upsert tenders
+        inserted = 0
+        for i in range(0, len(tender_rows), _BATCH_SIZE):
+            batch = tender_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("tenders").upsert(
+                    batch,
+                    on_conflict="tender_id",
+                ).execute()
+                inserted += len(batch)
+            except Exception as exc:
+                logger.error("upsert_tenders batch failed: %s", exc)
 
-                cursor.execute(
-                    """INSERT OR REPLACE INTO tenders (
-                        tender_id, tender_name, city_code, city, region,
-                        location, tender_type_code, tender_type, purpose_code,
-                        purpose, status_code, status, units, publish_date,
-                        deadline, committee_date, published_booklet, targeted,
-                        area_sqm, min_price, gush, helka, first_seen, last_updated
-                    ) VALUES (
-                        :tender_id, :tender_name, :city_code, :city, :region,
-                        :location, :tender_type_code, :tender_type, :purpose_code,
-                        :purpose, :status_code, :status, :units, :publish_date,
-                        :deadline, :committee_date, :published_booklet, :targeted,
-                        :area_sqm, :min_price, :gush, :helka, :first_seen,
-                        :last_updated
-                    )""",
-                    values,
-                )
+        # Batch upsert history (ignore duplicates for same tender+date)
+        for i in range(0, len(history_rows), _BATCH_SIZE):
+            batch = history_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("tender_history").upsert(
+                    batch,
+                    on_conflict="tender_id,snapshot_date",
+                    ignore_duplicates=True,
+                ).execute()
+            except Exception as exc:
+                logger.error("upsert_history batch failed: %s", exc)
 
-                if existing:
-                    updated += 1
-                else:
-                    inserted += 1
-
-                # Write history row (ignore duplicates for same date)
-                cursor.execute(
-                    """INSERT OR IGNORE INTO tender_history
-                       (tender_id, snapshot_date, status_code, status, units, deadline)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (
-                        tender_id,
-                        snapshot_date,
-                        _to_int(row.get("status_code")),
-                        _to_str(row.get("status")),
-                        _to_int(row.get("units")),
-                        _to_date_str(row.get("deadline")),
-                    ),
-                )
-
-            conn.commit()
-            logger.info(
-                "Upserted tenders: %d inserted, %d updated (snapshot %s)",
-                inserted, updated, snapshot_date,
-            )
-        finally:
-            conn.close()
+        logger.info(
+            "Upserted %d tenders (snapshot %s)", inserted, snapshot_date,
+        )
 
     # ------------------------------------------------------------------
     # Document upsert
@@ -353,61 +266,60 @@ class TenderDB:
             doc_list: List of document dicts from the API (MichrazDocList items).
 
         Returns:
-            List of document dicts that were newly inserted (first_seen == today).
+            List of document dicts that were newly inserted.
         """
-        if not doc_list:
+        if not doc_list or not self._client:
             return []
 
-        today = date.today().isoformat()
-        conn = self._connect()
-        new_docs: list[dict] = []
+        today_str = date.today().isoformat()
 
+        # Get existing row_ids for this tender to detect truly new docs
         try:
-            cursor = conn.cursor()
+            existing_result = (
+                self._client.table("tender_documents")
+                .select("row_id")
+                .eq("tender_id", tender_id)
+                .execute()
+            )
+            existing_ids = {r["row_id"] for r in (existing_result.data or [])}
+        except Exception as exc:
+            logger.error("Failed to check existing docs for tender %d: %s", tender_id, exc)
+            existing_ids = set()
 
-            for doc in doc_list:
-                row_id = doc.get("RowID")
-                if row_id is None:
-                    continue
+        new_docs: list[dict] = []
+        rows_to_insert: list[dict] = []
 
-                # Check if this doc already exists
-                existing = cursor.execute(
-                    "SELECT id FROM tender_documents WHERE tender_id = ? AND row_id = ?",
-                    (tender_id, row_id),
-                ).fetchone()
+        for doc in doc_list:
+            row_id = doc.get("RowID")
+            if row_id is None or row_id in existing_ids:
+                continue
 
-                if existing:
-                    continue
+            rows_to_insert.append({
+                "tender_id": tender_id,
+                "row_id": row_id,
+                "doc_name": doc.get("DocName"),
+                "description": doc.get("Teur"),
+                "file_type": doc.get("FileType"),
+                "size": doc.get("Size"),
+                "pirsum_type": doc.get("PirsumType"),
+                "update_date": _clean_val(doc.get("UpdateDate")),
+                "first_seen": today_str,
+            })
+            new_docs.append(doc)
 
-                update_date = _to_date_str(doc.get("UpdateDate"))
-
-                cursor.execute(
-                    """INSERT INTO tender_documents
-                       (tender_id, row_id, doc_name, description, file_type,
-                        size, pirsum_type, update_date, first_seen)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        tender_id,
-                        row_id,
-                        doc.get("DocName"),
-                        doc.get("Teur"),
-                        doc.get("FileType"),
-                        doc.get("Size"),
-                        doc.get("PirsumType"),
-                        update_date,
-                        today,
-                    ),
-                )
-                new_docs.append(doc)
-
-            conn.commit()
-
-            if new_docs:
+        if rows_to_insert:
+            try:
+                self._client.table("tender_documents").upsert(
+                    rows_to_insert,
+                    on_conflict="tender_id,row_id",
+                    ignore_duplicates=True,
+                ).execute()
                 logger.info(
                     "Tender %d: %d new documents added", tender_id, len(new_docs),
                 )
-        finally:
-            conn.close()
+            except Exception as exc:
+                logger.error("upsert_documents failed for tender %d: %s", tender_id, exc)
+                return []
 
         return new_docs
 
@@ -416,24 +328,26 @@ class TenderDB:
     # ------------------------------------------------------------------
 
     def load_current_tenders(self) -> pd.DataFrame:
-        """Load all tenders from the database as a DataFrame."""
-        conn = self._connect()
-        try:
-            df = pd.read_sql_query("SELECT * FROM tenders", conn)
-            logger.info("Loaded %d tenders from database", len(df))
+        """Load all tenders from Supabase as a DataFrame."""
+        rows = self._paginated_select("tenders", order_col="tender_id")
 
-            # Convert date columns to datetime
-            for col in ("publish_date", "deadline", "committee_date"):
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors="coerce")
+        if not rows:
+            logger.warning("No tenders loaded from Supabase")
+            return pd.DataFrame()
 
-            # Convert boolean-like columns
-            if "published_booklet" in df.columns:
-                df["published_booklet"] = df["published_booklet"].astype(bool)
+        df = pd.DataFrame(rows)
+        logger.info("Loaded %d tenders from Supabase", len(df))
 
-            return df
-        finally:
-            conn.close()
+        # Convert date columns to datetime
+        for col in ("publish_date", "deadline", "committee_date"):
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+
+        # Convert boolean-like columns
+        if "published_booklet" in df.columns:
+            df["published_booklet"] = df["published_booklet"].astype(bool)
+
+        return df
 
     def load_tender_history(
         self,
@@ -447,22 +361,13 @@ class TenderDB:
         Returns:
             DataFrame with history rows.
         """
-        conn = self._connect()
-        try:
-            if tender_id is not None:
-                df = pd.read_sql_query(
-                    "SELECT * FROM tender_history WHERE tender_id = ? ORDER BY snapshot_date",
-                    conn,
-                    params=(tender_id,),
-                )
-            else:
-                df = pd.read_sql_query(
-                    "SELECT * FROM tender_history ORDER BY snapshot_date",
-                    conn,
-                )
-            return df
-        finally:
-            conn.close()
+        filters = {"tender_id": tender_id} if tender_id is not None else None
+        rows = self._paginated_select(
+            "tender_history",
+            filters=filters,
+            order_col="snapshot_date",
+        )
+        return pd.DataFrame(rows) if rows else pd.DataFrame()
 
     def load_tender_documents(self, tender_id: int) -> pd.DataFrame:
         """Load all documents for a specific tender.
@@ -473,40 +378,75 @@ class TenderDB:
         Returns:
             DataFrame with document rows.
         """
-        conn = self._connect()
-        try:
-            df = pd.read_sql_query(
-                "SELECT * FROM tender_documents WHERE tender_id = ? ORDER BY update_date",
-                conn,
-                params=(tender_id,),
-            )
-            return df
-        finally:
-            conn.close()
+        rows = self._paginated_select(
+            "tender_documents",
+            filters={"tender_id": tender_id},
+            order_col="update_date",
+        )
+        return pd.DataFrame(rows) if rows else pd.DataFrame()
 
     def get_new_documents(self, since_date: str) -> pd.DataFrame:
-        """Get all documents first seen after a given date.
+        """Get all documents first seen after a given date, with tender info.
+
+        Note: Supabase REST API doesn't support JOINs natively, so we fetch
+        documents and tenders separately, then merge in Python.
 
         Args:
             since_date: ISO date string (e.g. "2026-02-16").
 
         Returns:
-            DataFrame with document rows, joined with tender name.
+            DataFrame with document rows plus tender_name, city, region.
         """
-        conn = self._connect()
+        if not self._client:
+            return pd.DataFrame()
+
         try:
-            df = pd.read_sql_query(
-                """SELECT d.*, t.tender_name, t.city, t.region
-                   FROM tender_documents d
-                   JOIN tenders t ON d.tender_id = t.tender_id
-                   WHERE d.first_seen > ?
-                   ORDER BY d.first_seen DESC""",
-                conn,
-                params=(since_date,),
-            )
-            return df
-        finally:
-            conn.close()
+            # Fetch documents with first_seen > since_date (paginated)
+            all_docs: list[dict] = []
+            offset = 0
+            while True:
+                result = (
+                    self._client.table("tender_documents")
+                    .select("*")
+                    .gt("first_seen", since_date)
+                    .order("first_seen", desc=True)
+                    .range(offset, offset + _PAGE_SIZE - 1)
+                    .execute()
+                )
+                rows = result.data or []
+                all_docs.extend(rows)
+                if len(rows) < _PAGE_SIZE:
+                    break
+                offset += _PAGE_SIZE
+
+            if not all_docs:
+                return pd.DataFrame()
+
+            docs_df = pd.DataFrame(all_docs)
+
+            # Fetch tender info for the matching tender_ids
+            tender_ids = docs_df["tender_id"].unique().tolist()
+            tender_info: list[dict] = []
+            for i in range(0, len(tender_ids), _BATCH_SIZE):
+                batch_ids = tender_ids[i : i + _BATCH_SIZE]
+                result = (
+                    self._client.table("tenders")
+                    .select("tender_id, tender_name, city, region")
+                    .in_("tender_id", batch_ids)
+                    .execute()
+                )
+                tender_info.extend(result.data or [])
+
+            if tender_info:
+                tenders_df = pd.DataFrame(tender_info)
+                merged = docs_df.merge(tenders_df, on="tender_id", how="left")
+                return merged
+
+            return docs_df
+
+        except Exception as exc:
+            logger.error("get_new_documents failed: %s", exc)
+            return pd.DataFrame()
 
     def get_tender_by_id(self, tender_id: int) -> Optional[dict]:
         """Look up a single tender by ID.
@@ -517,15 +457,22 @@ class TenderDB:
         Returns:
             Dict of tender fields, or None if not found.
         """
-        conn = self._connect()
+        if not self._client:
+            return None
+
         try:
-            row = conn.execute(
-                "SELECT * FROM tenders WHERE tender_id = ?",
-                (tender_id,),
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+            result = (
+                self._client.table("tenders")
+                .select("*")
+                .eq("tender_id", tender_id)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            return rows[0] if rows else None
+        except Exception as exc:
+            logger.error("get_tender_by_id failed: %s", exc)
+            return None
 
     def get_snapshot_dates(self) -> list[str]:
         """List all unique snapshot dates in the history table.
@@ -533,260 +480,32 @@ class TenderDB:
         Returns:
             Sorted list of ISO date strings.
         """
-        conn = self._connect()
+        if not self._client:
+            return []
+
         try:
-            rows = conn.execute(
-                "SELECT DISTINCT snapshot_date FROM tender_history ORDER BY snapshot_date",
-            ).fetchall()
-            return [r["snapshot_date"] for r in rows]
-        finally:
-            conn.close()
+            # Fetch snapshot_date column (paginated), deduplicate in Python
+            all_rows: list[dict] = []
+            offset = 0
+            while True:
+                result = (
+                    self._client.table("tender_history")
+                    .select("snapshot_date")
+                    .order("snapshot_date")
+                    .range(offset, offset + _PAGE_SIZE - 1)
+                    .execute()
+                )
+                rows = result.data or []
+                all_rows.extend(rows)
+                if len(rows) < _PAGE_SIZE:
+                    break
+                offset += _PAGE_SIZE
 
-    # ------------------------------------------------------------------
-    # Watchlist methods
-    # ------------------------------------------------------------------
-
-    def add_to_watchlist(self, user_email: str, tender_id: int) -> bool:
-        """Add a tender to the user's watchlist.
-
-        Args:
-            user_email: The user's email address.
-            tender_id: The tender's MichrazID (must exist in tenders table).
-
-        Returns:
-            True if added, False if already on the watchlist.
-        """
-        conn = self._connect()
-        try:
-            conn.execute(
-                """INSERT OR IGNORE INTO user_watchlist
-                   (user_email, tender_id, created_at, active)
-                   VALUES (?, ?, ?, 1)""",
-                (user_email, tender_id, date.today().isoformat()),
-            )
-            conn.commit()
-            return conn.total_changes > 0
-        finally:
-            conn.close()
-
-    def remove_from_watchlist(self, user_email: str, tender_id: int) -> None:
-        """Remove a tender from the user's watchlist.
-
-        Args:
-            user_email: The user's email address.
-            tender_id: The tender's MichrazID.
-        """
-        conn = self._connect()
-        try:
-            conn.execute(
-                "DELETE FROM user_watchlist WHERE user_email = ? AND tender_id = ?",
-                (user_email, tender_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    def get_user_watchlist(self, user_email: str) -> pd.DataFrame:
-        """Get all watched tenders for a user, joined with tender details.
-
-        Args:
-            user_email: The user's email address.
-
-        Returns:
-            DataFrame with watchlist entries joined to tender info.
-        """
-        conn = self._connect()
-        try:
-            df = pd.read_sql_query(
-                """SELECT w.id AS watch_id, w.tender_id, w.created_at,
-                          t.tender_name, t.city, t.region, t.status,
-                          t.deadline, t.units, t.published_booklet,
-                          t.tender_type
-                   FROM user_watchlist w
-                   JOIN tenders t ON w.tender_id = t.tender_id
-                   WHERE w.user_email = ? AND w.active = 1
-                   ORDER BY w.created_at DESC""",
-                conn,
-                params=(user_email,),
-            )
-            return df
-        finally:
-            conn.close()
-
-    def get_all_active_watchlists(self) -> list[dict]:
-        """Get all active watchlist entries grouped by user_email.
-
-        Returns:
-            List of dicts: [{user_email, tender_id, created_at}, ...].
-        """
-        conn = self._connect()
-        try:
-            rows = conn.execute(
-                """SELECT user_email, tender_id, created_at
-                   FROM user_watchlist
-                   WHERE active = 1
-                   ORDER BY user_email""",
-            ).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
-
-    # ------------------------------------------------------------------
-    # Alert history methods
-    # ------------------------------------------------------------------
-
-    def record_alert_sent(
-        self, user_email: str, tender_id: int, doc_row_id: int,
-    ) -> None:
-        """Record that an alert email was sent for a document.
-
-        Uses INSERT OR IGNORE for deduplication — safe to call multiple times.
-
-        Args:
-            user_email: Recipient email.
-            tender_id: The tender's MichrazID.
-            doc_row_id: The document's RowID from the API.
-        """
-        conn = self._connect()
-        try:
-            conn.execute(
-                """INSERT OR IGNORE INTO alert_history
-                   (user_email, tender_id, doc_row_id, sent_at)
-                   VALUES (?, ?, ?, ?)""",
-                (user_email, tender_id, doc_row_id, date.today().isoformat()),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    def get_unsent_docs_for_watch(
-        self,
-        user_email: str,
-        tender_id: int,
-        since_date: str,
-    ) -> list[dict]:
-        """Find new documents for a watched tender not yet emailed to this user.
-
-        Args:
-            user_email: The user's email.
-            tender_id: The watched tender ID.
-            since_date: Only consider documents with first_seen > this date
-                (typically the watchlist created_at date).
-
-        Returns:
-            List of document dicts with keys: row_id, doc_name, description,
-            file_type, size, pirsum_type, update_date, first_seen.
-        """
-        conn = self._connect()
-        try:
-            rows = conn.execute(
-                """SELECT d.row_id, d.doc_name, d.description, d.file_type,
-                          d.size, d.pirsum_type, d.update_date, d.first_seen
-                   FROM tender_documents d
-                   WHERE d.tender_id = ?
-                     AND d.first_seen > ?
-                     AND NOT EXISTS (
-                         SELECT 1 FROM alert_history ah
-                         WHERE ah.user_email = ?
-                           AND ah.tender_id = d.tender_id
-                           AND ah.doc_row_id = d.row_id
-                     )
-                   ORDER BY d.first_seen DESC""",
-                (tender_id, since_date, user_email),
-            ).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
-
-    # ------------------------------------------------------------------
-    # Review status methods
-    # ------------------------------------------------------------------
-
-    def get_review_status(self, tender_id: int) -> Optional[dict]:
-        """Get the current review status for a tender.
-
-        Args:
-            tender_id: The tender's MichrazID.
-
-        Returns:
-            Dict with status, updated_by, updated_at, notes — or None.
-        """
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT * FROM tender_reviews WHERE tender_id = ?",
-                (tender_id,),
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
-
-    def set_review_status(
-        self,
-        tender_id: int,
-        status: str,
-        updated_by: str,
-        notes: Optional[str] = None,
-    ) -> str:
-        """Set or update the review status for a tender.
-
-        Args:
-            tender_id: The tender's MichrazID.
-            status: One of REVIEW_STAGES.
-            updated_by: Email or name of the person updating.
-            notes: Optional free-text notes.
-
-        Returns:
-            The previous status (for notification purposes), or empty string.
-        """
-        now = datetime.now().isoformat(timespec="seconds")
-        conn = self._connect()
-        try:
-            # Get previous status
-            prev_row = conn.execute(
-                "SELECT status FROM tender_reviews WHERE tender_id = ?",
-                (tender_id,),
-            ).fetchone()
-            prev_status = prev_row["status"] if prev_row else ""
-
-            conn.execute(
-                """INSERT INTO tender_reviews (tender_id, status, updated_by, updated_at, notes)
-                   VALUES (?, ?, ?, ?, ?)
-                   ON CONFLICT(tender_id)
-                   DO UPDATE SET status = excluded.status,
-                                 updated_by = excluded.updated_by,
-                                 updated_at = excluded.updated_at,
-                                 notes = excluded.notes""",
-                (tender_id, status, updated_by, now, notes),
-            )
-            conn.commit()
-            return prev_status
-        finally:
-            conn.close()
-
-    def get_review_statuses_for_tenders(
-        self, tender_ids: list[int],
-    ) -> dict[int, dict]:
-        """Bulk-fetch review statuses for a list of tender IDs.
-
-        Args:
-            tender_ids: List of tender MichrazIDs.
-
-        Returns:
-            Dict mapping tender_id → review dict (status, updated_by, etc.).
-        """
-        if not tender_ids:
-            return {}
-        conn = self._connect()
-        try:
-            placeholders = ",".join("?" * len(tender_ids))
-            rows = conn.execute(
-                f"SELECT * FROM tender_reviews WHERE tender_id IN ({placeholders})",  # noqa: S608
-                tender_ids,
-            ).fetchall()
-            return {r["tender_id"]: dict(r) for r in rows}
-        finally:
-            conn.close()
+            dates = sorted({r["snapshot_date"] for r in all_rows if r.get("snapshot_date")})
+            return dates
+        except Exception as exc:
+            logger.error("get_snapshot_dates failed: %s", exc)
+            return []
 
     def get_new_docs_excluding(
         self,
@@ -796,7 +515,7 @@ class TenderDB:
     ) -> list[dict]:
         """Get new documents for a tender, excluding already-notified ones.
 
-        Used by the alert engine when alert_history lives in Supabase.
+        Used by the alert engine (alert_history dedup is in Supabase).
 
         Args:
             tender_id: The tender's MichrazID.
@@ -806,22 +525,23 @@ class TenderDB:
         Returns:
             List of document dicts not yet notified.
         """
-        conn = self._connect()
+        if not self._client:
+            return []
+
         try:
-            rows = conn.execute(
-                """SELECT row_id, doc_name, description, file_type,
-                          size, pirsum_type, update_date, first_seen
-                   FROM tender_documents
-                   WHERE tender_id = ? AND first_seen > ?
-                   ORDER BY first_seen DESC""",
-                (tender_id, since_date),
-            ).fetchall()
-            return [
-                dict(r) for r in rows
-                if r["row_id"] not in exclude_row_ids
-            ]
-        finally:
-            conn.close()
+            result = (
+                self._client.table("tender_documents")
+                .select("row_id, doc_name, description, file_type, size, pirsum_type, update_date, first_seen")
+                .eq("tender_id", tender_id)
+                .gt("first_seen", since_date)
+                .order("first_seen", desc=True)
+                .execute()
+            )
+            rows = result.data or []
+            return [r for r in rows if r["row_id"] not in exclude_row_ids]
+        except Exception as exc:
+            logger.error("get_new_docs_excluding failed: %s", exc)
+            return []
 
     def get_stats(self) -> dict:
         """Get summary counts for logging/debugging.
@@ -829,60 +549,21 @@ class TenderDB:
         Returns:
             Dict with table row counts.
         """
-        conn = self._connect()
-        try:
-            stats = {}
-            for table in (
-                "tenders", "tender_history", "tender_documents",
-                "user_watchlist", "alert_history", "tender_reviews",
-            ):
-                count = conn.execute(
-                    f"SELECT COUNT(*) FROM {table}",  # noqa: S608
-                ).fetchone()[0]
-                stats[table] = count
-            return stats
-        finally:
-            conn.close()
+        if not self._client:
+            return {}
 
+        stats = {}
+        for table in ("tenders", "tender_history", "tender_documents"):
+            try:
+                result = (
+                    self._client.table(table)
+                    .select("*", count="exact")
+                    .limit(0)
+                    .execute()
+                )
+                stats[table] = result.count if result.count is not None else 0
+            except Exception as exc:
+                logger.error("get_stats failed for %s: %s", table, exc)
+                stats[table] = -1
 
-# ------------------------------------------------------------------
-# Type conversion helpers
-# ------------------------------------------------------------------
-
-def _to_str(val: object) -> Optional[str]:
-    """Convert a value to string, handling NaN/None."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    return str(val).strip() if val else None
-
-
-def _to_int(val: object) -> Optional[int]:
-    """Convert a value to int, handling NaN/None/bool."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    if isinstance(val, bool):
-        return int(val)
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _to_float(val: object) -> Optional[float]:
-    """Convert a value to float, handling NaN/None."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _to_date_str(val: object) -> Optional[str]:
-    """Convert a date/datetime/string to ISO date string."""
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return None
-    if isinstance(val, (pd.Timestamp, datetime)):
-        return val.isoformat()
-    s = str(val).strip()
-    return s if s else None
+        return stats
