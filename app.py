@@ -29,7 +29,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Load fonts ──
+# ── Load fonts: Inter + Heebo (typography), Material (dataframe sort arrows) ──
 st.markdown("""
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
@@ -42,7 +42,7 @@ st.markdown("""
 
 
 # ============================================================================
-# SHARED CSS — Card-based design with light sidebar
+# SHARED CSS (MEGIDO Executive Design System)
 # ============================================================================
 
 st.markdown("""
@@ -53,7 +53,8 @@ st.markdown("""
         text-align: right;
     }
 
-    /* ── Hide keyboard shortcut hints ── */
+    /* ── Hide Streamlit keyboard shortcut hints (narrow selectors to avoid
+         breaking dataframe column filter/search popups) ── */
     [data-testid="InputInstructions"],
     [data-testid="StyledThumbValue"] {
         display: none !important;
@@ -62,7 +63,7 @@ st.markdown("""
         overflow: hidden !important;
     }
 
-    /* ── Bidi text fix ── */
+    /* ── Fix bidirectional text (Hebrew + numbers mix) ── */
     [data-testid="stExpander"] summary,
     [data-testid="stExpander"] summary span,
     .streamlit-expanderHeader,
@@ -72,96 +73,93 @@ st.markdown("""
     p, span, label, li {
         unicode-bidi: plaintext;
     }
+
+    /* Keep LTR for code / numbers where needed */
     code, pre, [data-testid="stMetricValue"] { direction: ltr; }
 
-    /* ── Design Tokens ── */
+    /* ── MEGIDO Design Tokens ── */
     :root {
-        --mg-bg-main: #F3F4F6;
+        --mg-bg-main: #F0F2F5;
         --mg-bg-card: #FFFFFF;
-        --mg-bg-sidebar: #FFFFFF;
-        --mg-primary: #1B6B3A;
-        --mg-primary-light: #E8F5E9;
-        --mg-primary-hover: #155D30;
-        --mg-gold: #D4A017;
+        --mg-bg-sidebar: #111827;
+        --mg-sidebar-header: #0D1321;
+        --mg-primary: #D4A017;
+        --mg-primary-hover: #B8860B;
+        --mg-navy: #1B2A4A;
         --mg-text-heading: #111827;
         --mg-text-body: #374151;
         --mg-text-muted: #9CA3AF;
-        --mg-text-section: #6B7280;
+        --mg-text-on-dark: #E5E7EB;
+        --mg-text-on-dark-muted: #6B7280;
         --mg-border: #E5E7EB;
-        --mg-border-light: #F0F0F0;
-        --mg-shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-        --mg-shadow-md: 0 2px 8px rgba(0,0,0,0.06);
-        --mg-radius: 16px;
-        --mg-radius-sm: 12px;
+        --mg-border-dark: #1F2937;
+        --mg-success: #10B981;
+        --mg-warning: #F59E0B;
+        --mg-danger: #EF4444;
     }
 
-    /* ── Typography ── */
+    /* ── Typography & Foundation ── */
     html, body, [class*="st-"], [data-testid="stAppViewContainer"] {
         font-family: 'Inter', 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif !important;
         background-color: var(--mg-bg-main) !important;
         color: var(--mg-text-body);
     }
+
     h1, h2, h3, h4, h5, h6, .stTabs button {
         font-family: 'Inter', 'Heebo', -apple-system, sans-serif !important;
         color: var(--mg-text-heading) !important;
     }
-    code, pre { font-family: 'JetBrains Mono', monospace !important; }
+
+    code, pre {
+        font-family: 'JetBrains Mono', monospace !important;
+    }
 
     .block-container { padding-top: 1rem; padding-bottom: 1rem; }
 
-    /* ── Sort Icon Fix ── */
+    /* ── Sort Icon Fix: Force Font & Align ── */
     [data-testid="stIconMaterial"] {
         font-family: 'Material Icons' !important;
-        font-weight: normal; font-style: normal;
+        font-weight: normal;
+        font-style: normal;
         font-size: 18px !important;
         visibility: visible !important;
-        line-height: 1; direction: ltr;
+        line-height: 1;
+        direction: ltr;
         float: left !important;
     }
 
-    /* ══════════════════════════════════════════════════════════════════
-       METRIC CARDS — white cards, first one highlighted
-       ══════════════════════════════════════════════════════════════════ */
+    /* ── Metric Cards (MEGIDO Executive) ── */
     [data-testid="stMetric"] {
         background-color: var(--mg-bg-card) !important;
-        border-radius: var(--mg-radius) !important;
-        border: 1px solid var(--mg-border-light) !important;
-        box-shadow: var(--mg-shadow-sm) !important;
-        padding: 16px 20px !important;
+        border-radius: 10px !important;
+        border: 1px solid var(--mg-border) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06) !important;
+        padding: 12px 16px !important;
         position: relative;
     }
+    /* Gold accent stripe on right (RTL) */
     [data-testid="stMetric"]::before {
-        content: none !important;
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        background: var(--mg-primary);
+        border-radius: 3px;
     }
     [data-testid="stMetricValue"] {
         color: var(--mg-text-heading) !important;
         font-weight: 700 !important;
-        font-size: 28px !important;
+        font-size: 22px !important;
     }
     [data-testid="stMetricLabel"] {
         color: var(--mg-text-muted) !important;
         font-weight: 500 !important;
         font-size: 12px !important;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
     }
 
-    /* Highlighted primary KPI (first column) */
-    .kpi-primary [data-testid="stMetric"] {
-        background: linear-gradient(135deg, #1B6B3A 0%, #2D8B4E 100%) !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(27, 107, 58, 0.25) !important;
-    }
-    .kpi-primary [data-testid="stMetricValue"] {
-        color: #FFFFFF !important;
-    }
-    .kpi-primary [data-testid="stMetricLabel"] {
-        color: rgba(255,255,255,0.75) !important;
-    }
-
-    /* ══════════════════════════════════════════════════════════════════
-       SIDEBAR — Light, clean
-       ══════════════════════════════════════════════════════════════════ */
+    /* ── Sidebar (Dark Executive) ── */
     section[data-testid="stSidebar"] > div {
         direction: rtl;
         text-align: right;
@@ -169,125 +167,106 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         background-color: var(--mg-bg-sidebar) !important;
         background-image: none !important;
-        min-width: 270px !important;
-        width: 270px !important;
-        border-left: 1px solid var(--mg-border) !important;
-        box-shadow: none !important;
+        min-width: 285px !important;
+        width: 285px !important;
+        box-shadow: 1px 0 0 var(--mg-border-dark);
     }
 
-    /* Sidebar text */
+    /* Default sidebar text (light on dark) */
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] label {
-        color: var(--mg-text-body) !important;
+        color: var(--mg-text-on-dark-muted) !important;
     }
+
+    /* Headers in sidebar */
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] h4 {
-        color: var(--mg-text-heading) !important;
+    section[data-testid="stSidebar"] h3 {
+        color: var(--mg-text-on-dark) !important;
     }
 
-    /* Sidebar section labels (small caps) */
-    .sidebar-section-label {
-        font-size: 0.7rem;
-        font-weight: 600;
-        color: var(--mg-text-muted) !important;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin: 16px 0 8px 0;
+    /* Navigation/Inputs in sidebar */
+    section[data-testid="stSidebar"] .stRadio label,
+    section[data-testid="stSidebar"] .stMultiSelect label {
+        color: var(--mg-text-on-dark-muted) !important;
+        font-weight: 500;
     }
 
-    /* Sidebar widgets — default light theme */
+    /* Dark sidebar widget overrides */
     section[data-testid="stSidebar"] [data-baseweb="select"],
     section[data-testid="stSidebar"] [data-baseweb="input"] {
-        background-color: #F9FAFB !important;
-        border-color: var(--mg-border) !important;
-        border-radius: 10px !important;
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="select"] input,
     section[data-testid="stSidebar"] [data-baseweb="input"] input {
-        color: var(--mg-text-heading) !important;
+        color: var(--mg-text-on-dark) !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="tag"] {
         background-color: var(--mg-primary) !important;
-        color: #FFFFFF !important;
-        border-radius: 6px !important;
+        color: #111827 !important;
     }
+    section[data-testid="stSidebar"] [data-baseweb="select"] [data-baseweb="icon"] {
+        color: var(--mg-text-on-dark-muted) !important;
+    }
+
+    /* Sidebar text inputs, password fields, auth forms — ensure ALL text visible */
     section[data-testid="stSidebar"] input,
     section[data-testid="stSidebar"] textarea {
-        color: var(--mg-text-heading) !important;
-        background-color: #F9FAFB !important;
-        border-color: var(--mg-border) !important;
+        color: var(--mg-text-on-dark) !important;
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
+        caret-color: var(--mg-primary) !important;
     }
     section[data-testid="stSidebar"] input::placeholder,
     section[data-testid="stSidebar"] textarea::placeholder {
-        color: var(--mg-text-muted) !important;
+        color: var(--mg-text-on-dark-muted) !important;
+        opacity: 0.7 !important;
     }
+    /* Sidebar form containers and auth elements */
     section[data-testid="stSidebar"] [data-testid="stTextInput"] > div,
-    section[data-testid="stSidebar"] [data-testid="stPasswordInput"] > div {
-        background-color: #F9FAFB !important;
-        border-color: var(--mg-border) !important;
+    section[data-testid="stSidebar"] [data-testid="stPasswordInput"] > div,
+    section[data-testid="stSidebar"] [data-testid="stForm"] input {
+        background-color: #1F2937 !important;
+        border-color: #374151 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stTextInput"] label,
+    section[data-testid="stSidebar"] [data-testid="stPasswordInput"] label {
+        color: var(--mg-text-on-dark) !important;
     }
 
     /* Sidebar dividers */
     section[data-testid="stSidebar"] hr {
-        border-color: var(--mg-border) !important;
-        margin: 12px 0 !important;
+        border-color: var(--mg-border-dark) !important;
     }
+
+    /* Sidebar captions */
     section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
-        color: var(--mg-text-muted) !important;
+        color: var(--mg-text-on-dark-muted) !important;
     }
 
-    /* ══════════════════════════════════════════════════════════════════
-       CARDS — dashboard-card class for section containers
-       ══════════════════════════════════════════════════════════════════ */
-    .dashboard-card {
-        background: var(--mg-bg-card);
-        border-radius: var(--mg-radius);
-        padding: 20px;
-        box-shadow: var(--mg-shadow-sm);
-        border: 1px solid var(--mg-border-light);
-        margin-bottom: 12px;
-    }
-    .dashboard-card-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--mg-text-heading);
-        margin: 0 0 12px 0;
-    }
-
-    /* Style st.container(border=True) as cards */
-    [data-testid="stVerticalBlock"] > div > [data-testid="stVerticalBlockBorderWrapper"] {
-        background: var(--mg-bg-card) !important;
-        border-radius: var(--mg-radius) !important;
-        border: 1px solid var(--mg-border-light) !important;
-        box-shadow: var(--mg-shadow-sm) !important;
-        padding: 4px !important;
-    }
-
-    /* ── Tables ── */
+    /* ── Tables (Clean bordered) ── */
     [data-testid="stDataFrame"], .stDataFrame {
-        border: 1px solid var(--mg-border-light) !important;
-        border-radius: var(--mg-radius-sm) !important;
+        border: 1px solid var(--mg-border) !important;
+        border-radius: 8px !important;
         overflow: hidden;
     }
 
-    /* ── Buttons ── */
+    /* ── Buttons (MEGIDO Gold) ── */
     .stButton button {
         background-color: var(--mg-primary) !important;
-        color: #FFFFFF !important;
-        border-radius: 10px !important;
+        color: #111827 !important;
+        border-radius: 8px !important;
         border: none !important;
-        padding: 8px 20px !important;
+        padding: 10px 24px !important;
         font-weight: 600 !important;
-        font-size: 0.85rem !important;
-        box-shadow: var(--mg-shadow-sm) !important;
+        box-shadow: 0 1px 2px rgba(212, 160, 23, 0.2) !important;
         transition: all 0.15s ease;
     }
     .stButton button:hover {
         background-color: var(--mg-primary-hover) !important;
-        box-shadow: var(--mg-shadow-md) !important;
+        box-shadow: 0 4px 12px rgba(212, 160, 23, 0.3) !important;
         transform: translateY(-1px);
     }
 
@@ -295,20 +274,21 @@ st.markdown("""
     .pie-title {
         font-family: 'Inter', 'Heebo', sans-serif !important;
         color: var(--mg-text-heading) !important;
-        font-weight: 600 !important;
-        font-size: 13px !important;
-        margin-bottom: 8px !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        margin-bottom: 10px !important;
         text-align: center !important;
     }
 
-    /* ── Pill Radio Buttons ── */
+    /* ── Pill-style Radio Buttons (Main Area) ── */
     div[role="radiogroup"] {
-        background-color: #F3F4F6;
+        background-color: var(--mg-bg-card);
         padding: 2px;
         border-radius: 8px;
         display: inline-flex;
         border: 1px solid var(--mg-border);
-        gap: 1px;
+        box-shadow: none;
+        gap: 2px;
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
@@ -317,29 +297,34 @@ st.markdown("""
         padding: 2px 8px !important;
         border-radius: 6px !important;
         margin: 0 !important;
+        transition: all 0.15s ease;
         font-size: 0.65rem !important;
         cursor: pointer;
         line-height: 1.4;
-        transition: all 0.15s ease;
     }
     div[role="radiogroup"] label:hover {
-        background-color: #E8F5E9;
+        background-color: #FFFBEB;
     }
+    /* Active/selected radio pill */
     div[role="radiogroup"] label[data-checked="true"],
     div[role="radiogroup"] label:has(input:checked) {
         background-color: var(--mg-primary) !important;
-        color: #FFFFFF !important;
+        color: #111827 !important;
         font-weight: 600 !important;
+        box-shadow: none;
     }
+
+    /* ── Center radio pills when inside chart columns ── */
     [data-testid="stColumn"] .stRadio > div {
         justify-content: center;
     }
+    /* Shrink the radio container inside columns */
     [data-testid="stColumn"] .stRadio {
         margin-top: -8px;
         margin-bottom: 0;
     }
 
-    /* ── Sidebar Toggle ── */
+    /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="collapsedControl"] button,
     button[kind="header"] {
@@ -351,61 +336,113 @@ st.markdown("""
     button[kind="header"] span {
         display: none !important;
     }
+
+    /* Collapsed state (Hamburger) */
     [data-testid="collapsedControl"] button::after,
     button[kind="header"]::after {
         content: "\2630";
         font-size: 1.8rem;
         color: var(--mg-text-heading);
-        display: block; line-height: 1; cursor: pointer;
+        display: block;
+        line-height: 1;
+        cursor: pointer;
     }
+
+    /* Expanded state (Close X) — light for dark sidebar */
     [data-testid="stSidebarCollapseButton"] button::after {
         content: "\2715";
         font-size: 1.5rem;
-        color: var(--mg-text-muted);
-        display: block; line-height: 1; cursor: pointer;
+        color: var(--mg-text-on-dark-muted);
+        display: block;
+        line-height: 1;
+        cursor: pointer;
     }
 
-    /* ── Expander ── */
+    /* ── Expander Arrow Fix (Hide arrow, keep clickable) ── */
     .streamlit-expanderHeader svg,
     .streamlit-expanderHeader span[data-testid="stExpanderToggleIcon"] {
         display: none !important;
     }
-    .streamlit-expanderHeader { padding-right: 0px !important; }
-
-    [data-testid="stExpander"] details {
-        background: var(--mg-bg-card) !important;
-        border-radius: var(--mg-radius) !important;
-        border: 1px solid var(--mg-border-light) !important;
-        box-shadow: var(--mg-shadow-sm) !important;
+    .streamlit-expanderHeader {
+        padding-right: 0px !important;
     }
+
+    /* ── Sidebar custom header (MEGIDO branding) ── */
+    .sidebar-header {
+        background-color: var(--mg-sidebar-header);
+        border-radius: 12px;
+        padding: 24px 16px 20px;
+        text-align: center;
+        margin-bottom: 16px;
+        border: 1px solid var(--mg-border-dark);
+    }
+    .sidebar-header h2 {
+        color: var(--mg-primary) !important;
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 0.05em;
+        text-align: center !important;
+    }
+    .sidebar-header p {
+        color: var(--mg-text-on-dark-muted) !important;
+        font-size: 0.82rem;
+        margin: 6px 0 0 0;
+        text-align: center !important;
+    }
+
+    /* ── Section headers with accent border ── */
+    .section-header {
+        font-family: 'Inter', 'Heebo', sans-serif;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--mg-text-heading);
+        padding: 4px 10px 4px 0;
+        border-right: 3px solid var(--mg-primary);
+        margin: 0.5rem 0 0.5rem 0;
+        direction: rtl;
+    }
+
+    /* ── New tenders highlight table ── */
+    .new-tenders-card {
+        background: #ECFDF5;
+        border: 1px solid #6EE7B7;
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    /* ── Compact toggle for deadlines ── */
+    [data-testid="stToggle"] label {
+        font-size: 0.8rem !important;
+    }
+
+    /* ── Expander styling ── */
     .streamlit-expanderHeader {
         font-weight: 600;
         direction: rtl;
         text-align: right;
     }
-
-    /* ── Section headers ── */
-    .section-header {
-        font-family: 'Inter', 'Heebo', sans-serif;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--mg-text-heading);
-        padding: 0;
-        border: none;
-        margin: 0 0 8px 0;
+    [data-testid="stExpander"] details {
         direction: rtl;
     }
 
-    /* ── Headers RTL ── */
+    /* ── Headers RTL with proper spacing ── */
     h1, h2, h3, h4, h5, h6 {
         direction: rtl;
         text-align: right;
         unicode-bidi: plaintext;
     }
-    h2, h3 { margin-top: 0.4rem; margin-bottom: 0.3rem; }
-    h4, h5, h6 { margin-top: 0.3rem; margin-bottom: 0.2rem; }
+    h2, h3 {
+        margin-top: 0.4rem;
+        margin-bottom: 0.3rem;
+    }
+    h4, h5, h6 {
+        margin-top: 0.3rem;
+        margin-bottom: 0.2rem;
+    }
 
-    /* ── Text overflow ── */
+    /* ── Prevent text overflow globally ── */
     .detail-field {
         word-break: break-word;
         overflow-wrap: break-word;
@@ -416,42 +453,50 @@ st.markdown("""
     }
     .detail-field strong { color: var(--mg-text-heading); }
 
-    /* ── Layout ── */
+    /* ── Column containers: prevent clipping ── */
     [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-        min-width: 0; overflow: visible;
+        min-width: 0;
+        overflow: visible;
     }
-    [data-testid="stHorizontalBlock"] { gap: 0.75rem; }
+    [data-testid="stHorizontalBlock"] {
+        gap: 1rem;
+    }
 
-    .stPlotlyChart { overflow: visible !important; }
-    .js-plotly-plot, .plot-container { overflow: visible !important; }
+    /* ── Plotly chart containers: no overflow ── */
+    .stPlotlyChart {
+        overflow: visible !important;
+    }
+    .js-plotly-plot, .plot-container {
+        overflow: visible !important;
+    }
 
-    /* ── Dividers ── */
+    /* ── Divider colour + compact ── */
     hr {
         border-color: var(--mg-border) !important;
-        margin: 0.75rem 0 !important;
+        margin: 0.5rem 0 !important;
     }
 
+    /* ── Subheader spacing fix ── */
     [data-testid="stSubheader"] {
         padding-bottom: 0.1rem;
         margin-bottom: 0.3rem;
     }
 
-    /* ── Radio inline ── */
-    .stRadio > div { gap: 0.3rem; }
-    .stRadio label { font-size: 0.85rem !important; }
+    /* ── Radio buttons inline fix ── */
+    .stRadio > div {
+        gap: 0.3rem;
+    }
+    .stRadio label {
+        font-size: 0.85rem !important;
+    }
 
-    /* ── Tabs ── */
+    /* ── Tabs styling ── */
     .stTabs [data-baseweb="tab"] {
         font-family: 'Inter', 'Heebo', sans-serif !important;
     }
     .stTabs [aria-selected="true"] {
         border-bottom-color: var(--mg-primary) !important;
         color: var(--mg-primary) !important;
-    }
-
-    /* ── Toggle compact ── */
-    [data-testid="stToggle"] label {
-        font-size: 0.8rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
