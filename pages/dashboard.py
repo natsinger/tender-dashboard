@@ -26,7 +26,7 @@ from config import (
     TEAM_EMAIL,
     TENDER_DETAIL_API,
 )
-from dashboard_utils import get_user_email, load_data, load_tender_details
+from dashboard_utils import get_user_email, load_data, load_tender_details, render_email_input
 from data_client import LandTendersClient, build_document_url
 from user_db import REVIEW_STAGES, UserDB
 
@@ -38,6 +38,9 @@ MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
 # ============================================================================
 # SIDEBAR
 # ============================================================================
+
+# Render email input widget once (before any get_user_email() calls)
+render_email_input()
 
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
