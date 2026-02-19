@@ -312,6 +312,11 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(212, 160, 23, 0.3);
     }
 
+    /* ── Center radio pills when inside chart columns ── */
+    [data-testid="stColumn"] .stRadio > div {
+        justify-content: center;
+    }
+
     /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="collapsedControl"] button,

@@ -38,7 +38,7 @@ MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
 # ============================================================================
 
 with st.sidebar:
-    logo_path = Path(__file__).parent.parent / "assets" / "logo.jpg"
+    logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
         st.image(str(logo_path), width=140)
     st.markdown("""
@@ -265,19 +265,7 @@ with col_pie1:
 
 # ── Pie Chart 2: Brochure-only tenders by District + Urgency Toggle ──────
 with col_pie2:
-    # Title + week toggle in one row
-    _pie2_title_col, _pie2_radio_col = st.columns([2, 1])
-    with _pie2_title_col:
-        st.markdown('<p class="pie-title" style="margin-bottom:0;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
-    with _pie2_radio_col:
-        st.radio(
-            "טווח",
-            list({"1W": 7, "2W": 14, "4W": 28}.keys()),
-            index=2,
-            horizontal=True,
-            key="urgency_pie2",
-            label_visibility="collapsed",
-        )
+    st.markdown('<p class="pie-title">חוברות לפי מחוז</p>', unsafe_allow_html=True)
 
     pie2_days_options = {"1W": 7, "2W": 14, "4W": 28}
     urgency_pie2 = st.session_state.get('urgency_pie2', '4W')
@@ -325,6 +313,16 @@ with col_pie2:
             st.info("אין מכרזים עם חוברת בטווח שנבחר")
     else:
         st.info("אין נתונים")
+
+    # Week toggle below chart (legend-like placement)
+    st.radio(
+        "טווח",
+        list({"1W": 7, "2W": 14, "4W": 28}.keys()),
+        index=2,
+        horizontal=True,
+        key="urgency_pie2",
+        label_visibility="collapsed",
+    )
 
 # ── Pie Chart 3: All tenders by District ──────────────────────────────────
 with col_pie3:

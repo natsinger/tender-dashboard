@@ -20,11 +20,15 @@ from user_db import REVIEW_STAGES, UserDB
 
 
 # ============================================================================
-# SIDEBAR (minimal)
+# SIDEBAR — Team watchlist management + stats
 # ============================================================================
 
+today = datetime.now()
+df = load_data(data_source="latest_file")
+watch_db = UserDB()
+
 with st.sidebar:
-    logo_path = Path(__file__).parent.parent / "assets" / "logo.jpg"
+    logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
         st.image(str(logo_path), width=140)
     st.markdown("""
@@ -33,17 +37,65 @@ with st.sidebar:
         <p>מגידו י.ק. | סקירה ניהולית</p>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── Add tender to team watchlist ───────────────────────────────────
+    st.markdown("#### ➕ הוסף מכרז למעקב")
+
+    # Build searchable label map from all tenders
+    _mgmt_labels: dict[int, str] = {}
+    for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
+        _name = str(_r['tender_name'])[:40] if pd.notna(_r['tender_name']) else ''
+        _city = str(_r['city'])[:15] if pd.notna(_r['city']) else ''
+        _mgmt_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
+
+    mgmt_watch_tid = st.selectbox(
+        "חיפוש מכרז",
+        options=list(_mgmt_labels.keys()),
+        index=None,
+        format_func=lambda tid: _mgmt_labels[tid],
+        placeholder="שם מכרז או עיר...",
+        key="mgmt_watch_select",
+    )
+
+    if st.button("➕ הוסף למעקב", key="mgmt_btn_add_watch", use_container_width=True):
+        if mgmt_watch_tid is not None:
+            added = watch_db.add_to_watchlist(TEAM_EMAIL, int(mgmt_watch_tid))
+            if added:
+                st.success("נוסף!")
+                st.rerun()
+            else:
+                st.info("כבר ברשימה.")
+
     st.markdown("---")
 
-    today = datetime.now()
-    df = load_data(data_source="latest_file")
+    # ── Current watchlist (compact list with remove buttons) ──────────
+    _wl_rows = watch_db.get_watchlist_rows(TEAM_EMAIL)
+    st.markdown(f"#### 📋 במעקב ({len(_wl_rows)})")
 
+    if _wl_rows:
+        _tender_lookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
+        for _wl in _wl_rows:
+            _tid = int(_wl['tender_id'])
+            _t = _tender_lookup.get(_tid, {})
+            _label = str(_t.get('tender_name', _tid))[:30]
+            _city = str(_t.get('city', ''))[:12]
+            _display = f"{_label} — {_city}" if _city else _label
+
+            c_name, c_rm = st.columns([5, 1])
+            with c_name:
+                st.caption(_display)
+            with c_rm:
+                if st.button("🗑️", key=f"mgmt_rm_{_wl['id']}"):
+                    watch_db.remove_from_watchlist(TEAM_EMAIL, _tid)
+                    st.rerun()
+    else:
+        st.caption("הרשימה ריקה")
+
+    st.markdown("---")
+
+    # ── Stats footer ──────────────────────────────────────────────────
     st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"סה\"כ רשומות במאגר: {len(df):,}")
-
-    watch_db = UserDB()
-    _watched_ids = watch_db.get_watchlist_ids(TEAM_EMAIL)
-    st.caption(f"מכרזים במעקב: {len(_watched_ids)}")
 
 
 # ============================================================================
@@ -223,13 +275,15 @@ if len(watchlist_df) > 0:
             )
             tender_label = _sel_labels.get(review_tender_id, str(review_tender_id))
             st.success(f"מכרז {tender_label}: {prev or 'חדש'} → {new_status}")
+
+            # TODO: WhatsApp notification integration
+            # When WhatsApp Business API is configured, send message here:
+            # f"🔔 מכרז {tender_label} — סטטוס עודכן: {new_status} (ע\"י {user_email})"
+
             st.rerun()
 
 else:
-    st.info(
-        "אין מכרזים ברשימת המעקב. "
-        "הוסף מכרזים מלוח המכרזים הראשי (📋 לוח מכרזים)."
-    )
+    st.info("אין מכרזים ברשימת המעקב. הוסף מכרזים דרך התפריט הצדדי ←")
 
 st.markdown("---")
 
