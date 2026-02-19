@@ -114,7 +114,7 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    .block-container { padding-top: 0.5rem; padding-bottom: 1rem; }
+    .block-container { padding-top: 1rem; padding-bottom: 1rem; }
 
     /* ── Sort Icon Fix: Force Font & Align ── */
     [data-testid="stIconMaterial"] {
@@ -283,22 +283,24 @@ st.markdown("""
     /* ── Pill-style Radio Buttons (Main Area) ── */
     div[role="radiogroup"] {
         background-color: var(--mg-bg-card);
-        padding: 3px;
-        border-radius: 10px;
+        padding: 2px;
+        border-radius: 8px;
         display: inline-flex;
         border: 1px solid var(--mg-border);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        box-shadow: none;
+        gap: 2px;
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
     div[role="radiogroup"] label {
-        padding: 4px 12px !important;
-        border-radius: 7px !important;
+        padding: 2px 8px !important;
+        border-radius: 6px !important;
         margin: 0 !important;
         transition: all 0.15s ease;
-        font-size: 0.8rem !important;
+        font-size: 0.65rem !important;
         cursor: pointer;
+        line-height: 1.4;
     }
     div[role="radiogroup"] label:hover {
         background-color: #FFFBEB;
@@ -309,12 +311,17 @@ st.markdown("""
         background-color: var(--mg-primary) !important;
         color: #111827 !important;
         font-weight: 600 !important;
-        box-shadow: 0 1px 3px rgba(212, 160, 23, 0.3);
+        box-shadow: none;
     }
 
     /* ── Center radio pills when inside chart columns ── */
     [data-testid="stColumn"] .stRadio > div {
         justify-content: center;
+    }
+    /* Shrink the radio container inside columns */
+    [data-testid="stColumn"] .stRadio {
+        margin-top: -8px;
+        margin-bottom: 0;
     }
 
     /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
