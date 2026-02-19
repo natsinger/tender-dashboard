@@ -3,9 +3,11 @@ Full dashboard page — daily user view.
 
 Includes: new tenders, KPIs, pie charts, deadlines table, data explorer,
 tender detail viewer, watchlist management, detailed analytics, and admin/debug.
+Branded for MEGIDO BY AURA (מגידו י.ק.).
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict
 
 import pandas as pd
@@ -26,16 +28,23 @@ from config import (
 from dashboard_utils import get_user_email, load_data, load_tender_details
 from data_client import LandTendersClient, build_document_url
 
+# ── MEGIDO brand constants ─────────────────────────────────────────────────
+MEGIDO_CHART_COLORS = ["#D4A017", "#3B82F6", "#1B2A4A", "#10B981", "#EF4444", "#8B5CF6"]
+MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
+
 
 # ============================================================================
 # SIDEBAR
 # ============================================================================
 
 with st.sidebar:
+    logo_path = Path(__file__).parent.parent / "assets" / "logo.jpg"
+    if logo_path.exists():
+        st.image(str(logo_path), width=140)
     st.markdown("""
     <div class="sidebar-header">
-        <h2>🏗️ מכרזי קרקע</h2>
-        <p>רשות מקרקעי ישראל</p>
+        <h2>MEGIDO</h2>
+        <p>מגידו י.ק. | מכרזי קרקע</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("---")
@@ -156,8 +165,8 @@ for candidate in ['created_date', 'publish_date', 'published_date']:
 if date_col:
     new_tenders_df = new_tenders_df[new_tenders_df[date_col] >= sunday_cutoff]
 
-st.title("🏗️ מכרזים")
-st.caption(f"מעקב אחר מכרזי קרקע של רשות מקרקעי ישראל  •  מעודכן: {today.strftime('%d/%m/%Y')}")
+st.markdown('<div class="section-header" style="font-size:1.6rem; margin-top:0;">מכרזי קרקע</div>', unsafe_allow_html=True)
+st.caption(f"MEGIDO | מעקב מכרזי קרקע  •  מעודכן: {today.strftime('%d/%m/%Y')}")
 
 if len(new_tenders_df) > 0:
     st.markdown('<div class="new-tenders-card">', unsafe_allow_html=True)
@@ -212,7 +221,7 @@ st.markdown("---")
 # SECTION 2: THREE PIE CHARTS (side by side)
 # ============================================================================
 
-PLOTLY_FONT = dict(family="DM Sans, sans-serif", size=12, color="#2B3674")
+PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=12, color="#111827")
 PLOTLY_TRANSPARENT_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
 col_pie1, col_pie2, col_pie3 = st.columns(3)
@@ -229,7 +238,7 @@ with col_pie1:
         fig_booklet = px.pie(
             values=[available, not_available],
             names=["חוברת זמינה", "חוברת לא זמינה"],
-            color_discrete_sequence=["#4318FF", "#E9EDF7"],
+            color_discrete_sequence=["#D4A017", "#E5E7EB"],
             hole=0.55,
         )
         fig_booklet.update_traces(
@@ -283,7 +292,7 @@ with col_pie2:
                 values='count',
                 names='region',
                 hole=0.55,
-                color_discrete_sequence=px.colors.sequential.Blues_r,
+                color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
             fig_brochure_region.update_traces(
                 textinfo='value',
@@ -296,7 +305,7 @@ with col_pie2:
                 margin=dict(t=30, b=20, l=10, r=10),
                 showlegend=False,
                 uniformtext_minsize=10, uniformtext_mode='hide',
-                font=dict(family="DM Sans, sans-serif", size=11, color="#2B3674"),
+                font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
                 **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_brochure_region, use_container_width=True, key="pie_brochure_region")
@@ -331,7 +340,7 @@ with col_pie3:
                 values='count',
                 names='region',
                 hole=0.55,
-                color_discrete_sequence=px.colors.sequential.Blues_r,
+                color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
             fig_region.update_traces(
                 textinfo='value',
@@ -344,7 +353,7 @@ with col_pie3:
                 margin=dict(t=30, b=20, l=10, r=10),
                 showlegend=False,
                 uniformtext_minsize=10, uniformtext_mode='hide',
-                font=dict(family="DM Sans, sans-serif", size=11, color="#2B3674"),
+                font=dict(family="Inter, Heebo, sans-serif", size=11, color="#111827"),
                 **PLOTLY_TRANSPARENT_BG,
             )
             st.plotly_chart(fig_region, use_container_width=True, key="pie_region_units")
@@ -937,9 +946,12 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 orientation='h',
                 labels={'x': 'מספר מכרזים', 'y': 'עיר'},
                 color=city_counts.values,
-                color_continuous_scale='Blues'
+                color_continuous_scale=MEGIDO_GOLD_SCALE,
             )
-            fig_city.update_layout(showlegend=False, height=400)
+            fig_city.update_layout(
+                showlegend=False, height=400,
+                font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            )
             st.plotly_chart(fig_city, use_container_width=True)
         else:
             st.info("אין נתונים להצגה")
@@ -953,9 +965,11 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 values=type_counts.values,
                 names=type_counts.index,
                 hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Set2
+                color_discrete_sequence=MEGIDO_CHART_COLORS,
             )
-            fig_type.update_layout(height=400)
+            fig_type.update_layout(
+                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            )
             st.plotly_chart(fig_type, use_container_width=True)
         else:
             st.info("אין נתונים להצגה")
@@ -975,9 +989,12 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 x='month',
                 y='count',
                 markers=True,
-                labels={'month': 'חודש', 'count': 'מספר מכרזים'}
+                labels={'month': 'חודש', 'count': 'מספר מכרזים'},
+                color_discrete_sequence=['#1B2A4A'],
             )
-            fig_timeline.update_layout(height=400)
+            fig_timeline.update_layout(
+                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            )
             st.plotly_chart(fig_timeline, use_container_width=True)
         else:
             st.info("אין נתוני תאריכים להצגה")
@@ -993,9 +1010,11 @@ with st.expander("📊 ניתוח מפורט", expanded=False):
                 x='tender_type',
                 y='units',
                 labels={'units': 'סה\"כ יח\"ד', 'tender_type': 'סוג מכרז'},
-                color_discrete_sequence=['#1f77b4']
+                color_discrete_sequence=['#D4A017'],
             )
-            fig_units.update_layout(height=400)
+            fig_units.update_layout(
+                height=400, font=PLOTLY_FONT, **PLOTLY_TRANSPARENT_BG,
+            )
             st.plotly_chart(fig_units, use_container_width=True)
         else:
             st.info("אין נתוני יח\"ד להצגה")

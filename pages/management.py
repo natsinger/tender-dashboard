@@ -3,10 +3,11 @@ Management overview page — team operational dashboard.
 
 Shows curated selected tenders (shared watchlist) with review status tracking,
 closing-soon tenders with popup detail, tender-type tabs, and compact KPIs.
-Designed for maximum information density at a glance.
+Branded for MEGIDO BY AURA (מגידו י.ק.).
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -22,10 +23,13 @@ from db import REVIEW_STAGES, TenderDB
 # ============================================================================
 
 with st.sidebar:
+    logo_path = Path(__file__).parent.parent / "assets" / "logo.jpg"
+    if logo_path.exists():
+        st.image(str(logo_path), width=140)
     st.markdown("""
     <div class="sidebar-header">
-        <h2>📊 סקירה ניהולית</h2>
-        <p>רשות מקרקעי ישראל</p>
+        <h2>MEGIDO</h2>
+        <p>מגידו י.ק. | סקירה ניהולית</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("---")
@@ -221,7 +225,7 @@ if len(watchlist_df) > 0:
 else:
     st.info(
         "אין מכרזים ברשימת המעקב. "
-        "הוסף מכרזים מלוח המכרזים הראשי (🏗️ לוח מכרזים)."
+        "הוסף מכרזים מלוח המכרזים הראשי (📋 לוח מכרזים)."
     )
 
 st.markdown("---")
