@@ -28,11 +28,11 @@ jobs:
 
       - name: Fetch tenders and send alerts
         env:
-          SMTP_HOST: smtp.office365.com
+          SMTP_HOST: mail.smtp2go.com
           SMTP_PORT: "587"
-          SMTP_USER: ${{ secrets.M365_EMAIL }}
-          SMTP_PASSWORD: ${{ secrets.M365_PASSWORD }}
-          SMTP_FROM: ${{ secrets.M365_EMAIL }}
+          SMTP_USER: ${{ secrets.SMTP2GO_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP2GO_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
         run: python scripts/refresh_tenders.py
 

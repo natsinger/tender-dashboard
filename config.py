@@ -114,7 +114,8 @@ DEFAULT_FETCH_WORKERS: int = _get_int("DEFAULT_FETCH_WORKERS", 3)
 DEFAULT_FETCH_DELAY: float = float(_get("DEFAULT_FETCH_DELAY", "1.0"))
 
 # Tender types shown in the dashboard (codes from GeneralTablesApi Table 215)
-RELEVANT_TENDER_TYPES: Set[int] = {1, 5, 8}
+# 1=פומבי רגיל, 5=מחיר מטרה, 6=דיור להשכרה, 8=מחיר מופחת, 9=מכרז ייזום
+RELEVANT_TENDER_TYPES: Set[int] = {1, 5, 6, 8, 9}
 
 # Statuses excluded from the default "active" view
 NON_ACTIVE_STATUSES: list = [
@@ -125,10 +126,13 @@ NON_ACTIVE_STATUSES: list = [
 # EMAIL ALERTS (Microsoft 365 SMTP)
 # ============================================================================
 
-SMTP_HOST: str = _get("SMTP_HOST", "smtp.office365.com")
+SMTP_HOST: str = _get("SMTP_HOST", "mail.smtp2go.com")
 SMTP_PORT: int = _get_int("SMTP_PORT", 587)
 SMTP_USER: str = _get("SMTP_USER", "")
 SMTP_PASSWORD: str = _get("SMTP_PASSWORD", "")
 SMTP_FROM: str = _get("SMTP_FROM", "") or SMTP_USER
 DASHBOARD_URL: str = _get("DASHBOARD_URL", "")
 DEV_USER_EMAIL: str = _get("DEV_USER_EMAIL", "")
+
+# Shared team email for the management watchlist (all members see the same list)
+TEAM_EMAIL: str = _get("TEAM_EMAIL", "team@tender-dashboard.local")

@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-17
+**Last updated:** 2026-02-18
 
 ---
 
@@ -9,16 +9,23 @@
 Sprint 1 (Stabilize & Deploy MVP) — **complete**.
 Sprint 3 (SQLite Data Persistence) — **complete**.
 Sprint 5 (Watchlist & Email Alerts) — **complete** (code written, pending deployment + SMTP credentials).
+Management Page Redesign (Features #1-4) — **complete**.
 
 The app is now **multipage** with two views:
-- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management, analytics, debug
-- **Management** (`pages/management.py`) — Executive overview: KPIs with deltas, pie charts, closing-soon table (top 20)
+- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), analytics, debug
+- **Management** (`pages/management.py`) — Team operational dashboard:
+  1. **Selected Tenders** — shared team watchlist with review status tracking (5 stages)
+  2. **Closing Soon** — active tenders closing within 14 days, with popup detail dialog
+  3. **Tender Type Tabs** — dedicated views for "מכרז ייזום" and "דיור להשכרה"
+  4. **Compact KPIs** — single row with key metrics
+
+Review tracking has 5 stages: לא נסקר → סקירה ראשונית → בדיקה מעמיקה → הוצג בפורום → אושר בפורום. Any team member can update. WhatsApp notification is stubbed (TODO: integrate WhatsApp Business API).
 
 Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document sync. Sends Hebrew RTL HTML emails via M365 SMTP when new documents appear on watched tenders.
 
 **To activate alerts**: Add `M365_EMAIL` and `M365_PASSWORD` to GitHub repo secrets. Optionally set `DASHBOARD_URL` secret.
 
-**Next**: Verify multipage app works on Streamlit Cloud, test alert flow end-to-end.
+**Next**: Verify multipage app works locally, test review status tracking, configure WhatsApp API.
 
 ---
 
@@ -26,6 +33,12 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-18 | Feature #4: Tender type tabs — dedicated views for מכרז ייזום + דיור להשכרה | `pages/management.py`, `config.py` |
+| 2026-02-18 | Feature #3: Close deadline popup — @st.dialog modal for tender details | `pages/management.py` |
+| 2026-02-18 | Feature #2: Review status tracking — 5-stage workflow, any team member can update | `db.py`, `pages/management.py` |
+| 2026-02-18 | Feature #1: Selected tenders — shared team watchlist at top of management page | `pages/management.py`, `config.py`, `db.py` |
+| 2026-02-18 | Watchlist autocomplete — selectbox with tender_name + city search | `pages/dashboard.py` |
+| 2026-02-18 | Config: added TEAM_EMAIL, expanded RELEVANT_TENDER_TYPES to include types 6+9 | `config.py` |
 | 2026-02-17 | Sprint 5: Multipage app — restructured into navigation router + 2 pages | `app.py`, `pages/dashboard.py` (NEW), `pages/management.py` (NEW), `dashboard_utils.py` (NEW) |
 | 2026-02-17 | Sprint 5: Watchlist UI — add/remove tenders, validated against DB, per-user | `pages/dashboard.py`, `db.py` |
 | 2026-02-17 | Sprint 5: Alert engine — detect new docs, compose Hebrew HTML email, send via M365 SMTP | `alerts.py` (NEW) |
@@ -87,6 +100,7 @@ tender_documents   —  3,471 rows — document metadata from 444 tenders
 tender_scores      — (empty)     — Sprint 4: scoring results
 user_watchlist     — (empty)     — per-user tender watchlist for email alerts
 alert_history      — (empty)     — sent alert log for deduplication
+tender_reviews     — (empty)     — review status tracking (5-stage workflow)
 ```
 
 ---
@@ -115,7 +129,7 @@ Gov tender projects/
 ├── .gitignore                      # Git ignore rules
 ├── pages/                          # Streamlit multipage app pages (NEW - Sprint 5)
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist
-│   └── management.py               # Executive overview: KPIs, pie charts, closing-soon table
+│   └── management.py               # Team dashboard: watchlist, review tracking, type tabs, KPIs
 ├── .streamlit/
 │   └── config.toml                 # Streamlit theme + server config
 ├── .github/

@@ -2,7 +2,7 @@
 Tender watchlist alert engine.
 
 Checks for new documents on watched tenders and sends email notifications
-via Microsoft 365 SMTP. Designed to run standalone in GitHub Actions cron
+via SMTP2GO. Designed to run standalone in GitHub Actions cron
 or be imported by the Streamlit app for test sends.
 
 Usage:
