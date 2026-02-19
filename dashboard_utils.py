@@ -79,14 +79,15 @@ def load_tender_details(tender_id: int) -> Optional[Dict]:
 def get_user_email() -> str:
     """Get the current user's email address.
 
-    On Streamlit Cloud: uses st.experimental_user.email.
+    On Streamlit Cloud: uses st.user.email (requires viewer auth enabled).
     Local development: uses DEV_USER_EMAIL from config/env.
 
     Returns:
         Email string, or empty string if not available.
     """
     try:
-        email = st.experimental_user.get("email", "")
+        user_info = st.user
+        email = getattr(user_info, "email", "") or ""
         if email:
             return email
     except Exception:
