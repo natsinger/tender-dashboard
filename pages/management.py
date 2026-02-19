@@ -23,7 +23,7 @@ from db import REVIEW_STAGES, TenderDB
 # ============================================================================
 
 with st.sidebar:
-    logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpeg"
+    logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
         st.image(str(logo_path), width=140)
     st.markdown("""

@@ -131,7 +131,7 @@ Gov tender projects/
 ├── DATA_FLOW_EXPLANATION.md        # Data pipeline documentation
 ├── .gitignore                      # Git ignore rules
 ├── assets/                         # Brand assets (logo, images)
-│   └── logo megido.jpeg             # MEGIDO BY AURA brand logo
+│   └── logo megido.jpg              # MEGIDO BY AURA brand logo
 ├── pages/                          # Streamlit multipage app pages (NEW - Sprint 5)
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist
 │   └── management.py               # Team dashboard: watchlist, review tracking, type tabs, KPIs
