@@ -57,14 +57,7 @@ active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
-        st.image(str(logo_path), width=120)
-    st.markdown(
-        '<div class="sidebar-header">'
-        "<h2>MEGIDO</h2>"
-        "<p>מגידו י.ק. | מכרזי קרקע</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+        st.image(str(logo_path), width=140)
 
     # ── Team watchlist management ────────────────────────────────────────
     st.markdown("---")
@@ -128,7 +121,7 @@ with st.sidebar:
 # ============================================================================
 
 st.markdown(
-    '<div style="display:flex;align-items:center;gap:12px;padding:0 0 4px 0;margin:0;">'
+    '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 4px 0;margin:0;">'
     '<span style="font-size:1.4rem;font-weight:700;color:#111827;">'
     "MEGIDO | לוח מכרזי קרקע"
     "</span>"
@@ -266,7 +259,11 @@ with col_pies:
                 st.info("אין מכרזים בטווח")
         else:
             st.info("אין נתונים")
-        st.radio("טווח", list(pie2_opts.keys()), index=2, horizontal=True, key="urgency_pie2", label_visibility="collapsed")
+        # Tiny pill selector
+        _sel = st.radio(
+            "טווח", list(pie2_opts.keys()), index=2,
+            horizontal=True, key="urgency_pie2", label_visibility="collapsed",
+        )
 
     # ── Pie 3: Active tenders by region ──────────────────────────────────
     with p3:
