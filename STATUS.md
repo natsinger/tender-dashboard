@@ -35,7 +35,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
-| 2026-02-19 | Management sidebar redesign — team watchlist add/remove controls in sidebar | `pages/management.py` |
+| 2026-02-19 | Move team watchlist + review editing to Dashboard; Management now read-only | `pages/dashboard.py`, `pages/management.py` |
 | 2026-02-19 | Sprint 6 roadmap: full Supabase migration (move ALL tables off SQLite) | `STATUS.md` |
 | 2026-02-19 | Supabase persistence — user_watchlist, tender_reviews, alert_history now in Supabase PostgreSQL | `user_db.py` (NEW), `config.py`, `requirements.txt`, `pages/dashboard.py`, `pages/management.py`, `alerts.py`, `db.py` |
 | 2026-02-19 | Fix: complete PURPOSE_MAP (26 codes from API table -1), restore dataframe column filtering (narrow CSS/JS) | `data_client.py`, `app.py`, `data/tenders.db` |

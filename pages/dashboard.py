@@ -23,10 +23,12 @@ from config import (
     LAND_AUTHORITY_API,
     NON_ACTIVE_STATUSES,
     RMI_SITE_URL,
+    TEAM_EMAIL,
     TENDER_DETAIL_API,
 )
 from dashboard_utils import get_user_email, load_data, load_tender_details
 from data_client import LandTendersClient, build_document_url
+from user_db import REVIEW_STAGES, UserDB
 
 # ── MEGIDO brand constants ─────────────────────────────────────────────────
 MEGIDO_CHART_COLORS = ["#D4A017", "#3B82F6", "#1B2A4A", "#10B981", "#EF4444", "#8B5CF6"]
@@ -107,6 +109,60 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"סה\"כ רשומות: {len(df):,}")
+
+    # ── Team watchlist management (requires login) ────────────────────
+    st.markdown("---")
+    st.markdown("#### 📋 מכרזים נבחרים (צוות)")
+
+    _sidebar_email = get_user_email()
+    _team_db = UserDB()
+
+    if not _sidebar_email:
+        st.caption("יש להזדהות כדי לנהל מכרזים נבחרים")
+    else:
+        # Build searchable label map
+        _team_labels: dict[int, str] = {}
+        for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
+            _name = str(_r['tender_name'])[:40] if pd.notna(_r['tender_name']) else ''
+            _city = str(_r['city'])[:15] if pd.notna(_r['city']) else ''
+            _team_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
+
+        _team_tid = st.selectbox(
+            "חיפוש מכרז",
+            options=list(_team_labels.keys()),
+            index=None,
+            format_func=lambda tid: _team_labels[tid],
+            placeholder="שם מכרז או עיר...",
+            key="dash_team_watch_select",
+        )
+
+        if st.button("➕ הוסף למעקב צוות", key="dash_team_btn_add", use_container_width=True):
+            if _team_tid is not None:
+                _added = _team_db.add_to_watchlist(TEAM_EMAIL, int(_team_tid))
+                if _added:
+                    st.success("נוסף!")
+                    st.rerun()
+                else:
+                    st.info("כבר ברשימה.")
+
+        # Current team watchlist with remove buttons
+        _team_wl = _team_db.get_watchlist_rows(TEAM_EMAIL)
+        if _team_wl:
+            _tlookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
+            for _tw in _team_wl:
+                _ttid = int(_tw['tender_id'])
+                _tt = _tlookup.get(_ttid, {})
+                _tdisplay = str(_tt.get('tender_name', _ttid))[:25]
+
+                _tc1, _tc2 = st.columns([5, 1])
+                with _tc1:
+                    st.caption(_tdisplay)
+                with _tc2:
+                    if st.button("🗑️", key=f"dash_team_rm_{_tw['id']}"):
+                        _team_db.remove_from_watchlist(TEAM_EMAIL, _ttid)
+                        st.rerun()
+        else:
+            st.caption("אין מכרזים נבחרים")
 
 
 # ============================================================================
@@ -850,7 +906,6 @@ if not user_email:
 else:
     st.caption(f"משתמש: {user_email}")
 
-    from user_db import UserDB
     watch_db = UserDB()
 
     if not watch_db.available:
@@ -930,6 +985,109 @@ else:
         st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים למכרזים שברשימה.")
     else:
         st.info("רשימת המעקב ריקה. הוסף/י מכרזים לפי מספר כדי לקבל התראות.")
+
+st.markdown("---")
+
+
+# ============================================================================
+# SECTION 5.6: TEAM SELECTED TENDERS — REVIEW STATUS
+# ============================================================================
+
+st.subheader("📋 מכרזים נבחרים — סטטוס סקירה")
+
+_review_email = get_user_email()
+_review_db = UserDB()
+
+_team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
+if _team_ids:
+    _team_df = df[df['tender_id'].astype(int).isin(_team_ids)].copy()
+else:
+    _team_df = pd.DataFrame()
+
+_REVIEW_EMOJI: dict[str, str] = {
+    "לא נסקר": "⬜",
+    "סקירה ראשונית": "🔵",
+    "בדיקה מעמיקה": "🟣",
+    "הוצג בפורום": "🟠",
+    "אושר בפורום": "🟢",
+}
+
+if len(_team_df) > 0:
+    # Build compact display table
+    _rev_tbl = _team_df[['tender_name', 'city', 'tender_type', 'units']].copy()
+    _rev_ids = _team_df['tender_id'].astype(int).tolist()
+    _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
+
+    _rev_tbl['review'] = [
+        _REVIEW_EMOJI.get(
+            _rev_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
+        ) + " " + _rev_map.get(int(tid), {}).get("status", "לא נסקר")
+        for tid in _team_df['tender_id']
+    ]
+
+    st.dataframe(
+        _rev_tbl,
+        column_config={
+            "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
+            "city": st.column_config.TextColumn("עיר", width="small"),
+            "tender_type": st.column_config.TextColumn("סוג", width="small"),
+            "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
+            "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
+        },
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    # ── Review status update controls ──────────────────────────────────
+    if not _review_email:
+        st.info("יש להזדהות כדי לעדכן סטטוס סקירה.")
+    else:
+        with st.expander("🔄 עדכון סטטוס סקירה", expanded=False):
+            _rev_labels: dict[int, str] = {}
+            for _, _r in _team_df.iterrows():
+                _rname = str(_r.get('tender_name', ''))[:30]
+                _rcity = str(_r.get('city', ''))[:15]
+                _rev_labels[int(_r['tender_id'])] = f"{_rname} — {_rcity}"
+
+            _rc1, _rc2 = st.columns([2, 2])
+            with _rc1:
+                _rev_tid = st.selectbox(
+                    "מכרז",
+                    options=list(_rev_labels.keys()),
+                    format_func=lambda tid: _rev_labels[tid],
+                    key="dash_review_tender_select",
+                )
+            with _rc2:
+                _cur_status = _rev_map.get(
+                    _rev_tid, {},
+                ).get("status", REVIEW_STAGES[0])
+                _cur_idx = (
+                    REVIEW_STAGES.index(_cur_status)
+                    if _cur_status in REVIEW_STAGES else 0
+                )
+                _new_status = st.selectbox(
+                    "סטטוס חדש",
+                    options=REVIEW_STAGES,
+                    index=_cur_idx,
+                    key="dash_review_status_select",
+                )
+
+            _rev_notes = st.text_input(
+                "הערות (אופציונלי)", key="dash_review_notes", placeholder="..."
+            )
+
+            if st.button("💾 עדכן סטטוס", key="dash_btn_update_review"):
+                _prev = _review_db.set_review_status(
+                    tender_id=_rev_tid,
+                    status=_new_status,
+                    updated_by=_review_email,
+                    notes=_rev_notes or None,
+                )
+                _rev_label = _rev_labels.get(_rev_tid, str(_rev_tid))
+                st.success(f"מכרז {_rev_label}: {_prev or 'חדש'} → {_new_status}")
+                st.rerun()
+else:
+    st.info("אין מכרזים נבחרים. הוסף מכרזים דרך התפריט הצדדי ←")
 
 st.markdown("---")
 

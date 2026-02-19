@@ -14,13 +14,13 @@ import pandas as pd
 import streamlit as st
 
 from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, TEAM_EMAIL
-from dashboard_utils import get_user_email, load_data
+from dashboard_utils import load_data
 from db import TenderDB
-from user_db import REVIEW_STAGES, UserDB
+from user_db import UserDB
 
 
 # ============================================================================
-# SIDEBAR — Team watchlist management + stats
+# SIDEBAR (read-only stats)
 # ============================================================================
 
 today = datetime.now()
@@ -37,65 +37,12 @@ with st.sidebar:
         <p>מגידו י.ק. | סקירה ניהולית</p>
     </div>
     """, unsafe_allow_html=True)
-
-    # ── Add tender to team watchlist ───────────────────────────────────
-    st.markdown("#### ➕ הוסף מכרז למעקב")
-
-    # Build searchable label map from all tenders
-    _mgmt_labels: dict[int, str] = {}
-    for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
-        _name = str(_r['tender_name'])[:40] if pd.notna(_r['tender_name']) else ''
-        _city = str(_r['city'])[:15] if pd.notna(_r['city']) else ''
-        _mgmt_labels[int(_r['tender_id'])] = f"{_name} — {_city}" if _city else _name
-
-    mgmt_watch_tid = st.selectbox(
-        "חיפוש מכרז",
-        options=list(_mgmt_labels.keys()),
-        index=None,
-        format_func=lambda tid: _mgmt_labels[tid],
-        placeholder="שם מכרז או עיר...",
-        key="mgmt_watch_select",
-    )
-
-    if st.button("➕ הוסף למעקב", key="mgmt_btn_add_watch", use_container_width=True):
-        if mgmt_watch_tid is not None:
-            added = watch_db.add_to_watchlist(TEAM_EMAIL, int(mgmt_watch_tid))
-            if added:
-                st.success("נוסף!")
-                st.rerun()
-            else:
-                st.info("כבר ברשימה.")
-
     st.markdown("---")
 
-    # ── Current watchlist (compact list with remove buttons) ──────────
-    _wl_rows = watch_db.get_watchlist_rows(TEAM_EMAIL)
-    st.markdown(f"#### 📋 במעקב ({len(_wl_rows)})")
-
-    if _wl_rows:
-        _tender_lookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
-        for _wl in _wl_rows:
-            _tid = int(_wl['tender_id'])
-            _t = _tender_lookup.get(_tid, {})
-            _label = str(_t.get('tender_name', _tid))[:30]
-            _city = str(_t.get('city', ''))[:12]
-            _display = f"{_label} — {_city}" if _city else _label
-
-            c_name, c_rm = st.columns([5, 1])
-            with c_name:
-                st.caption(_display)
-            with c_rm:
-                if st.button("🗑️", key=f"mgmt_rm_{_wl['id']}"):
-                    watch_db.remove_from_watchlist(TEAM_EMAIL, _tid)
-                    st.rerun()
-    else:
-        st.caption("הרשימה ריקה")
-
-    st.markdown("---")
-
-    # ── Stats footer ──────────────────────────────────────────────────
+    _watched_count = len(watch_db.get_watchlist_ids(TEAM_EMAIL))
     st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"סה\"כ רשומות במאגר: {len(df):,}")
+    st.caption(f"מכרזים במעקב: {_watched_count}")
 
 
 # ============================================================================
@@ -227,63 +174,11 @@ if len(watchlist_df) > 0:
         use_container_width=True,
     )
 
-    # ── Review status update controls ──────────────────────────────────
-    with st.expander("🔄 עדכון סטטוס סקירה", expanded=False):
-        user_email = get_user_email() or "unknown"
-
-        # Build tender selectbox options
-        _sel_labels: dict[int, str] = {}
-        for _, _r in watchlist_df.iterrows():
-            _name = str(_r.get('tender_name', ''))[:30]
-            _city = str(_r.get('city', ''))[:15]
-            _sel_labels[int(_r['tender_id'])] = f"{_name} — {_city}"
-
-        rc1, rc2 = st.columns([2, 2])
-        with rc1:
-            review_tender_id = st.selectbox(
-                "מכרז",
-                options=list(_sel_labels.keys()),
-                format_func=lambda tid: _sel_labels[tid],
-                key="review_tender_select",
-            )
-        with rc2:
-            # Pre-select current status
-            current_status = review_map.get(
-                review_tender_id, {},
-            ).get("status", REVIEW_STAGES[0])
-            current_idx = (
-                REVIEW_STAGES.index(current_status)
-                if current_status in REVIEW_STAGES else 0
-            )
-            new_status = st.selectbox(
-                "סטטוס חדש",
-                options=REVIEW_STAGES,
-                index=current_idx,
-                key="review_status_select",
-            )
-
-        notes = st.text_input(
-            "הערות (אופציונלי)", key="review_notes", placeholder="..."
-        )
-
-        if st.button("💾 עדכן סטטוס", key="btn_update_review"):
-            prev = watch_db.set_review_status(
-                tender_id=review_tender_id,
-                status=new_status,
-                updated_by=user_email,
-                notes=notes or None,
-            )
-            tender_label = _sel_labels.get(review_tender_id, str(review_tender_id))
-            st.success(f"מכרז {tender_label}: {prev or 'חדש'} → {new_status}")
-
-            # TODO: WhatsApp notification integration
-            # When WhatsApp Business API is configured, send message here:
-            # f"🔔 מכרז {tender_label} — סטטוס עודכן: {new_status} (ע\"י {user_email})"
-
-            st.rerun()
+    # NOTE: Review status editing is in the Dashboard (📋 לוח מכרזים).
+    # TODO: WhatsApp notification on status change (WhatsApp Business API).
 
 else:
-    st.info("אין מכרזים ברשימת המעקב. הוסף מכרזים דרך התפריט הצדדי ←")
+    st.info("אין מכרזים ברשימת המעקב. הוסף מכרזים דרך לוח המכרזים (📋).")
 
 st.markdown("---")
 
