@@ -15,7 +15,8 @@ import streamlit as st
 
 from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, TEAM_EMAIL
 from dashboard_utils import get_user_email, load_data
-from db import REVIEW_STAGES, TenderDB
+from db import TenderDB
+from user_db import REVIEW_STAGES, UserDB
 
 
 # ============================================================================
@@ -40,9 +41,9 @@ with st.sidebar:
     st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"סה\"כ רשומות במאגר: {len(df):,}")
 
-    watch_db = TenderDB()
-    watchlist_df = watch_db.get_user_watchlist(TEAM_EMAIL)
-    st.caption(f"מכרזים במעקב: {len(watchlist_df)}")
+    watch_db = UserDB()
+    _watched_ids = watch_db.get_watchlist_ids(TEAM_EMAIL)
+    st.caption(f"מכרזים במעקב: {len(_watched_ids)}")
 
 
 # ============================================================================
@@ -141,11 +142,18 @@ _COMPACT_COLUMNS = {
 
 st.markdown("#### 📋 מכרזים נבחרים")
 
+# Build watchlist_df by joining Supabase IDs with the loaded tender data
+_watched_ids_main = watch_db.get_watchlist_ids(TEAM_EMAIL)
+if _watched_ids_main:
+    watchlist_df = df[df['tender_id'].astype(int).isin(_watched_ids_main)].copy()
+else:
+    watchlist_df = pd.DataFrame()
+
 if len(watchlist_df) > 0:
     # Build compact table
     display_sel = _build_compact_table(watchlist_df)
 
-    # Fetch review statuses for all watched tenders
+    # Fetch review statuses for all watched tenders from Supabase
     watched_ids = watchlist_df['tender_id'].astype(int).tolist()
     review_map = watch_db.get_review_statuses_for_tenders(watched_ids)
 
@@ -215,11 +223,6 @@ if len(watchlist_df) > 0:
             )
             tender_label = _sel_labels.get(review_tender_id, str(review_tender_id))
             st.success(f"מכרז {tender_label}: {prev or 'חדש'} → {new_status}")
-
-            # TODO: WhatsApp notification integration
-            # When WhatsApp Business API is configured, send message here:
-            # f"🔔 מכרז {tender_label} — סטטוס עודכן: {new_status} (ע\"י {user_email})"
-
             st.rerun()
 
 else:
@@ -247,7 +250,8 @@ closing_soon = active_df[
 @st.dialog("📋 פרטי מכרז", width="large")
 def _show_tender_detail(tender_id: int) -> None:
     """Show tender detail in a modal dialog."""
-    tender = watch_db.get_tender_by_id(tender_id)
+    sqlite_db = TenderDB()
+    tender = sqlite_db.get_tender_by_id(tender_id)
     if tender is None:
         st.error("מכרז לא נמצא")
         return

@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DASHBOARD_URL, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
 from data_client import build_document_url
 from db import TenderDB
+from user_db import UserDB
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +62,16 @@ class UserAlertBundle:
 class AlertEngine:
     """Core alert logic: detect new documents, compose emails, send via SMTP."""
 
-    def __init__(self, db: TenderDB, dry_run: bool = False) -> None:
+    def __init__(self, db: TenderDB, user_db: UserDB, dry_run: bool = False) -> None:
         """Initialize the alert engine.
 
         Args:
-            db: TenderDB instance for querying watchlists and documents.
+            db: TenderDB instance for tender/document queries (SQLite).
+            user_db: UserDB instance for watchlist/alert_history (Supabase).
             dry_run: If True, log what would be sent without actually sending.
         """
         self.db = db
+        self.user_db = user_db
         self.dry_run = dry_run
 
     def check_and_send(self) -> int:
@@ -77,7 +80,7 @@ class AlertEngine:
         Returns:
             Number of emails sent (or would be sent in dry-run mode).
         """
-        watchlist_entries = self.db.get_all_active_watchlists()
+        watchlist_entries = self.user_db.get_all_active_watchlists()
         if not watchlist_entries:
             logger.info("No active watchlist entries found")
             return 0
@@ -133,10 +136,9 @@ class AlertEngine:
             tender_id = entry["tender_id"]
             since_date = entry["created_at"]
 
-            # Find unsent new docs for this watch entry
-            new_docs = self.db.get_unsent_docs_for_watch(
-                user_email, tender_id, since_date,
-            )
+            # Find unsent new docs: exclude already-sent IDs (from Supabase)
+            sent_ids = self.user_db.get_sent_doc_ids(user_email, tender_id)
+            new_docs = self.db.get_new_docs_excluding(tender_id, since_date, sent_ids)
 
             if not new_docs:
                 continue
@@ -158,10 +160,10 @@ class AlertEngine:
         return bundle if bundle.tender_alerts else None
 
     def _record_sent_alerts(self, bundle: UserAlertBundle) -> None:
-        """Record all sent alerts in alert_history for deduplication."""
+        """Record all sent alerts in Supabase alert_history for deduplication."""
         for ta in bundle.tender_alerts:
             for doc in ta.new_docs:
-                self.db.record_alert_sent(
+                self.user_db.record_alert_sent(
                     bundle.user_email, ta.tender_id, doc["row_id"],
                 )
 
@@ -359,7 +361,8 @@ def main() -> None:
         logger.info("Running in DRY RUN mode (no emails will be sent)")
 
     db = TenderDB()
-    engine = AlertEngine(db, dry_run=dry_run)
+    user_db = UserDB()
+    engine = AlertEngine(db, user_db, dry_run=dry_run)
     sent = engine.check_and_send()
 
     logger.info("Done. %d email(s) %s.", sent, "would be sent" if dry_run else "sent")

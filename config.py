@@ -136,3 +136,10 @@ DEV_USER_EMAIL: str = _get("DEV_USER_EMAIL", "")
 
 # Shared team email for the management watchlist (all members see the same list)
 TEAM_EMAIL: str = _get("TEAM_EMAIL", "team@tender-dashboard.local")
+
+# ============================================================================
+# SUPABASE (persistent user data: watchlist, reviews, alert_history)
+# ============================================================================
+
+SUPABASE_URL: str = _get("SUPABASE_URL", "")
+SUPABASE_KEY: str = _get("SUPABASE_KEY", "")

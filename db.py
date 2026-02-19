@@ -788,6 +788,41 @@ class TenderDB:
         finally:
             conn.close()
 
+    def get_new_docs_excluding(
+        self,
+        tender_id: int,
+        since_date: str,
+        exclude_row_ids: set[int],
+    ) -> list[dict]:
+        """Get new documents for a tender, excluding already-notified ones.
+
+        Used by the alert engine when alert_history lives in Supabase.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            since_date: Only docs with first_seen > this date.
+            exclude_row_ids: Set of row_ids already sent to this user.
+
+        Returns:
+            List of document dicts not yet notified.
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """SELECT row_id, doc_name, description, file_type,
+                          size, pirsum_type, update_date, first_seen
+                   FROM tender_documents
+                   WHERE tender_id = ? AND first_seen > ?
+                   ORDER BY first_seen DESC""",
+                (tender_id, since_date),
+            ).fetchall()
+            return [
+                dict(r) for r in rows
+                if r["row_id"] not in exclude_row_ids
+            ]
+        finally:
+            conn.close()
+
     def get_stats(self) -> dict:
         """Get summary counts for logging/debugging.
 

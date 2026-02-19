@@ -854,11 +854,14 @@ if not user_email:
 else:
     st.caption(f"משתמש: {user_email}")
 
-    from db import TenderDB
-    watch_db = TenderDB()
+    from user_db import UserDB
+    watch_db = UserDB()
+
+    if not watch_db.available:
+        st.warning("אחסון מרוחק (Supabase) לא מוגדר — רשימת המעקב לא תישמר בין כניסות.")
 
     # ── Add to watchlist ──────────────────────────────────────────────
-    # Build label map from ALL tenders (not just filtered) so user can watch any tender
+    # Build label map from ALL tenders so user can watch any tender
     _watch_labels: dict[int, str] = {}
     for _, _r in df[['tender_id', 'tender_name', 'city']].iterrows():
         _name = str(_r['tender_name'])[:50] if pd.notna(_r['tender_name']) else ''
@@ -889,35 +892,43 @@ else:
                 f"מכרז {_label} נוסף לרשימת המעקב! "
                 f"תקבל/י התראה במייל כשיתווספו מסמכים חדשים."
             )
+            st.rerun()
         else:
             st.info(f"מכרז {_label} כבר נמצא ברשימת המעקב.")
 
-    # ── Display watchlist ─────────────────────────────────────────────
-    watchlist_df = watch_db.get_user_watchlist(user_email)
+    # ── Display watchlist (join Supabase IDs with local tender data) ──
+    watchlist_rows = watch_db.get_watchlist_rows(user_email)
 
-    if len(watchlist_df) > 0:
-        st.markdown(f"##### מכרזים במעקב ({len(watchlist_df)})")
+    if watchlist_rows:
+        st.markdown(f"##### מכרזים במעקב ({len(watchlist_rows)})")
 
-        for _, row in watchlist_df.iterrows():
+        # Build a lookup from the loaded df for tender details
+        _tender_lookup = df.set_index('tender_id').to_dict('index') if not df.empty else {}
+
+        for row in watchlist_rows:
+            tid = int(row['tender_id'])
+            t = _tender_lookup.get(tid, {})
+            watch_id = row['id']
+
             w_cols = st.columns([2, 2, 2, 2, 1, 1])
             with w_cols[0]:
-                st.write(str(row.get('tender_name', row['tender_id'])))
+                st.write(str(t.get('tender_name', tid))[:50])
             with w_cols[1]:
-                st.write(row.get('city', ''))
+                st.write(str(t.get('city', '')))
             with w_cols[2]:
-                st.write(row.get('region', ''))
+                st.write(str(t.get('region', '')))
             with w_cols[3]:
-                deadline_val = row.get('deadline', '')
-                if pd.notna(deadline_val):
+                deadline_val = t.get('deadline', '')
+                if deadline_val and pd.notna(deadline_val):
                     dl = pd.to_datetime(deadline_val, errors='coerce')
                     st.write(dl.strftime('%d/%m/%Y') if pd.notna(dl) else '')
                 else:
                     st.write('')
             with w_cols[4]:
-                st.write(row.get('status', ''))
+                st.write(str(t.get('status', '')))
             with w_cols[5]:
-                if st.button("🗑️", key=f"rm_watch_{row['watch_id']}"):
-                    watch_db.remove_from_watchlist(user_email, int(row['tender_id']))
+                if st.button("🗑️", key=f"rm_watch_{watch_id}"):
+                    watch_db.remove_from_watchlist(user_email, tid)
                     st.rerun()
 
         st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים למכרזים שברשימה.")
