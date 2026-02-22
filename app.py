@@ -300,27 +300,27 @@ st.markdown("""
         text-align: center !important;
     }
 
-    /* ── Pill-style Radio Buttons (Main Area) ── */
+    /* ── Pill-style Radio Buttons (Main Area) — legend-sized ── */
     div[role="radiogroup"] {
         background-color: var(--mg-bg-card);
         padding: 1px;
-        border-radius: 6px;
+        border-radius: 4px;
         display: inline-flex;
         border: 1px solid var(--mg-border);
         box-shadow: none;
-        gap: 1px;
+        gap: 0px;
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
     div[role="radiogroup"] label {
-        padding: 1px 5px !important;
-        border-radius: 6px !important;
+        padding: 0px 4px !important;
+        border-radius: 3px !important;
         margin: 0 !important;
         transition: all 0.15s ease;
-        font-size: 0.58rem !important;
+        font-size: 10px !important;
         cursor: pointer;
-        line-height: 1.2;
+        line-height: 1.3;
     }
     div[role="radiogroup"] label:hover {
         background-color: var(--mg-primary-light);
@@ -406,9 +406,18 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
-    /* ── Compact toggle for deadlines ── */
+    /* ── Compact toggle for deadlines — high-contrast on/off ── */
+    [data-testid="stToggle"] {
+        margin-top: -4px !important;
+        margin-bottom: -4px !important;
+    }
     [data-testid="stToggle"] label {
-        font-size: 0.8rem !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        gap: 6px !important;
+    }
+    [data-testid="stToggle"] label span {
+        color: var(--mg-text-heading) !important;
     }
 
     /* ── Expander styling ── */
@@ -637,10 +646,10 @@ st.markdown("""
             white-space: nowrap;
         }
 
-        /* Radio pills: smaller on mobile */
+        /* Radio pills: legend-sized on mobile */
         div[role="radiogroup"] label {
-            font-size: 0.5rem !important;
-            padding: 1px 4px !important;
+            font-size: 9px !important;
+            padding: 0px 3px !important;
         }
 
         /* Pie title smaller */
