@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-22 (session 7)
+**Last updated:** 2026-02-22 (session 8)
 
 ---
 
@@ -13,6 +13,7 @@ Sprint 6 (Full Supabase Migration) — **complete** (pending: run SQL schema + m
 Sprint 4 (Analytical Engine) — **complete** (analytics_engine + analytics_enrichment + pages/analytics.py, 125 tests).
 Management Page Redesign (Features #1-4) — **complete**.
 MEGIDO Brand Redesign — **complete**.
+Mobile-First Responsive Redesign (Deep Blue) — **complete**.
 
 **All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
@@ -45,6 +46,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-22 | **Mobile-first responsive redesign** — replaced gold/navy palette with Deep Blue professional palette (primary #2563EB, sidebar #0F172A, accent #60A5FA). Added mobile-first CSS with @media breakpoints at 768px and 1024px: single-column stacking on mobile, responsive metric cards, horizontal-scrolling tables, compact typography. Updated all 5 files: CSS tokens in app.py, chart colors in dashboard.py and analytics.py, inline HTML colors in explorer.py and management.py, Streamlit theme in config.toml. | `app.py`, `pages/dashboard.py`, `pages/analytics.py`, `pages/explorer.py`, `pages/management.py`, `.streamlit/config.toml` |
 | 2026-02-22 | **Analytics page** — new "ניתוח שוק" page with 5 sections: Market Overview (KPIs + supply pipeline), Trends (regional volume, momentum, monthly distribution, moving averages), Competitive Intelligence (lifecycle, deadline overlap, saturation, document intelligence), Price Analytics (price trends, taba summary, price premium), Scoring (top 20 table with badges, histogram, radar deep-dive). Sidebar date range + region filters. | `pages/analytics.py` (NEW), `app.py` |
 | 2026-02-22 | **Analytics enrichment engine** -- price extraction from Tik[], detail API field capture (acquisition_form, participation_fee, land_area), taba plan number extraction, aggregated plan-level analytics, days_to_deadline computed column. New tables: tender_prices, taba_analytics. 23 tests pass. | `analytics_enrichment.py` (NEW), `tests/test_analytics_enrichment.py` (NEW), `scripts/sql/analytics_enrichment_schema.sql` (NEW), `db.py`, `data_client.py`, `dashboard_utils.py` |
 | 2026-02-22 | **On-demand building rights UI** — dashboard button triggers brochure analysis (immediate) + GitHub Actions extraction (5-10 min). Shows brochure summary, lots table, building rights table with status tracking. | `brochure_analyzer.py` (NEW), `pages/dashboard.py`, `dashboard_utils.py`, `db.py`, `.github/workflows/extract_building_rights.yml` (NEW), `scripts/sql/building_rights_schema.sql`, `scripts/extract_building_rights_batch.py` |

@@ -43,7 +43,7 @@ with st.sidebar:
         st.image(str(logo_path), width=140)
     st.markdown("""
     <div class="sidebar-header">
-        <h2>MEGIDO</h2>
+        <h2 style="color:#60A5FA !important;">MEGIDO</h2>
         <p>מגידו י.ק. | לוח הנהלה</p>
     </div>
     """, unsafe_allow_html=True)
