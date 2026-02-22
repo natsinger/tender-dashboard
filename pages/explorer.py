@@ -439,6 +439,172 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
                     load_building_rights_data.clear()
                     st.rerun()
 
+            # ── Lot Data (from tender_lots table) ─────────────────────
+            st.markdown("---")
+            st.markdown("### נתוני מתחמים")
+
+            try:
+                from db import TenderDB as _LotDB
+
+                _lot_db = _LotDB()
+                _tender_record = _lot_db.get_tender_by_id(selected_tender_id)
+                _lots = _lot_db.get_lots(selected_tender_id)
+
+                # ── Bid limit badge ───────────────────────────────────
+                _max_lots = (
+                    _tender_record.get("max_lots_per_bidder")
+                    if _tender_record
+                    else None
+                )
+                if _max_lots is not None and _max_lots > 0:
+                    st.markdown(
+                        '<div style="display:inline-block;padding:4px 14px;'
+                        "border-radius:16px;font-size:0.85rem;font-weight:600;"
+                        'background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74;">'
+                        f"\U0001f3af הגבלת הגשה: עד {_max_lots} מתחמים"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        '<div style="display:inline-block;padding:4px 14px;'
+                        "border-radius:16px;font-size:0.85rem;font-weight:600;"
+                        'background:#F0FDF4;color:#166534;border:1px solid #86EFAC;">'
+                        "\U0001f3af ללא הגבלה"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                # ── Lots table ────────────────────────────────────────
+                if _lots:
+                    _lots_df = pd.DataFrame(_lots)
+
+                    _COL_MAP = {
+                        "lot_number": "מתחם",
+                        "plot_numbers": "מגרש",
+                        "area_sqm": 'שטח מ"ר',
+                        "units_target_price": 'יח"ד מטרה',
+                        "units_free_market": 'יח"ד שוק חופשי',
+                        "min_price": "מחיר מינימום \u20aa",
+                        "guarantee_amount": "ערבות \u20aa",
+                        "zoning_plan": 'תב"ע',
+                    }
+                    _display_cols = [
+                        c for c in _COL_MAP if c in _lots_df.columns
+                    ]
+                    _lots_display = _lots_df[_display_cols].rename(
+                        columns=_COL_MAP,
+                    )
+
+                    # Numeric formatting config
+                    _col_config = {}
+                    _num_cols_fmt_d = ['שטח מ"ר', 'יח"ד מטרה', 'יח"ד שוק חופשי']
+                    _num_cols_fmt_money = ["מחיר מינימום \u20aa", "ערבות \u20aa"]
+                    for _nc in _num_cols_fmt_d:
+                        if _nc in _lots_display.columns:
+                            _col_config[_nc] = st.column_config.NumberColumn(
+                                _nc, format="%d",
+                            )
+                    for _mc in _num_cols_fmt_money:
+                        if _mc in _lots_display.columns:
+                            _col_config[_mc] = st.column_config.NumberColumn(
+                                _mc, format="%,.0f",
+                            )
+                    for _tc in ["מתחם", "מגרש", 'תב"ע']:
+                        if _tc in _lots_display.columns:
+                            _col_config[_tc] = st.column_config.TextColumn(_tc)
+
+                    st.dataframe(
+                        _lots_display,
+                        column_config=_col_config,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(35 * len(_lots_display) + 38, 400),
+                    )
+
+                    # ── Summary metrics ───────────────────────────────
+                    _total_lots = len(_lots_display)
+                    _total_target = (
+                        pd.to_numeric(
+                            _lots_df.get("units_target_price"), errors="coerce",
+                        ).sum()
+                        if "units_target_price" in _lots_df.columns
+                        else 0
+                    )
+                    _total_free = (
+                        pd.to_numeric(
+                            _lots_df.get("units_free_market"), errors="coerce",
+                        ).sum()
+                        if "units_free_market" in _lots_df.columns
+                        else 0
+                    )
+
+                    _sm1, _sm2, _sm3 = st.columns(3)
+                    with _sm1:
+                        st.metric("סה\"כ מתחמים", f"{_total_lots:,}")
+                    with _sm2:
+                        st.metric('יח"ד מטרה', f"{_total_target:,.0f}")
+                    with _sm3:
+                        st.metric('יח"ד שוק חופשי', f"{_total_free:,.0f}")
+                else:
+                    st.info("אין נתוני מתחמים למכרז זה")
+
+                # ── Extraction status indicator ───────────────────────
+                _lot_status = (
+                    _tender_record.get("lot_extraction_status")
+                    if _tender_record
+                    else None
+                )
+                _lot_date = (
+                    _tender_record.get("lot_extraction_date")
+                    if _tender_record
+                    else None
+                )
+
+                if _lot_status == "extracted":
+                    _date_str = ""
+                    if _lot_date:
+                        _dt = pd.to_datetime(_lot_date, errors="coerce")
+                        if pd.notna(_dt):
+                            _date_str = f" ({_dt.strftime('%d/%m/%Y %H:%M')})"
+                    st.markdown(
+                        f'<span style="color:#166534;font-size:0.8rem;">'
+                        f"\u2705 מתחמים חולצו בהצלחה{_date_str}"
+                        f"</span>",
+                        unsafe_allow_html=True,
+                    )
+                elif _lot_status == "pending":
+                    st.markdown(
+                        '<span style="color:#92400E;font-size:0.8rem;">'
+                        "\u23f3 חילוץ מתחמים בהמתנה"
+                        "</span>",
+                        unsafe_allow_html=True,
+                    )
+                elif _lot_status == "failed":
+                    st.markdown(
+                        '<span style="color:#991B1B;font-size:0.8rem;">'
+                        "\u274c חילוץ מתחמים נכשל"
+                        "</span>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        '<span style="color:#94A3B8;font-size:0.8rem;">'
+                        "\u2796 נתוני מתחמים לא זמינים"
+                        "</span>",
+                        unsafe_allow_html=True,
+                    )
+
+            except Exception as _lot_exc:
+                import logging as _lot_logging
+
+                _lot_logging.getLogger(__name__).error(
+                    "Failed to load lot data for tender %d: %s",
+                    selected_tender_id,
+                    _lot_exc,
+                )
+                st.caption("לא ניתן לטעון נתוני מתחמים")
+
             st.markdown("---")
             st.markdown(f"[צפה באתר רמ\"י]({RMI_SITE_URL}/{selected_tender_id})")
         else:

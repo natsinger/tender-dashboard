@@ -582,8 +582,8 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     # Compute tender_duration_days (publish_date to deadline)
     if "publish_date" in df.columns and "deadline" in df.columns:
-        pub = pd.to_datetime(df["publish_date"], errors="coerce")
-        ded = pd.to_datetime(df["deadline"], errors="coerce")
+        pub = pd.to_datetime(df["publish_date"], errors="coerce", utc=True)
+        ded = pd.to_datetime(df["deadline"], errors="coerce", utc=True)
         duration = (ded - pub).dt.days
         df["tender_duration_days"] = duration.where(duration > 0, other=None)
 
