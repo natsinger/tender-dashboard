@@ -507,9 +507,10 @@ st.markdown("""
 # MULTIPAGE NAVIGATION
 # ============================================================================
 
-dashboard = st.Page("pages/dashboard.py", title="לוח מכרזים", icon="📋", default=True)
+dashboard = st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋", default=True)
+explorer = st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍")
 analytics = st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈")
-management = st.Page("pages/management.py", title="סקירה ניהולית", icon="📊")
+management = st.Page("pages/management.py", title="לוח הנהלה", icon="📊")
 
-pg = st.navigation([dashboard, analytics, management])
+pg = st.navigation([dashboard, explorer, analytics, management])
 pg.run()
