@@ -1,13 +1,15 @@
 """
 Shared utility functions for the Streamlit dashboard pages.
 
-Contains data loading functions used by both the main dashboard
-and the management overview pages.
+Contains data loading functions, chart constants, and snapshot comparison
+helpers used by both the main dashboard and the management overview pages.
 """
 
+import json
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 import pandas as pd
 import streamlit as st
@@ -16,6 +18,14 @@ from config import CACHE_TTL, DATA_DIR, DEV_USER_EMAIL, PROJECT_ROOT
 from data_client import LandTendersClient, generate_sample_data
 
 logger = logging.getLogger(__name__)
+
+# ── Shared chart styling constants ───────────────────────────────────────────
+MEGIDO_CHART_COLORS: list[str] = [
+    "#2563EB", "#60A5FA", "#1E3A5F", "#10B981", "#F59E0B", "#8B5CF6",
+]
+MEGIDO_GOLD_SCALE: list[list] = [[0, "#DBEAFE"], [1, "#2563EB"]]
+PLOTLY_FONT: dict = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E293B")
+PLOTLY_BG: dict = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
 
 def _add_days_to_deadline(df: pd.DataFrame) -> pd.DataFrame:
@@ -208,3 +218,53 @@ def get_user_email() -> str:
 
     # 2. Session state (populated by render_email_input)
     return st.session_state.get("user_email", "")
+
+
+def find_new_tender_ids_from_snapshots() -> Set[int]:
+    """Compare the two most recent JSON snapshots to find newly added tender IDs.
+
+    Scans PROJECT_ROOT for tenders_list_*.json files, picks the two most recent
+    by filename date, and returns tender IDs present in the newest but absent
+    from the previous snapshot.
+
+    Returns:
+        Set of tender_id ints that are new in the latest snapshot.
+    """
+    pattern = "tenders_list_*.json"
+    snapshots = sorted(PROJECT_ROOT.glob(pattern))
+    if len(snapshots) < 2:
+        logger.info("Not enough snapshots for comparison (%d found)", len(snapshots))
+        return set()
+
+    newest = snapshots[-1]
+    previous = snapshots[-2]
+    logger.info("Comparing snapshots: %s vs %s", previous.name, newest.name)
+
+    try:
+        with open(newest, encoding="utf-8") as f:
+            new_data = json.load(f)
+        with open(previous, encoding="utf-8") as f:
+            old_data = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Failed to read snapshots: %s", exc)
+        return set()
+
+    def _extract_ids(data: list | dict) -> Set[int]:
+        """Extract tender IDs from a JSON snapshot (list of dicts or wrapped)."""
+        records = data if isinstance(data, list) else data.get("data", data.get("results", []))
+        ids: Set[int] = set()
+        for rec in records:
+            tid = rec.get("MichrazID") or rec.get("tender_id") or rec.get("michraz_id")
+            if tid is not None:
+                try:
+                    ids.add(int(tid))
+                except (ValueError, TypeError):
+                    pass
+        return ids
+
+    new_ids = _extract_ids(new_data)
+    old_ids = _extract_ids(old_data)
+    diff = new_ids - old_ids
+    logger.info("Snapshot diff: %d new, %d removed, %d total new",
+                len(diff), len(old_ids - new_ids), len(new_ids))
+    return diff

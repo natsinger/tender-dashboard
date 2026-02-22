@@ -11,10 +11,16 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, RELEVANT_TENDER_TYPES, TEAM_EMAIL
-from dashboard_utils import load_data
+from dashboard_utils import (
+    MEGIDO_CHART_COLORS,
+    PLOTLY_BG,
+    PLOTLY_FONT,
+    load_data,
+)
 from db import TenderDB
 from user_db import UserDB
 
@@ -277,6 +283,80 @@ st.markdown("---")
 
 
 # ============================================================================
+# SECTION 2B: PIE CHARTS + KPI CARDS
+# ============================================================================
+
+_pie_col, _kpi_col = st.columns([3, 2])
+
+with _pie_col:
+    _mp1, _mp2 = st.columns(2)
+
+    # ── Pie: Brochure availability ────────────────────────────────────
+    with _mp1:
+        st.markdown('<p class="pie-title" style="font-size:13px;">חוברת מכרז</p>', unsafe_allow_html=True)
+        if "published_booklet" in active_df.columns and len(active_df) > 0:
+            _bc = active_df["published_booklet"].value_counts()
+            _avail = int(_bc.get(True, 0))
+            _not_avail = int(_bc.get(False, 0))
+            _fig_b = px.pie(
+                values=[_avail, _not_avail],
+                names=["יש חוברת", "בלי חוברת"],
+                color_discrete_sequence=["#2563EB", "#E2E8F0"],
+                hole=0.55,
+            )
+            _fig_b.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+            _fig_b.update_layout(
+                height=220, margin=dict(t=5, b=30, l=5, r=5),
+                showlegend=True,
+                legend=dict(
+                    orientation="h", yanchor="top", y=-0.05,
+                    xanchor="center", x=0.5, font=dict(size=11),
+                ),
+                font=PLOTLY_FONT, **PLOTLY_BG,
+            )
+            st.plotly_chart(_fig_b, use_container_width=True, key="mgmt_pie_booklet")
+        else:
+            st.info("אין נתונים")
+
+    # ── Pie: Region distribution ──────────────────────────────────────
+    with _mp2:
+        st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים לפי מחוז</p>', unsafe_allow_html=True)
+        if "region" in active_df.columns and len(active_df) > 0:
+            _reg = active_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
+            if not _reg.empty:
+                _fig_r = px.pie(
+                    _reg, values="count", names="region",
+                    hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS,
+                )
+                _fig_r.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                _fig_r.update_layout(
+                    height=220, margin=dict(t=5, b=30, l=5, r=5),
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h", yanchor="top", y=-0.05,
+                        xanchor="center", x=0.5, font=dict(size=10),
+                    ),
+                    font=PLOTLY_FONT, **PLOTLY_BG,
+                )
+                st.plotly_chart(_fig_r, use_container_width=True, key="mgmt_pie_region")
+            else:
+                st.info("אין נתוני מחוזות")
+        else:
+            st.info("אין נתונים")
+
+with _kpi_col:
+    _card_active = active_df[active_df["tender_type_code"].isin(CARD_TENDER_TYPES)]
+    _closing_count = len(closing_soon)
+    _mk1, _mk2 = st.columns(2)
+    with _mk1:
+        st.metric("מכרזים פעילים", f"{len(_card_active):,}")
+    with _mk2:
+        st.metric("נסגרים ב-14 יום", f"{_closing_count}")
+
+st.markdown("---")
+
+
+# ============================================================================
 # SECTION 3: BOTTOM CATEGORY CARDS — דיור להשכרה, דיור מוגן, מכרז ייזום
 # ============================================================================
 
@@ -337,17 +417,3 @@ with tab_yezum:
         st.info("אין מכרזי ייזום פעילים כרגע.")
 
 st.markdown("---")
-
-
-# ============================================================================
-# SECTION 4: COMPACT KPIs
-# ============================================================================
-
-card_active_df = active_df[active_df["tender_type_code"].isin(CARD_TENDER_TYPES)]
-closing_count = len(closing_soon)
-
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("מספר מכרזים פעילים", f"{len(card_active_df):,}")
-k2.metric("מכרזים שייסגרו בשבועיים הקרובים", f"{closing_count}")
-k3.metric("מכרזים מועדפים", f"{len(watchlist_df)}")
-k4.metric("סה\"כ רשומות", f"{len(df):,}")
