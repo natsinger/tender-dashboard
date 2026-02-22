@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-22 (session 5)
+**Last updated:** 2026-02-22 (session 7)
 
 ---
 
@@ -10,13 +10,15 @@ Sprint 1 (Stabilize & Deploy MVP) — **complete**.
 Sprint 3 (SQLite Data Persistence) — **complete** → superseded by Sprint 6.
 Sprint 5 (Watchlist & Email Alerts) — **complete** (deployed to Streamlit Cloud, SMTP pending).
 Sprint 6 (Full Supabase Migration) — **complete** (pending: run SQL schema + migration script + add GitHub secrets).
+Sprint 4 (Analytical Engine) — **complete** (analytics_engine + analytics_enrichment + pages/analytics.py, 125 tests).
 Management Page Redesign (Features #1-4) — **complete**.
 MEGIDO Brand Redesign — **complete**.
 
 **All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
-The app is now **multipage** with two views:
+The app is now **multipage** with three views:
 - **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), team watchlist controls (sidebar), review status editing, analytics, debug
+- **Analytics** (`pages/analytics.py`) — Market intelligence: trends, competitive analysis, price analytics, scoring with radar charts
 - **Management** (`pages/management.py`) — Team operational dashboard (read-only):
   1. **Selected Tenders** — shared team watchlist with review status display
   2. **Closing Soon** — active tenders closing within 14 days, with popup detail dialog
@@ -30,11 +32,12 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 **To activate (one-time setup)**:
 1. Run the SQL schema in Supabase SQL Editor (creates tables + indexes + GRANTs)
 2. Run `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number` column + `building_rights` table + brochure/extraction columns)
-3. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
-4. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
-5. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
-6. Add Supabase + SMTP secrets to Streamlit Cloud secrets
-7. Create a GitHub PAT with `actions:write` scope and add as `GH_PAT` to Streamlit Cloud secrets
+3. Run `scripts/sql/analytics_enrichment_schema.sql` in Supabase SQL Editor (adds enrichment columns + `tender_prices` + `taba_analytics` tables)
+4. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
+5. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
+6. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
+7. Add Supabase + SMTP secrets to Streamlit Cloud secrets
+8. Create a GitHub PAT with `actions:write` scope and add as `GH_PAT` to Streamlit Cloud secrets
 
 ---
 
@@ -42,6 +45,8 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-22 | **Analytics page** — new "ניתוח שוק" page with 5 sections: Market Overview (KPIs + supply pipeline), Trends (regional volume, momentum, monthly distribution, moving averages), Competitive Intelligence (lifecycle, deadline overlap, saturation, document intelligence), Price Analytics (price trends, taba summary, price premium), Scoring (top 20 table with badges, histogram, radar deep-dive). Sidebar date range + region filters. | `pages/analytics.py` (NEW), `app.py` |
+| 2026-02-22 | **Analytics enrichment engine** -- price extraction from Tik[], detail API field capture (acquisition_form, participation_fee, land_area), taba plan number extraction, aggregated plan-level analytics, days_to_deadline computed column. New tables: tender_prices, taba_analytics. 23 tests pass. | `analytics_enrichment.py` (NEW), `tests/test_analytics_enrichment.py` (NEW), `scripts/sql/analytics_enrichment_schema.sql` (NEW), `db.py`, `data_client.py`, `dashboard_utils.py` |
 | 2026-02-22 | **On-demand building rights UI** — dashboard button triggers brochure analysis (immediate) + GitHub Actions extraction (5-10 min). Shows brochure summary, lots table, building rights table with status tracking. | `brochure_analyzer.py` (NEW), `pages/dashboard.py`, `dashboard_utils.py`, `db.py`, `.github/workflows/extract_building_rights.yml` (NEW), `scripts/sql/building_rights_schema.sql`, `scripts/extract_building_rights_batch.py` |
 | 2026-02-20 | **Building rights batch pipeline** — end-to-end: brochure → plan number → Mavat download → Section 5 extraction → Supabase. Runs in daily cron + CLI. SQL schema file included. | `scripts/extract_building_rights_batch.py` (NEW), `scripts/sql/building_rights_schema.sql` (NEW), `.github/workflows/daily_refresh.yml`, `db.py` |
 | 2026-02-20 | **Building rights extractor** — extract Section 5 tables from Mavat plan PDFs. Multi-level header merging, Hebrew RTL handling, multi-page continuation, Supabase storage. 36 tests pass. | `building_rights_extractor.py` (NEW), `mavat_plan_extractor.py`, `db.py`, `test_building_rights.py` (NEW) |
@@ -74,7 +79,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ## Known Issues
 
-1. **No tests** — No test suite exists. pytest tests should be added for data_client, db, and alerts modules.
+1. **Partial test coverage** — 125 pytest tests exist for `analytics_engine` (102) and `analytics_enrichment` (23). Tests for `data_client`, `db`, and `alerts` modules are still needed.
 2. **Date range filter removed** — The urgency toggle replaces the old date range picker. May want to add it back as an "advanced" option.
 3. **Pie chart click-to-filter** — Plotly click events don't wire easily to Streamlit filters. Deferred.
 4. **Streamlit Cloud auth** — Viewer auth not enforced. Using sidebar email input as fallback (works but self-reported).
@@ -88,8 +93,8 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 1. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
 2. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
 3. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
-4. **Sprint 4** — Analytical engine: scoring + market trends.
-5. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
+4. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
+5. **Expand test coverage** — Add tests for data_client, db, alerts, and dashboard_utils modules.
 
 ---
 
@@ -97,10 +102,12 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ```
 -- Tender data (managed by db.py)
-tenders            — ~10,447 rows — current state of each tender
+tenders            — ~10,447 rows — current state of each tender (+ enrichment columns)
 tender_history     — ~30,997 rows — daily snapshots for trend analysis
 tender_documents   —  ~3,471 rows — document metadata from 444 tenders
-building_rights    — extracted Section 5 data from Mavat plan PDFs (NEW, needs SQL creation)
+building_rights    — extracted Section 5 data from Mavat plan PDFs
+tender_prices      — winning bids, floor prices, appraisals per plot (NEW, needs SQL creation)
+taba_analytics     — aggregated plan-level analytics (NEW, needs SQL creation)
 
 -- User data (managed by user_db.py)
 user_watchlist     — per-user tender watchlist for email alerts
@@ -123,12 +130,17 @@ Gov tender projects/
 ├── alerts.py                       # Email alert engine: watchlist → SMTP
 ├── tender_pdf_extractor.py         # PDF extraction: גוש, חלקה, תב"ע from brochure PDFs
 ├── brochure_analyzer.py             # On-demand brochure analysis + GitHub Actions trigger
+├── analytics_engine.py             # Market analytics: regional, seasonal, price, competitive, scoring
+├── analytics_enrichment.py         # Price extraction, taba analytics, detail field enrichment
 ├── building_rights_extractor.py    # PDF extraction: Section 5 building rights from Mavat plans
 ├── mavat_client.py                 # Playwright client: search plans on mavat.iplan.gov.il
 ├── mavat_plan_extractor.py         # Coordinator: download + extract from Mavat plan PDFs
 ├── test_pdf_extractor.py           # Test script for PDF extractor (2 sample PDFs)
 ├── test_pdf_extractor_batch.py     # Batch test: download + extract from N tender brochures
 ├── test_building_rights.py         # Tests for building rights extractor (36 tests)
+├── tests/                          # pytest test suite (125 tests)
+│   ├── test_analytics_engine.py    # Tests for analytics engine (102 tests)
+│   └── test_analytics_enrichment.py  # Tests for analytics enrichment (23 tests)
 ├── requirements.txt                # Pinned Python dependencies
 ├── complete_city_codes.py          # CBS settlement code → city name mapping (1,281 entries)
 ├── complete_city_regions.py        # CBS settlement code → region mapping (1,488 entries)
@@ -141,6 +153,7 @@ Gov tender projects/
 │   └── logo megido.jpg             # MEGIDO BY AURA brand logo
 ├── pages/                          # Streamlit multipage app pages
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist, review editing
+│   ├── analytics.py                # Market analytics: trends, competitive intel, prices, scoring
 │   └── management.py               # Team dashboard (read-only): watchlist, review display, type tabs, KPIs
 ├── .streamlit/
 │   └── config.toml                 # Streamlit theme + server config
@@ -154,7 +167,8 @@ Gov tender projects/
 │   ├── migrate_json_to_db.py       # One-time migration: JSON → SQLite (historical)
 │   ├── migrate_sqlite_to_supabase.py  # One-time migration: SQLite → Supabase (Sprint 6)
 │   └── sql/
-│       └── building_rights_schema.sql  # SQL: plan_number column + building_rights table
+│       ├── building_rights_schema.sql  # SQL: plan_number column + building_rights table
+│       └── analytics_enrichment_schema.sql  # SQL: tender_prices + taba_analytics tables + enrichment columns
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
 │   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)

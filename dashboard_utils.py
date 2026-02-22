@@ -6,6 +6,7 @@ and the management overview pages.
 """
 
 import logging
+from datetime import datetime
 from typing import Dict, Optional
 
 import pandas as pd
@@ -15,6 +16,28 @@ from config import CACHE_TTL, DATA_DIR, DEV_USER_EMAIL, PROJECT_ROOT
 from data_client import LandTendersClient, generate_sample_data
 
 logger = logging.getLogger(__name__)
+
+
+def _add_days_to_deadline(df: pd.DataFrame) -> pd.DataFrame:
+    """Add computed days_to_deadline column to a tenders DataFrame.
+
+    Calculates the number of calendar days from today to each tender's
+    deadline. Negative values mean the deadline has passed.
+
+    Args:
+        df: DataFrame with a 'deadline' column (datetime or parseable).
+
+    Returns:
+        The same DataFrame with a new 'days_to_deadline' column added.
+    """
+    if df.empty or "deadline" not in df.columns:
+        return df
+
+    df = df.copy()
+    now = pd.Timestamp(datetime.now())
+    deadline_dt = pd.to_datetime(df["deadline"], errors="coerce")
+    df["days_to_deadline"] = (deadline_dt - now).dt.days
+    return df
 
 
 @st.cache_data(ttl=CACHE_TTL)
@@ -28,7 +51,7 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
         DataFrame of tenders with normalized columns.
     """
     if data_source == "sample":
-        return generate_sample_data()
+        return _add_days_to_deadline(generate_sample_data())
 
     # Priority 1: Supabase database
     try:
@@ -37,7 +60,7 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
         db = TenderDB()
         df = db.load_current_tenders()
         if len(df) > 0:
-            return df
+            return _add_days_to_deadline(df)
         logger.info("Database is empty, trying JSON fallback")
     except Exception as exc:
         logger.warning("Could not load from database: %s", exc)
@@ -47,7 +70,7 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
     if data_source == "latest_file":
         df = client.load_latest_json_snapshot()
         if df is not None:
-            return df
+            return _add_days_to_deadline(df)
         logger.warning("No JSON files found, fetching from API")
         st.warning("לא נמצאו קבצי JSON, טוען מהAPI...")
 
@@ -56,10 +79,10 @@ def load_data(data_source: str = "latest_file") -> pd.DataFrame:
     if df is None:
         logger.error("Could not fetch from API, falling back to sample data")
         st.error("לא ניתן לטעון מהAPI. מציג נתונים לדוגמה.")
-        return generate_sample_data()
+        return _add_days_to_deadline(generate_sample_data())
 
     client.save_json_snapshot(df)
-    return df
+    return _add_days_to_deadline(df)
 
 
 @st.cache_data(ttl=CACHE_TTL)

@@ -36,6 +36,7 @@ from dashboard_utils import (
     render_email_input,
 )
 from data_client import LandTendersClient, build_document_url
+from analytics_engine import score_all_tenders
 from user_db import REVIEW_STAGES, UserDB
 
 # ── Constants ────────────────────────────────────────────────────────────────
@@ -52,6 +53,8 @@ render_email_input()
 df_all = load_data(data_source="latest_file")
 # Pre-filter: only 5 relevant types
 df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
+# Score all tenders (adds total_score + sub-score columns)
+df = score_all_tenders(df)
 # Active-only base
 active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
 
@@ -208,6 +211,12 @@ with col_kpi:
         st.metric("🏙️ ערים", f"{active_df['city'].nunique()}")
     with k4:
         st.metric(f"⏰ נסגרים {CLOSING_SOON_DAYS}י'", closing_soon_count)
+    k5, k6 = st.columns(2)
+    with k5:
+        _avg_score = round(active_df["total_score"].mean(), 1) if "total_score" in active_df.columns and len(active_df) > 0 else 0.0
+        st.metric("📊 ציון ממוצע", f"{_avg_score}")
+    with k6:
+        st.page_link("pages/analytics.py", label="📈 ניתוח מעמיק →")
 
 
 # ============================================================================
@@ -379,7 +388,7 @@ with f4:
         explorer_df = explorer_df[explorer_df["status"].isin(sel_status)]
 
 # Fixed display columns
-EXP_COLS = ["tender_name", "city", "region", "tender_type", "purpose", "units", "deadline", "status", "published_booklet"]
+EXP_COLS = ["total_score", "tender_name", "city", "region", "tender_type", "purpose", "units", "deadline", "status", "published_booklet"]
 display_cols = [c for c in EXP_COLS if c in explorer_df.columns]
 
 if display_cols:
@@ -397,6 +406,7 @@ if display_cols:
         hide_index=True,
         use_container_width=True,
         column_config={
+            "total_score": st.column_config.ProgressColumn("ציון", min_value=0, max_value=100, format="%.0f"),
             "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
             "city": st.column_config.TextColumn("עיר", width="medium"),
             "region": st.column_config.TextColumn("מחוז", width="small"),
