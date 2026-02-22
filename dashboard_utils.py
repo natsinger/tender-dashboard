@@ -113,6 +113,54 @@ def render_email_input() -> None:
                 st.rerun()
 
 
+@st.cache_data(ttl=300)
+def load_building_rights_data(tender_id: int) -> dict:
+    """Load building rights and brochure data for a tender.
+
+    Checks the tender record for extraction_status, plan_number,
+    brochure_summary, and lots_data. If building rights exist in the
+    building_rights table, loads those too.
+
+    Args:
+        tender_id: The tender's MichrazID.
+
+    Returns:
+        Dict with keys: extraction_status, plan_number, brochure_summary,
+        lots_data, building_rights, extraction_error.
+    """
+    from db import TenderDB
+
+    result = {
+        "extraction_status": "none",
+        "plan_number": None,
+        "brochure_summary": None,
+        "lots_data": None,
+        "building_rights": [],
+        "extraction_error": None,
+    }
+
+    try:
+        db = TenderDB()
+        tender = db.get_tender_by_id(tender_id)
+        if not tender:
+            return result
+
+        result["extraction_status"] = tender.get("extraction_status") or "none"
+        result["plan_number"] = tender.get("plan_number")
+        result["brochure_summary"] = tender.get("brochure_summary")
+        result["lots_data"] = tender.get("lots_data")
+        result["extraction_error"] = tender.get("extraction_error")
+
+        # Load building rights if plan_number exists
+        if result["plan_number"]:
+            result["building_rights"] = db.load_building_rights(result["plan_number"])
+
+    except Exception as exc:
+        logger.error("load_building_rights_data failed for tender %d: %s", tender_id, exc)
+
+    return result
+
+
 def get_user_email() -> str:
     """Get the current user's email address (no widgets rendered).
 

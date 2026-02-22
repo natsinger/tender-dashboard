@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-19 (session 3)
+**Last updated:** 2026-02-22 (session 5)
 
 ---
 
@@ -29,10 +29,12 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 **To activate (one-time setup)**:
 1. Run the SQL schema in Supabase SQL Editor (creates tables + indexes + GRANTs)
-2. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
-3. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
-4. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
-5. Add Supabase + SMTP secrets to Streamlit Cloud secrets
+2. Run `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number` column + `building_rights` table + brochure/extraction columns)
+3. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
+4. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
+5. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
+6. Add Supabase + SMTP secrets to Streamlit Cloud secrets
+7. Create a GitHub PAT with `actions:write` scope and add as `GH_PAT` to Streamlit Cloud secrets
 
 ---
 
@@ -40,6 +42,9 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-22 | **On-demand building rights UI** — dashboard button triggers brochure analysis (immediate) + GitHub Actions extraction (5-10 min). Shows brochure summary, lots table, building rights table with status tracking. | `brochure_analyzer.py` (NEW), `pages/dashboard.py`, `dashboard_utils.py`, `db.py`, `.github/workflows/extract_building_rights.yml` (NEW), `scripts/sql/building_rights_schema.sql`, `scripts/extract_building_rights_batch.py` |
+| 2026-02-20 | **Building rights batch pipeline** — end-to-end: brochure → plan number → Mavat download → Section 5 extraction → Supabase. Runs in daily cron + CLI. SQL schema file included. | `scripts/extract_building_rights_batch.py` (NEW), `scripts/sql/building_rights_schema.sql` (NEW), `.github/workflows/daily_refresh.yml`, `db.py` |
+| 2026-02-20 | **Building rights extractor** — extract Section 5 tables from Mavat plan PDFs. Multi-level header merging, Hebrew RTL handling, multi-page continuation, Supabase storage. 36 tests pass. | `building_rights_extractor.py` (NEW), `mavat_plan_extractor.py`, `db.py`, `test_building_rights.py` (NEW) |
 | 2026-02-19 | **Sprint 6: Full Supabase migration** — rewrite db.py from SQLite to Supabase REST API, migration script, fix AlertEngine bug, update CI workflow | `db.py`, `scripts/migrate_sqlite_to_supabase.py` (NEW), `scripts/refresh_tenders.py`, `.github/workflows/daily_refresh.yml`, `user_db.py`, `dashboard_utils.py`, `.gitignore` |
 | 2026-02-19 | Move team watchlist + review editing to Dashboard; Management now read-only | `pages/dashboard.py`, `pages/management.py` |
 | 2026-02-19 | Supabase persistence — user_watchlist, tender_reviews, alert_history now in Supabase PostgreSQL | `user_db.py` (NEW), `config.py`, `requirements.txt`, `pages/dashboard.py`, `pages/management.py`, `alerts.py`, `db.py` |
@@ -80,14 +85,11 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ## Next Steps
 
-1. **Run Supabase SQL schema** — Create tenders, tender_history, tender_documents tables + indexes + GRANTs in SQL Editor.
-2. **Run migration script** — `python scripts/migrate_sqlite_to_supabase.py` to populate Supabase with existing data.
-3. **Add GitHub secrets** — `SUPABASE_URL`, `SUPABASE_KEY` in repo Settings → Secrets.
-4. **Add Streamlit Cloud secrets** — Same Supabase + SMTP credentials.
-5. **Verify app** — Confirm dashboard loads from Supabase, watchlist persists, review status works.
-6. **Remove tenders.db from git** — `git rm --cached data/tenders.db` after confirming Supabase works.
-7. **Sprint 4** — Analytical engine: scoring + market trends.
-8. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
+1. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
+2. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
+3. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
+4. **Sprint 4** — Analytical engine: scoring + market trends.
+5. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
 
 ---
 
@@ -98,6 +100,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 tenders            — ~10,447 rows — current state of each tender
 tender_history     — ~30,997 rows — daily snapshots for trend analysis
 tender_documents   —  ~3,471 rows — document metadata from 444 tenders
+building_rights    — extracted Section 5 data from Mavat plan PDFs (NEW, needs SQL creation)
 
 -- User data (managed by user_db.py)
 user_watchlist     — per-user tender watchlist for email alerts
@@ -119,9 +122,13 @@ Gov tender projects/
 ├── dashboard_utils.py              # Shared data loading functions for pages
 ├── alerts.py                       # Email alert engine: watchlist → SMTP
 ├── tender_pdf_extractor.py         # PDF extraction: גוש, חלקה, תב"ע from brochure PDFs
+├── brochure_analyzer.py             # On-demand brochure analysis + GitHub Actions trigger
+├── building_rights_extractor.py    # PDF extraction: Section 5 building rights from Mavat plans
 ├── mavat_client.py                 # Playwright client: search plans on mavat.iplan.gov.il
+├── mavat_plan_extractor.py         # Coordinator: download + extract from Mavat plan PDFs
 ├── test_pdf_extractor.py           # Test script for PDF extractor (2 sample PDFs)
 ├── test_pdf_extractor_batch.py     # Batch test: download + extract from N tender brochures
+├── test_building_rights.py         # Tests for building rights extractor (36 tests)
 ├── requirements.txt                # Pinned Python dependencies
 ├── complete_city_codes.py          # CBS settlement code → city name mapping (1,281 entries)
 ├── complete_city_regions.py        # CBS settlement code → region mapping (1,488 entries)
@@ -139,11 +146,15 @@ Gov tender projects/
 │   └── config.toml                 # Streamlit theme + server config
 ├── .github/
 │   └── workflows/
-│       └── daily_refresh.yml       # GitHub Actions: daily refresh + alert emails
+│       ├── daily_refresh.yml       # GitHub Actions: daily refresh + alert emails
+│       └── extract_building_rights.yml  # On-demand building rights extraction (workflow_dispatch)
 ├── scripts/
 │   ├── refresh_tenders.py          # Data refresh script (used by cron)
+│   ├── extract_building_rights_batch.py  # Batch pipeline: brochure → plan → Mavat → extract → Supabase
 │   ├── migrate_json_to_db.py       # One-time migration: JSON → SQLite (historical)
-│   └── migrate_sqlite_to_supabase.py  # One-time migration: SQLite → Supabase (Sprint 6)
+│   ├── migrate_sqlite_to_supabase.py  # One-time migration: SQLite → Supabase (Sprint 6)
+│   └── sql/
+│       └── building_rights_schema.sql  # SQL: plan_number column + building_rights table
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
 │   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)

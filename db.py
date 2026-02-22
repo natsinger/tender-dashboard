@@ -9,6 +9,7 @@ Tables managed by this module:
     tenders          — current state of each tender (upserted daily)
     tender_history   — daily snapshots for trend analysis
     tender_documents — per-tender document tracking (detect additions)
+    building_rights  — extracted building rights from Mavat plan PDFs
 
 User-facing tables (watchlist, reviews, alert_history) are in user_db.py.
 
@@ -488,6 +489,29 @@ class TenderDB:
             logger.error("get_tender_by_id failed: %s", exc)
             return None
 
+    def update_plan_number(self, tender_id: int, plan_number: str) -> bool:
+        """Store an extracted plan number (תב"ע) on a tender.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            plan_number: The תב"ע plan number string.
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not self._client or not plan_number:
+            return False
+
+        try:
+            self._client.table("tenders").update(
+                {"plan_number": plan_number}
+            ).eq("tender_id", tender_id).execute()
+            logger.info("Stored plan_number=%s for tender %d", plan_number, tender_id)
+            return True
+        except Exception as exc:
+            logger.error("update_plan_number failed for tender %d: %s", tender_id, exc)
+            return False
+
     def get_snapshot_dates(self) -> list[str]:
         """List all unique snapshot dates in the history table.
 
@@ -567,7 +591,7 @@ class TenderDB:
             return {}
 
         stats = {}
-        for table in ("tenders", "tender_history", "tender_documents"):
+        for table in ("tenders", "tender_history", "tender_documents", "building_rights"):
             try:
                 result = (
                     self._client.table(table)
@@ -581,3 +605,259 @@ class TenderDB:
                 stats[table] = -1
 
         return stats
+
+    # ------------------------------------------------------------------
+    # Building rights (Section 5 from Mavat plan PDFs)
+    # ------------------------------------------------------------------
+
+    # Columns stored in typed fields. Anything else goes into extra_data JSONB.
+    _BUILDING_RIGHTS_TYPED_COLS = {
+        "designation", "use_type", "area_condition",
+        "plot_size_absolute", "plot_size_minimum",
+        "building_area_above", "building_area_above_service",
+        "building_area_below", "building_area_below_service",
+        "building_area_total",
+        "coverage_pct", "housing_units", "building_height",
+        "floors_above", "floors_below",
+        "setback_rear", "setback_front", "setback_side",
+        "balcony_area",
+    }
+
+    # Columns typed as INT in the schema — must cast float → int.
+    _BUILDING_RIGHTS_INT_COLS = {"housing_units", "floors_above", "floors_below"}
+
+    # Maps extractor field names → Supabase column names.
+    _RIGHTS_FIELD_MAP = {
+        "designation": "designation",
+        "use": "use_type",
+        "area_condition": "area_condition",
+        "plot_size_absolute": "plot_size_absolute",
+        "plot_size_minimum": "plot_size_minimum",
+        "building_area_above_main": "building_area_above",
+        "building_area_above_service": "building_area_above_service",
+        "building_area_below_main": "building_area_below",
+        "building_area_below_service": "building_area_below_service",
+        "building_area_total": "building_area_total",
+        "coverage_pct": "coverage_pct",
+        "housing_units": "housing_units",
+        "building_height": "building_height",
+        "floors_above": "floors_above",
+        "floors_below": "floors_below",
+        "setback_rear": "setback_rear",
+        "setback_front": "setback_front",
+        "setback_side": "setback_side",
+        "balcony_area": "balcony_area",
+    }
+
+    def upsert_building_rights(
+        self,
+        plan_number: str,
+        rows: list[dict],
+        plan_status: Optional[str] = None,
+    ) -> int:
+        """Insert or update building rights rows for a plan.
+
+        Maps extractor field names to Supabase column names. Fields not
+        in the schema are stored in the extra_data JSONB column.
+
+        Args:
+            plan_number: The plan number (e.g. "606-0458471").
+            rows: List of row dicts from building_rights_extractor.
+            plan_status: "מצב מוצע" or "מצב מאושר".
+
+        Returns:
+            Number of rows upserted.
+        """
+        if not rows or not self._client:
+            return 0
+
+        db_rows: list[dict] = []
+        for idx, row in enumerate(rows):
+            db_row: dict = {
+                "plan_number": plan_number,
+                "plan_status": plan_status,
+                "row_index": idx,
+            }
+
+            extra: dict = {}
+            for src_field, value in row.items():
+                if src_field.startswith("_"):
+                    continue
+                db_col = self._RIGHTS_FIELD_MAP.get(src_field)
+                if db_col:
+                    cleaned = _clean_val(value)
+                    # Cast float → int for INT columns (e.g. 3.0 → 3)
+                    if (
+                        db_col in self._BUILDING_RIGHTS_INT_COLS
+                        and isinstance(cleaned, float)
+                    ):
+                        cleaned = int(cleaned)
+                    db_row[db_col] = cleaned
+                else:
+                    extra[src_field] = _clean_val(value)
+
+            if extra:
+                db_row["extra_data"] = extra
+
+            db_rows.append(db_row)
+
+        # Batch upsert
+        inserted = 0
+        for i in range(0, len(db_rows), _BATCH_SIZE):
+            batch = db_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("building_rights").upsert(
+                    batch,
+                    on_conflict="plan_number,plan_status,row_index",
+                ).execute()
+                inserted += len(batch)
+            except Exception as exc:
+                logger.error(
+                    "upsert_building_rights failed for %s: %s",
+                    plan_number, exc,
+                )
+
+        if inserted:
+            logger.info(
+                "Upserted %d building rights rows for plan %s (%s)",
+                inserted, plan_number, plan_status,
+            )
+        return inserted
+
+    def load_building_rights(
+        self,
+        plan_number: str,
+        plan_status: Optional[str] = None,
+    ) -> list[dict]:
+        """Load building rights rows for a plan.
+
+        Args:
+            plan_number: The plan number.
+            plan_status: Optional filter by status.
+
+        Returns:
+            List of row dicts ordered by row_index.
+        """
+        filters: dict = {"plan_number": plan_number}
+        if plan_status:
+            filters["plan_status"] = plan_status
+
+        return self._paginated_select(
+            "building_rights",
+            filters=filters,
+            order_col="row_index",
+        )
+
+    # ------------------------------------------------------------------
+    # Brochure analysis & extraction pipeline status
+    # ------------------------------------------------------------------
+
+    def update_brochure_data(
+        self,
+        tender_id: int,
+        plan_number: Optional[str],
+        lots_data: dict,
+        brochure_summary: str,
+        extraction_status: str = "brochure_extracted",
+    ) -> bool:
+        """Store brochure extraction results on the tender record.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            plan_number: The תב"ע plan number (may be None).
+            lots_data: Structured plot data from TenderPDFExtractor.
+            brochure_summary: Text summary of the brochure.
+            extraction_status: Pipeline status to set.
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not self._client:
+            return False
+
+        import json as _json
+
+        update_data: dict = {
+            "brochure_summary": brochure_summary or None,
+            "lots_data": _json.loads(_json.dumps(lots_data, default=str)) if lots_data else {},
+            "extraction_status": extraction_status,
+            "extraction_error": None,
+        }
+        if plan_number:
+            update_data["plan_number"] = plan_number
+
+        try:
+            self._client.table("tenders").update(
+                update_data,
+            ).eq("tender_id", tender_id).execute()
+            logger.info(
+                "Stored brochure data for tender %d (status=%s, plan=%s)",
+                tender_id, extraction_status, plan_number,
+            )
+            return True
+        except Exception as exc:
+            logger.error("update_brochure_data failed for tender %d: %s", tender_id, exc)
+            return False
+
+    def set_extraction_status(
+        self,
+        tender_id: int,
+        status: str,
+        error: Optional[str] = None,
+    ) -> bool:
+        """Update the building rights extraction pipeline status.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            status: One of 'none', 'brochure_extracted', 'queued',
+                'complete', 'failed'.
+            error: Error message (for 'failed' status).
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not self._client:
+            return False
+
+        update_data: dict = {"extraction_status": status}
+        if error is not None:
+            update_data["extraction_error"] = error
+        elif status != "failed":
+            update_data["extraction_error"] = None
+
+        try:
+            self._client.table("tenders").update(
+                update_data,
+            ).eq("tender_id", tender_id).execute()
+            logger.info("Set extraction_status=%s for tender %d", status, tender_id)
+            return True
+        except Exception as exc:
+            logger.error("set_extraction_status failed for tender %d: %s", tender_id, exc)
+            return False
+
+    def get_pending_extractions(self) -> list[dict]:
+        """Get tenders queued for building rights extraction.
+
+        Returns tenders where extraction_status == 'queued' and
+        plan_number is set.
+
+        Returns:
+            List of tender dicts with tender_id and plan_number.
+        """
+        if not self._client:
+            return []
+
+        try:
+            result = (
+                self._client.table("tenders")
+                .select("tender_id, plan_number, extraction_status")
+                .eq("extraction_status", "queued")
+                .not_.is_("plan_number", "null")
+                .execute()
+            )
+            rows = result.data or []
+            logger.info("Found %d tenders queued for extraction", len(rows))
+            return rows
+        except Exception as exc:
+            logger.error("get_pending_extractions failed: %s", exc)
+            return []

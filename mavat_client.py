@@ -334,7 +334,7 @@ class MavatClient:
 
         The exact UI flow (4 clicks):
             1. Click "מסמכי התכנית" (green notebook icon) to expand
-            2. Click "מסמכים מאושרים (מתן תוקף)" dropdown to expand
+            2. Click "מסמכים מאושרים (מתן תוקף)" or "מסמכים בתהליך" to expand
             3. Click "הוראות" sub-dropdown to expand
             4. Click the PDF icon on the "תדפיס הוראות התכנית" row
 
@@ -361,20 +361,29 @@ class MavatClient:
                 )
                 return None
 
-            # Step 2: Click "מסמכים מאושרים (מתן תוקף)" to expand
+            # Step 2: Click "מסמכים מאושרים (מתן תוקף)" to expand.
+            # Fallback to "מסמכים בתהליך" for plans not yet approved.
             approved_header = page.locator("text=מסמכים מאושרים").first
             if approved_header.is_visible(timeout=5000):
                 approved_header.click()
                 time.sleep(2)
                 logger.info("Expanded 'מסמכים מאושרים (מתן תוקף)'")
             else:
-                logger.warning("'מסמכים מאושרים' not visible")
-                page.screenshot(
-                    path=str(
-                        self.output_dir / f"debug_{safe_name}_step2.png"
+                in_process_header = page.locator("text=מסמכים בתהליך").first
+                if in_process_header.is_visible(timeout=3000):
+                    in_process_header.click()
+                    time.sleep(2)
+                    logger.info("Expanded 'מסמכים בתהליך' (fallback)")
+                else:
+                    logger.warning(
+                        "'מסמכים מאושרים' and 'מסמכים בתהליך' both not visible"
                     )
-                )
-                return None
+                    page.screenshot(
+                        path=str(
+                            self.output_dir / f"debug_{safe_name}_step2.png"
+                        )
+                    )
+                    return None
 
             # Step 3: Click "הוראות" sub-dropdown to expand.
             # Must use exact match — "text=הוראות" also matches
