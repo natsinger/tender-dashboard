@@ -508,7 +508,8 @@ st.markdown("""
 # ============================================================================
 
 dashboard = st.Page("pages/dashboard.py", title="לוח מכרזים", icon="📋", default=True)
+analytics = st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈")
 management = st.Page("pages/management.py", title="סקירה ניהולית", icon="📊")
 
-pg = st.navigation([dashboard, management])
+pg = st.navigation([dashboard, analytics, management])
 pg.run()

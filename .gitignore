@@ -27,6 +27,9 @@ data/raw/
 data/details_cache/
 data/tenders.db
 
+# Babysitter / orchestration
+.a5c/
+
 # IDE
 .vscode/
 .idea/

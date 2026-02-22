@@ -36,6 +36,10 @@ TENDER_COLUMNS = [
     "status_code", "status", "units", "publish_date", "deadline",
     "committee_date", "published_booklet", "targeted",
     "area_sqm", "min_price", "gush", "helka",
+    # Analytics enrichment columns (Sprint 7)
+    "rmi_region_code", "official_publish_date", "brochure_update_date",
+    "target_audience", "acquisition_form", "participation_fee",
+    "tender_duration_days", "land_area_sqm", "plan_number",
 ]
 
 # Batch size for Supabase upsert operations.
@@ -221,6 +225,15 @@ class TenderDB:
                 "min_price": _clean_val(row.get("min_price")),
                 "gush": _clean_val(row.get("gush")),
                 "helka": _clean_val(row.get("helka")),
+                # Analytics enrichment fields
+                "rmi_region_code": _clean_val(row.get("rmi_region_code")),
+                "official_publish_date": _clean_val(row.get("official_publish_date")),
+                "brochure_update_date": _clean_val(row.get("brochure_update_date")),
+                "target_audience": _clean_val(row.get("target_audience")),
+                "acquisition_form": _clean_val(row.get("acquisition_form")),
+                "participation_fee": _clean_val(row.get("participation_fee")),
+                "tender_duration_days": _clean_val(row.get("tender_duration_days")),
+                "land_area_sqm": _clean_val(row.get("land_area_sqm")),
                 "last_updated": now,
             }
             tender_rows.append(tender_row)
@@ -510,6 +523,31 @@ class TenderDB:
             return True
         except Exception as exc:
             logger.error("update_plan_number failed for tender %d: %s", tender_id, exc)
+            return False
+
+    def update_tender_fields(self, tender_id: int, fields: dict) -> bool:
+        """Update arbitrary fields on a tender record.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            fields: Dict of {column_name: value} to update.
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not fields or not self._client:
+            return False
+
+        try:
+            clean_fields = _clean_dict(fields)
+            self._client.table("tenders").update(
+                clean_fields,
+            ).eq("tender_id", tender_id).execute()
+            return True
+        except Exception as exc:
+            logger.error(
+                "update_tender_fields failed for tender %d: %s", tender_id, exc,
+            )
             return False
 
     def get_snapshot_dates(self) -> list[str]:
@@ -861,3 +899,119 @@ class TenderDB:
         except Exception as exc:
             logger.error("get_pending_extractions failed: %s", exc)
             return []
+
+    # ------------------------------------------------------------------
+    # Tender prices (winning bids, floor prices, appraisals per plot)
+    # ------------------------------------------------------------------
+
+    def upsert_tender_prices(self, rows: list[dict]) -> int:
+        """Insert or update tender price rows (one per tik/plot).
+
+        Args:
+            rows: List of dicts with keys matching the tender_prices schema
+                (tender_id, tik_id, mitcham_name, land_area, floor_price,
+                appraisal_price, winning_bid, winner_name, num_bids,
+                highest_bid, lowest_bid, dev_costs, capacity_units).
+
+        Returns:
+            Number of rows upserted.
+        """
+        if not rows or not self._client:
+            return 0
+
+        clean_rows = [_clean_dict(r) for r in rows]
+        inserted = 0
+
+        for i in range(0, len(clean_rows), _BATCH_SIZE):
+            batch = clean_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("tender_prices").upsert(
+                    batch,
+                    on_conflict="tender_id,tik_id",
+                ).execute()
+                inserted += len(batch)
+            except Exception as exc:
+                logger.error("upsert_tender_prices batch failed: %s", exc)
+
+        if inserted:
+            logger.info("Upserted %d tender price rows", inserted)
+        return inserted
+
+    def load_tender_prices(
+        self,
+        tender_id: Optional[int] = None,
+    ) -> pd.DataFrame:
+        """Load tender price data, optionally filtered by tender.
+
+        Args:
+            tender_id: If provided, filter to this tender only.
+
+        Returns:
+            DataFrame with tender price rows.
+        """
+        filters = {"tender_id": tender_id} if tender_id is not None else None
+        rows = self._paginated_select(
+            "tender_prices",
+            filters=filters,
+            order_col="tender_id",
+        )
+        return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Taba analytics (aggregated plan-level analytics)
+    # ------------------------------------------------------------------
+
+    def upsert_taba_analytics(self, rows: list[dict]) -> int:
+        """Insert or update taba analytics rows (one per plan).
+
+        Args:
+            rows: List of dicts with keys matching the taba_analytics schema
+                (plan_number, tender_count, total_units, total_land_area,
+                avg_appraisal_price, avg_floor_price, avg_winning_bid,
+                premium_vs_appraisal_pct, premium_vs_floor_pct,
+                region_codes, city_codes, purpose_codes, first_seen,
+                last_seen).
+
+        Returns:
+            Number of rows upserted.
+        """
+        if not rows or not self._client:
+            return 0
+
+        clean_rows = [_clean_dict(r) for r in rows]
+        inserted = 0
+
+        for i in range(0, len(clean_rows), _BATCH_SIZE):
+            batch = clean_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("taba_analytics").upsert(
+                    batch,
+                    on_conflict="plan_number",
+                ).execute()
+                inserted += len(batch)
+            except Exception as exc:
+                logger.error("upsert_taba_analytics batch failed: %s", exc)
+
+        if inserted:
+            logger.info("Upserted %d taba analytics rows", inserted)
+        return inserted
+
+    def load_taba_analytics(
+        self,
+        plan_number: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Load taba analytics data, optionally filtered by plan.
+
+        Args:
+            plan_number: If provided, filter to this plan only.
+
+        Returns:
+            DataFrame with taba analytics rows.
+        """
+        filters = {"plan_number": plan_number} if plan_number is not None else None
+        rows = self._paginated_select(
+            "taba_analytics",
+            filters=filters,
+            order_col="plan_number",
+        )
+        return pd.DataFrame(rows) if rows else pd.DataFrame()

@@ -551,6 +551,11 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         "KodYeudMichraz": "purpose_code",
         "PublishedChoveret": "published_booklet",
         "Mekuvan": "targeted",
+        # Analytics enrichment fields
+        "KodMerchav": "rmi_region_code",
+        "PirsumDate": "official_publish_date",
+        "ChoveretUpdateDate": "brochure_update_date",
+        "KhalYaadRashi": "target_audience",
     }
 
     df = df.rename(columns=column_mapping)
@@ -574,6 +579,13 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
     for field in ("gush", "helka"):
         if field not in df.columns:
             df[field] = None
+
+    # Compute tender_duration_days (publish_date to deadline)
+    if "publish_date" in df.columns and "deadline" in df.columns:
+        pub = pd.to_datetime(df["publish_date"], errors="coerce")
+        ded = pd.to_datetime(df["deadline"], errors="coerce")
+        duration = (ded - pub).dt.days
+        df["tender_duration_days"] = duration.where(duration > 0, other=None)
 
     return df
 
