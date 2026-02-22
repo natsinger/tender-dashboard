@@ -25,7 +25,7 @@ import pdfplumber
 import requests
 
 from config import _get
-from tender_pdf_extractor import TenderPDFExtractor
+from tender_pdf_extractor import TenderPDFExtractor, _reverse_hebrew
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,9 @@ def generate_brochure_summary(pdf_bytes: bytes) -> str:
             # Take first ~2000 chars which usually covers the important info
             summary = combined[:2000].strip()
 
-            # Clean up: collapse multiple blank lines
+            # Clean up: collapse multiple blank lines and reverse Hebrew
+            # pdfplumber extracts RTL text in visual (LTR) order — reverse
+            # each line back to logical Hebrew reading order.
             lines = summary.split("\n")
             cleaned_lines: List[str] = []
             prev_blank = False
@@ -121,7 +123,7 @@ def generate_brochure_summary(pdf_bytes: bytes) -> str:
                         cleaned_lines.append("")
                     prev_blank = True
                 else:
-                    cleaned_lines.append(stripped)
+                    cleaned_lines.append(_reverse_hebrew(stripped))
                     prev_blank = False
 
             return "\n".join(cleaned_lines)
