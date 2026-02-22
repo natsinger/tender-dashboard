@@ -1,8 +1,8 @@
 """
-Management overview page — team operational dashboard.
+Management overview page — לוח הנהלה.
 
 Shows curated selected tenders (shared watchlist) with review status tracking,
-closing-soon tenders with popup detail, tender-type tabs, and compact KPIs.
+closing-soon tenders (collapsible), tender-type cards with units, and compact KPIs.
 Branded for MEGIDO BY AURA (מגידו י.ק.).
 """
 
@@ -13,10 +13,16 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
-from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, TEAM_EMAIL
+from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, RELEVANT_TENDER_TYPES, TEAM_EMAIL
 from dashboard_utils import load_data
 from db import TenderDB
 from user_db import UserDB
+
+# Purpose filter: same as dashboard
+RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
+
+# The 3 tender types for the active card
+CARD_TENDER_TYPES = {1, 5, 8}
 
 
 # ============================================================================
@@ -24,7 +30,11 @@ from user_db import UserDB
 # ============================================================================
 
 today = datetime.now()
-df = load_data(data_source="latest_file")
+df_all = load_data(data_source="latest_file")
+# Apply same filters as dashboard
+df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
+if "purpose" in df.columns:
+    df = df[df["purpose"].isin(RELEVANT_PURPOSES)].copy()
 watch_db = UserDB()
 
 with st.sidebar:
@@ -34,7 +44,7 @@ with st.sidebar:
     st.markdown("""
     <div class="sidebar-header">
         <h2>MEGIDO</h2>
-        <p>מגידו י.ק. | סקירה ניהולית</p>
+        <p>מגידו י.ק. | לוח הנהלה</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("---")
@@ -42,7 +52,7 @@ with st.sidebar:
     _watched_count = len(watch_db.get_watchlist_ids(TEAM_EMAIL))
     st.caption(f"עדכון אחרון: {today.strftime('%Y-%m-%d %H:%M')}")
     st.caption(f"סה\"כ רשומות במאגר: {len(df):,}")
-    st.caption(f"מכרזים במעקב: {_watched_count}")
+    st.caption(f"מכרזים מועדפים: {_watched_count}")
 
 
 # ============================================================================
@@ -136,10 +146,10 @@ _COMPACT_COLUMNS = {
 
 
 # ============================================================================
-# SECTION 1: SELECTED TENDERS + REVIEW STATUS
+# SECTION 1: SELECTED TENDERS + REVIEW STATUS (מכרזים מועדפים - חדר עסקאות)
 # ============================================================================
 
-st.markdown("#### 📋 מכרזים נבחרים")
+st.markdown("#### מכרזים מועדפים - חדר עסקאות")
 
 # Build watchlist_df by joining Supabase IDs with the loaded tender data
 _watched_ids_main = watch_db.get_watchlist_ids(TEAM_EMAIL)
@@ -149,14 +159,11 @@ else:
     watchlist_df = pd.DataFrame()
 
 if len(watchlist_df) > 0:
-    # Build compact table
     display_sel = _build_compact_table(watchlist_df)
 
-    # Fetch review statuses for all watched tenders from Supabase
     watched_ids = watchlist_df['tender_id'].astype(int).tolist()
     review_map = watch_db.get_review_statuses_for_tenders(watched_ids)
 
-    # Add review status column
     display_sel['review'] = [
         _REVIEW_EMOJI.get(
             review_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
@@ -174,20 +181,15 @@ if len(watchlist_df) > 0:
         use_container_width=True,
     )
 
-    # NOTE: Review status editing is in the Dashboard (📋 לוח מכרזים).
-    # TODO: WhatsApp notification on status change (WhatsApp Business API).
-
 else:
-    st.info("אין מכרזים ברשימת המעקב. הוסף מכרזים דרך לוח המכרזים (📋).")
+    st.info("אין מכרזים מועדפים. הוסף מכרזים דרך דאשבורד חדר העסקאות.")
 
 st.markdown("---")
 
 
 # ============================================================================
-# SECTION 2: CLOSING SOON + POPUP DETAIL
+# SECTION 2: CLOSING SOON — collapsed expander by default
 # ============================================================================
-
-st.markdown("#### ⏰ נסגרים בקרוב")
 
 closing_soon = active_df[
     (active_df['deadline'].notna()) &
@@ -196,7 +198,7 @@ closing_soon = active_df[
 ].sort_values('deadline').copy()
 
 
-@st.dialog("📋 פרטי מכרז", width="large")
+@st.dialog("פרטי מכרז", width="large")
 def _show_tender_detail(tender_id: int) -> None:
     """Show tender detail in a modal dialog."""
     sqlite_db = TenderDB()
@@ -234,57 +236,95 @@ def _show_tender_detail(tender_id: int) -> None:
         st.markdown(f"**גוש/חלקה:** {tender.get('gush', '')} / {tender.get('helka', '')}")
 
 
-if len(closing_soon) > 0:
-    display_cs = _build_compact_table(closing_soon, show_days_count=True)
+with st.expander(f"מכרזים שייסגרו בשבועיים הקרובים ({len(closing_soon)})", expanded=False):
+    if len(closing_soon) > 0:
+        display_cs = _build_compact_table(closing_soon, show_days_count=True)
 
-    st.dataframe(
-        display_cs,
-        column_config=_COMPACT_COLUMNS,
-        hide_index=True,
-        use_container_width=True,
-    )
-
-    # Button to show all closing-soon tenders in popup
-    cs_ids = closing_soon['tender_id'].tolist()
-    cs_labels = {
-        int(r['tender_id']): f"{r.get('tender_name', '')} — {r.get('city', '')}"
-        for _, r in closing_soon.iterrows()
-    }
-
-    pc1, pc2 = st.columns([3, 1])
-    with pc1:
-        popup_tender = st.selectbox(
-            "בחר מכרז לצפייה בפרטים",
-            options=cs_ids,
-            format_func=lambda tid: cs_labels.get(int(tid), str(tid)),
-            key="closing_popup_select",
-            index=None,
-            placeholder="בחר מכרז...",
+        st.dataframe(
+            display_cs,
+            column_config=_COMPACT_COLUMNS,
+            hide_index=True,
+            use_container_width=True,
         )
-    with pc2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔍 פרטים", key="btn_closing_detail"):
-            if popup_tender is not None:
-                _show_tender_detail(int(popup_tender))
 
-    st.caption(f"מציג {len(closing_soon)} מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום")
-else:
-    st.info(f"אין מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום.")
+        cs_ids = closing_soon['tender_id'].tolist()
+        cs_labels = {
+            int(r['tender_id']): f"{r.get('tender_name', '')} — {r.get('city', '')}"
+            for _, r in closing_soon.iterrows()
+        }
+
+        pc1, pc2 = st.columns([3, 1])
+        with pc1:
+            popup_tender = st.selectbox(
+                "בחר מכרז לצפייה בפרטים",
+                options=cs_ids,
+                format_func=lambda tid: cs_labels.get(int(tid), str(tid)),
+                key="closing_popup_select",
+                index=None,
+                placeholder="בחר מכרז...",
+            )
+        with pc2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("פרטים", key="btn_closing_detail"):
+                if popup_tender is not None:
+                    _show_tender_detail(int(popup_tender))
+
+        st.caption(f"מציג {len(closing_soon)} מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום")
+    else:
+        st.info(f"אין מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום.")
 
 st.markdown("---")
 
 
 # ============================================================================
-# SECTION 3: TENDER TYPE TABS
+# SECTION 3: BOTTOM CATEGORY CARDS — דיור להשכרה, דיור מוגן, מכרז ייזום
 # ============================================================================
 
-st.markdown("#### 🏷️ מכרזים לפי סוג")
+st.markdown("#### סוגים נוספים")
 
-tab_yezum, tab_diur, tab_all = st.tabs(["מכרז ייזום", "דיור להשכרה", "כל המכרזים"])
+# Use unfiltered-by-purpose data for these categories
+_all_typed = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
+_all_active = _all_typed[~_all_typed["status"].isin(NON_ACTIVE_STATUSES)].copy()
+
+tab_diur_h, tab_diur_m, tab_yezum = st.tabs(["דיור להשכרה", "דיור מוגן", "מכרז ייזום"])
+
+with tab_diur_h:
+    diur_h_df = _all_active[_all_active['tender_type'] == "דיור להשכרה"].copy()
+    if len(diur_h_df) > 0:
+        _units_dh = int(diur_h_df["units"].sum())
+        st.metric(f"סה\"כ יח\"ד", f"{_units_dh:,}")
+        display_dh = _build_compact_table(diur_h_df, show_days_count=True)
+        st.dataframe(
+            display_dh,
+            column_config=_COMPACT_COLUMNS,
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(f"{len(diur_h_df)} מכרזי דיור להשכרה פעילים")
+    else:
+        st.info("אין מכרזי דיור להשכרה פעילים כרגע.")
+
+with tab_diur_m:
+    diur_m_df = _all_active[_all_active["purpose"].str.contains("דיור מוגן", na=False)].copy() if "purpose" in _all_active.columns else pd.DataFrame()
+    if len(diur_m_df) > 0:
+        _units_dm = int(diur_m_df["units"].sum())
+        st.metric(f"סה\"כ יח\"ד", f"{_units_dm:,}")
+        display_dm = _build_compact_table(diur_m_df, show_days_count=True)
+        st.dataframe(
+            display_dm,
+            column_config=_COMPACT_COLUMNS,
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(f"{len(diur_m_df)} מכרזי דיור מוגן פעילים")
+    else:
+        st.info("אין מכרזי דיור מוגן פעילים כרגע.")
 
 with tab_yezum:
-    yezum_df = active_df[active_df['tender_type'] == "מכרז ייזום"].copy()
+    yezum_df = _all_active[_all_active['tender_type'] == "מכרז ייזום"].copy()
     if len(yezum_df) > 0:
+        _units_yz = int(yezum_df["units"].sum())
+        st.metric(f"סה\"כ יח\"ד", f"{_units_yz:,}")
         display_y = _build_compact_table(yezum_df, show_days_count=True)
         st.dataframe(
             display_y,
@@ -296,33 +336,6 @@ with tab_yezum:
     else:
         st.info("אין מכרזי ייזום פעילים כרגע.")
 
-with tab_diur:
-    diur_df = active_df[active_df['tender_type'] == "דיור להשכרה"].copy()
-    if len(diur_df) > 0:
-        display_d = _build_compact_table(diur_df, show_days_count=True)
-        st.dataframe(
-            display_d,
-            column_config=_COMPACT_COLUMNS,
-            hide_index=True,
-            use_container_width=True,
-        )
-        st.caption(f"{len(diur_df)} מכרזי דיור להשכרה פעילים")
-    else:
-        st.info("אין מכרזי דיור להשכרה פעילים כרגע.")
-
-with tab_all:
-    if len(active_df) > 0:
-        display_all = _build_compact_table(active_df, show_days_count=True)
-        st.dataframe(
-            display_all,
-            column_config=_COMPACT_COLUMNS,
-            hide_index=True,
-            use_container_width=True,
-        )
-        st.caption(f"{len(active_df)} מכרזים פעילים")
-    else:
-        st.info("אין מכרזים פעילים.")
-
 st.markdown("---")
 
 
@@ -330,16 +343,11 @@ st.markdown("---")
 # SECTION 4: COMPACT KPIs
 # ============================================================================
 
-total_units = int(active_df['units'].sum()) if 'units' in active_df.columns else 0
-unique_cities = active_df['city'].nunique() if 'city' in active_df.columns else 0
+card_active_df = active_df[active_df["tender_type_code"].isin(CARD_TENDER_TYPES)]
 closing_count = len(closing_soon)
-yezum_count = len(active_df[active_df['tender_type'] == "מכרז ייזום"])
-diur_count = len(active_df[active_df['tender_type'] == "דיור להשכרה"])
 
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-k1.metric("🟢 פעילים", f"{len(active_df):,}")
-k2.metric("🏠 יח\"ד", f"{total_units:,}")
-k3.metric(f"⏰ ≤{CLOSING_SOON_DAYS}ד׳", f"{closing_count}")
-k4.metric("📋 במעקב", f"{len(watchlist_df)}")
-k5.metric("🔨 ייזום", f"{yezum_count}")
-k6.metric("🏘️ דיור", f"{diur_count}")
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("מספר מכרזים פעילים", f"{len(card_active_df):,}")
+k2.metric("מכרזים שייסגרו בשבועיים הקרובים", f"{closing_count}")
+k3.metric("מכרזים מועדפים", f"{len(watchlist_df)}")
+k4.metric("סה\"כ רשומות", f"{len(df):,}")

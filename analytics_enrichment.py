@@ -383,11 +383,12 @@ def build_taba_analytics(db: TenderDB) -> list[dict]:
         pub_dates: list[str] = []
         for t in tender_list:
             pd_val = t.get("publish_date")
-            if pd_val is not None:
-                if hasattr(pd_val, "isoformat"):
-                    pub_dates.append(pd_val.isoformat()[:10])
-                elif isinstance(pd_val, str) and len(pd_val) >= 10:
-                    pub_dates.append(pd_val[:10])
+            if pd_val is None or (hasattr(pd_val, "isoformat") and str(pd_val) == "NaT"):
+                continue
+            if hasattr(pd_val, "isoformat"):
+                pub_dates.append(pd_val.isoformat()[:10])
+            elif isinstance(pd_val, str) and len(pd_val) >= 10 and pd_val != "NaT":
+                pub_dates.append(pd_val[:10])
 
         first_seen = min(pub_dates) if pub_dates else None
         last_seen = max(pub_dates) if pub_dates else None
@@ -501,8 +502,9 @@ def derive_land_area(db: TenderDB) -> int:
                 pass
 
         # Fallback: sum from building_rights if plan_number exists
-        if land_area is None and row.get("plan_number"):
-            rights = db.load_building_rights(row["plan_number"])
+        plan_num = row.get("plan_number")
+        if land_area is None and plan_num and isinstance(plan_num, str) and plan_num != "nan":
+            rights = db.load_building_rights(plan_num)
             if rights:
                 total = sum(
                     float(r.get("plot_size_absolute", 0) or 0)
