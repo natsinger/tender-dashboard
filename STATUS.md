@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-22 (session 12 — full brochure document selection)
+**Last updated:** 2026-02-23 (session 13 — API-first lot data integration)
 
 ---
 
@@ -15,6 +15,7 @@ Management Page Redesign (Features #1-4) — **complete**.
 MEGIDO Brand Redesign — **complete**.
 Mobile-First Responsive Redesign (Deep Blue) — **complete**.
 Lot Extraction Pipeline — **complete** (lot_extractor + extract_lots_batch + 169 tests, real-PDF fixes applied, pending SQL schema deployment).
+API-First Lot Integration — **complete** (API Tik[] as source of truth, PDF overlay for PDF-only fields, 7 new columns).
 
 **All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
@@ -49,6 +50,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-23 | **API-first lot data integration** — New `extract_lots_from_api()` function in data_client.py maps Tik[] array fields (MitchamName, Shetach, Kibolet, MechirSaf, SchumArvut, mechirShuma, HotzaotPituach, TochnitMigrash, GushHelka, ShemZoche, SchumZchiya) to lot schema. Pipeline rewritten: API lots upserted first (data_source='api'), then PDF-only fields (units_target_price, units_free_market, zoning_designation) overlaid via merge (data_source='merged'). 7 new columns on tender_lots: total_units, development_costs, gush, helka, winner_name, winning_amount, data_source. Explorer page updated with new columns + 4-column summary metrics. 294 tests pass (no regressions). | `data_client.py`, `db.py`, `scripts/extract_lots_batch.py`, `pages/explorer.py`, `scripts/sql/tender_lots_schema.sql`, `STATUS.md` |
 | 2026-02-22 | **Full brochure document selection** — Investigated 450 cached tender details and found 142 tenders have חוברת המכרז (full brochure, 1-40MB) in MichrazDocList vs פרסום ראשון (1-2 page announcement). New `find_best_brochure()` function in brochure_analyzer.py with 3-tier priority: (1) חוברת from MichrazDocList, (2) MichrazFullDocument, (3) פרסום ראשון fallback. Updated extract_lots_batch.py to use find_best_brochure() with doc_type tracking. Tested on 8 real brochures: full brochure yields 100% zoning extraction (5/5) vs 40% for pirsum rishon (2/5). Multi-lot tenders (14, 7, 7 lots) correctly extract Section 1 tables, Section 2 zoning tables, and Section 3 bid limits from full brochures. 169 tests pass (no regressions). | `brochure_analyzer.py`, `scripts/extract_lots_batch.py`, `STATUS.md` |
 | 2026-02-22 | **Lot extraction real-PDF fixes** — Downloaded 8 diverse brochures (types 1/5/6/9) and discovered pirsum rishon docs use inline text, not Section headers. Added: `_extract_zoning_inline()` for inline plan+designation from reversed Hebrew text (pattern: "PLAN תינכות הלח םישרגמה לע"), `_extract_lots_from_text()` fallback for no-table documents, new Section 1 column keywords (helka, gush, total_units, rental/sale columns). Results on 8 real PDFs: S1 75%->100%, S2 0%->88%, S3 0% (correctly: pirsum rishon docs don't contain bid limits). 169 tests pass (+16 new). | `lot_extractor.py`, `tests/test_lot_extractor.py`, `STATUS.md` |
 | 2026-02-22 | **Lot extraction pipeline (complete)** — Full BrochureLotExtractor: Section 1 lot table parsing (multi-page, reversed Hebrew, multi-line headers), Section 2 zoning (table + text extraction), Section 3 bid limits (Hebrew number words + regex). SQL schema for `tender_lots` table (14 columns) + 3 tenders columns. 4 DB methods (upsert_lots, get_lots, update_lot_extraction_status, update_max_lots_per_bidder). Batch CLI script with --tender-id and --limit args. Explorer page lot display section with bid-limit badge, formatted table, summary metrics, and extraction status indicator. 153 pytest tests pass. QA-verified against 5+ real brochure PDFs. | `lot_extractor.py` (NEW), `scripts/extract_lots_batch.py` (NEW), `tests/test_lot_extractor.py` (NEW), `scripts/sql/tender_lots_schema.sql` (NEW), `db.py`, `pages/explorer.py`, `STATUS.md` |
@@ -100,7 +102,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ## Next Steps
 
-1. **Run lot extraction SQL schema** — Execute `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table + `max_lots_per_bidder`, `lot_extraction_status`, `lot_extraction_date` columns on tenders).
+1. **Run lot extraction SQL schema** — Execute `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table with 21 columns including API-sourced fields: total_units, development_costs, gush, helka, winner_name, winning_amount, data_source).
 2. **Run lot extraction batch** — Execute `python scripts/extract_lots_batch.py --limit 20` to process first batch of tenders with brochures.
 3. **Add lot extraction to daily cron** — Add `extract_lots_batch.py` step to `.github/workflows/daily_refresh.yml` after document sync.
 4. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
@@ -121,7 +123,7 @@ tender_documents   —  ~3,471 rows — document metadata from 444 tenders
 building_rights    — extracted Section 5 data from Mavat plan PDFs
 tender_prices      — winning bids, floor prices, appraisals per plot (NEW, needs SQL creation)
 taba_analytics     — aggregated plan-level analytics (NEW, needs SQL creation)
-tender_lots        — lot-level data from brochure PDFs (14 columns: lot_number, units, pricing, zoning; needs SQL creation)
+tender_lots        — lot-level data from API + brochure PDFs (21 columns: lot_number, units, pricing, zoning, gush/helka, winner, data_source; needs SQL creation)
 
 -- User data (managed by user_db.py)
 user_watchlist     — per-user tender watchlist for email alerts
