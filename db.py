@@ -10,6 +10,7 @@ Tables managed by this module:
     tender_history   — daily snapshots for trend analysis
     tender_documents — per-tender document tracking (detect additions)
     building_rights  — extracted building rights from Mavat plan PDFs
+    tender_lots      — lot-level data extracted from brochure PDFs
 
 User-facing tables (watchlist, reviews, alert_history) are in user_db.py.
 
@@ -40,6 +41,7 @@ TENDER_COLUMNS = [
     "rmi_region_code", "official_publish_date", "brochure_update_date",
     "target_audience", "acquisition_form", "participation_fee",
     "tender_duration_days", "land_area_sqm", "plan_number",
+    "max_lots_per_bidder",
 ]
 
 # Batch size for Supabase upsert operations.
@@ -234,6 +236,7 @@ class TenderDB:
                 "participation_fee": _clean_val(row.get("participation_fee")),
                 "tender_duration_days": _clean_val(row.get("tender_duration_days")),
                 "land_area_sqm": _clean_val(row.get("land_area_sqm")),
+                "max_lots_per_bidder": _clean_val(row.get("max_lots_per_bidder")),
                 "last_updated": now,
             }
             tender_rows.append(tender_row)
@@ -1015,3 +1018,151 @@ class TenderDB:
             order_col="plan_number",
         )
         return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Tender lots (lot-level data from brochure PDFs)
+    # ------------------------------------------------------------------
+
+    def upsert_lots(self, tender_id: int, lots: list[dict]) -> int:
+        """Insert or update lot rows for a tender.
+
+        Each lot dict should contain keys matching the tender_lots schema
+        columns (lot_number, plot_numbers, area_sqm, units_target_price,
+        units_free_market, min_price, guarantee_amount, etc.).
+
+        Args:
+            tender_id: The tender's MichrazID.
+            lots: List of lot dicts from BrochureLotExtractor.
+
+        Returns:
+            Number of rows upserted.
+        """
+        if not lots or not self._client:
+            return 0
+
+        now = datetime.now().isoformat()
+        db_rows: list[dict] = []
+
+        for lot in lots:
+            db_row = _clean_dict({
+                "tender_id": tender_id,
+                "lot_number": lot.get("lot_number"),
+                "plot_numbers": lot.get("plot_numbers"),
+                "area_sqm": lot.get("area_sqm"),
+                "units_target_price": lot.get("units_target_price"),
+                "units_free_market": lot.get("units_free_market"),
+                "min_price": lot.get("min_price"),
+                "guarantee_amount": lot.get("guarantee_amount"),
+                "sqm_value_appraisal": lot.get("sqm_value_appraisal"),
+                "sqm_value_current": lot.get("sqm_value_current"),
+                "discount_amount": lot.get("discount_amount"),
+                "zoning_plan": lot.get("zoning_plan"),
+                "zoning_designation": lot.get("zoning_designation"),
+                "updated_at": now,
+            })
+            db_rows.append(db_row)
+
+        inserted = 0
+        for i in range(0, len(db_rows), _BATCH_SIZE):
+            batch = db_rows[i : i + _BATCH_SIZE]
+            try:
+                self._client.table("tender_lots").upsert(
+                    batch,
+                    on_conflict="tender_id,lot_number",
+                ).execute()
+                inserted += len(batch)
+            except Exception as exc:
+                logger.error(
+                    "upsert_lots failed for tender %d: %s", tender_id, exc,
+                )
+
+        if inserted:
+            logger.info(
+                "Upserted %d lot rows for tender %d", inserted, tender_id,
+            )
+        return inserted
+
+    def get_lots(self, tender_id: int) -> list[dict]:
+        """Get all lots for a specific tender, ordered by lot_number.
+
+        Args:
+            tender_id: The tender's MichrazID.
+
+        Returns:
+            List of lot dicts ordered by lot_number.
+        """
+        return self._paginated_select(
+            "tender_lots",
+            filters={"tender_id": tender_id},
+            order_col="lot_number",
+        )
+
+    def update_lot_extraction_status(
+        self,
+        tender_id: int,
+        status: str,
+    ) -> bool:
+        """Update the lot extraction pipeline status on a tender.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            status: One of 'pending', 'extracted', 'failed', 'no_brochure'.
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not self._client:
+            return False
+
+        update_data: dict = {
+            "lot_extraction_status": status,
+            "lot_extraction_date": datetime.now().isoformat(),
+        }
+
+        try:
+            self._client.table("tenders").update(
+                update_data,
+            ).eq("tender_id", tender_id).execute()
+            logger.info(
+                "Set lot_extraction_status=%s for tender %d", status, tender_id,
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "update_lot_extraction_status failed for tender %d: %s",
+                tender_id, exc,
+            )
+            return False
+
+    def update_max_lots_per_bidder(
+        self,
+        tender_id: int,
+        max_lots: int,
+    ) -> bool:
+        """Update the maximum lots per bidder limit on a tender.
+
+        Args:
+            tender_id: The tender's MichrazID.
+            max_lots: Maximum number of lots a single bidder can win.
+
+        Returns:
+            True if the update succeeded.
+        """
+        if not self._client:
+            return False
+
+        try:
+            self._client.table("tenders").update(
+                {"max_lots_per_bidder": max_lots},
+            ).eq("tender_id", tender_id).execute()
+            logger.info(
+                "Set max_lots_per_bidder=%d for tender %d",
+                max_lots, tender_id,
+            )
+            return True
+        except Exception as exc:
+            logger.error(
+                "update_max_lots_per_bidder failed for tender %d: %s",
+                tender_id, exc,
+            )
+            return False

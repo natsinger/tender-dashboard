@@ -1,13 +1,23 @@
 """Lightweight brochure analysis for on-demand building rights extraction.
 
-Downloads the פרסום ראשון (first publication) PDF from the Land Authority API,
+Downloads the best available brochure PDF from the Land Authority API,
 extracts plan number, gush, helka, lots, and generates a text summary.
+
+Document selection priority (find_best_brochure):
+    1. Full brochure (חוברת המכרז) from MichrazDocList — the multi-page
+       formal document with Sections 1-3, lot tables, zoning, bid limits.
+       Typically 1-40 MB, PirsumType=2.
+    2. MichrazFullDocument — a combined publication document, ~100-800 KB.
+       Contains more than pirsum rishon but less than the full brochure.
+    3. Pirsum rishon (פרסום ראשון) — 1-2 page announcement with inline
+       text only.  PirsumType=3.
 
 This module runs WITHOUT Playwright — it only uses HTTP requests and pdfplumber,
 making it safe for Streamlit Cloud deployment.
 
 Usage:
     from brochure_analyzer import download_and_analyze_brochure, trigger_extraction_workflow
+    from brochure_analyzer import find_best_brochure
     from data_client import LandTendersClient
 
     client = LandTendersClient()
@@ -47,9 +57,23 @@ _SUMMARY_SECTIONS = [
 _GH_REPO = "natsinger/tender-dashboard"
 _GH_WORKFLOW_FILE = "extract_building_rights.yml"
 
+# ---------------------------------------------------------------------------
+# Document type constants — returned by find_best_brochure() to indicate
+# which document was selected.
+# ---------------------------------------------------------------------------
+DOC_TYPE_CHOVERET: str = "choveret"          # Full brochure (חוברת המכרז)
+DOC_TYPE_FULL_DOCUMENT: str = "full_document"  # MichrazFullDocument (מסמך הפרסום המלא)
+DOC_TYPE_PIRSUM_RISHON: str = "pirsum_rishon"  # First publication (פרסום ראשון)
+
+# Keywords that identify the full brochure in MichrazDocList[].Teur.
+# Covers: "חוברת המכרז", "חוברת מעודכנת", "חוברת המכררז" (typo), etc.
+_CHOVERET_KEYWORDS: list[str] = ["חוברת"]
+
 
 def find_pirsum_rishon(details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Find the פרסום ראשון document from tender details.
+
+    Kept for backward compatibility. New code should use find_best_brochure().
 
     Priority order:
     1. MichrazDocList items where Teur contains "פרסום ראשון"
@@ -79,6 +103,81 @@ def find_pirsum_rishon(details: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     logger.warning("No brochure document found in tender details")
     return None
+
+
+def find_best_brochure(
+    details: Dict[str, Any],
+) -> tuple[Optional[Dict[str, Any]], str]:
+    """Find the best available brochure document from tender details.
+
+    Selection priority:
+        1. Full brochure (חוברת המכרז) from MichrazDocList — the formal
+           multi-page document with Sections 1-3.  Identified by "חוברת"
+           in Teur.  If multiple exist, picks the latest by UpdateDate.
+        2. MichrazFullDocument — the combined publication PDF (RowID=-1).
+        3. Pirsum rishon (פרסום ראשון) — the 1-2 page first-publication
+           announcement from MichrazDocList.
+
+    Args:
+        details: Tender details dict from the API.
+
+    Returns:
+        Tuple of (document_dict, doc_type_string).
+        document_dict is suitable for data_client.download_document().
+        doc_type_string is one of DOC_TYPE_CHOVERET, DOC_TYPE_FULL_DOCUMENT,
+        DOC_TYPE_PIRSUM_RISHON, or "" if nothing found (doc will be None).
+    """
+    # --- Priority 1: Full brochure (חוברת) in MichrazDocList ---
+    choveret_candidates: list[Dict[str, Any]] = []
+    pirsum_rishon: Optional[Dict[str, Any]] = None
+
+    for doc in details.get("MichrazDocList", []):
+        teur = (doc.get("Teur") or "").strip()
+
+        # Check for choveret
+        if any(kw in teur for kw in _CHOVERET_KEYWORDS):
+            choveret_candidates.append(doc)
+
+        # Also track pirsum rishon for fallback
+        if "פרסום ראשון" in teur and pirsum_rishon is None:
+            pirsum_rishon = doc
+
+    if choveret_candidates:
+        # If multiple choveret documents exist, pick the latest by UpdateDate,
+        # falling back to the highest RowID.
+        best = max(
+            choveret_candidates,
+            key=lambda d: (d.get("UpdateDate") or "", d.get("RowID") or 0),
+        )
+        logger.info(
+            "Selected full brochure (חוברת) from MichrazDocList: "
+            "Teur=%r, RowID=%s, Size=%s",
+            best.get("Teur"),
+            best.get("RowID"),
+            best.get("Size"),
+        )
+        return best, DOC_TYPE_CHOVERET
+
+    # --- Priority 2: MichrazFullDocument ---
+    full_doc = details.get("MichrazFullDocument")
+    if full_doc and full_doc.get("RowID") is not None:
+        logger.info(
+            "No חוברת found; using MichrazFullDocument (Size=%s)",
+            full_doc.get("Size"),
+        )
+        return full_doc, DOC_TYPE_FULL_DOCUMENT
+
+    # --- Priority 3: Pirsum rishon ---
+    if pirsum_rishon is not None:
+        logger.info(
+            "No חוברת or MichrazFullDocument; falling back to פרסום ראשון "
+            "(RowID=%s)",
+            pirsum_rishon.get("RowID"),
+        )
+        return pirsum_rishon, DOC_TYPE_PIRSUM_RISHON
+
+    logger.warning("No brochure document found in tender details")
+    return None, ""
 
 
 def generate_brochure_summary(pdf_bytes: bytes) -> str:
@@ -168,13 +267,14 @@ def download_and_analyze_brochure(
         result["errors"].append(f"Could not fetch details for tender {tender_id}")
         return result
 
-    # Step 2: Find the brochure document
-    doc = find_pirsum_rishon(details)
+    # Step 2: Find the best available brochure document
+    doc, doc_type = find_best_brochure(details)
     if not doc:
         result["errors"].append("No brochure document found")
         return result
 
     result["source_doc"] = doc.get("Teur") or doc.get("DocName") or "unknown"
+    result["doc_type"] = doc_type
 
     # Step 3: Download the PDF
     logger.info("Downloading brochure for tender %d...", tender_id)

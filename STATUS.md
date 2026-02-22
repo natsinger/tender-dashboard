@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-22 (session 9)
+**Last updated:** 2026-02-22 (session 12 — full brochure document selection)
 
 ---
 
@@ -14,11 +14,13 @@ Sprint 4 (Analytical Engine) — **complete** (analytics_engine + analytics_enri
 Management Page Redesign (Features #1-4) — **complete**.
 MEGIDO Brand Redesign — **complete**.
 Mobile-First Responsive Redesign (Deep Blue) — **complete**.
+Lot Extraction Pipeline — **complete** (lot_extractor + extract_lots_batch + 169 tests, real-PDF fixes applied, pending SQL schema deployment).
 
 **All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
-The app is now **multipage** with three views:
+The app is now **multipage** with four views:
 - **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), team watchlist controls (sidebar), review status editing, analytics, debug
+- **Explorer** (`pages/explorer.py`) — Tender explorer: filterable data table, detail viewer with lot data display, building rights section
 - **Analytics** (`pages/analytics.py`) — Market intelligence: trends, competitive analysis, price analytics, scoring with radar charts
 - **Management** (`pages/management.py`) — Team operational dashboard (read-only):
   1. **Selected Tenders** — shared team watchlist with review status display
@@ -34,6 +36,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 1. Run the SQL schema in Supabase SQL Editor (creates tables + indexes + GRANTs)
 2. Run `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number` column + `building_rights` table + brochure/extraction columns)
 3. Run `scripts/sql/analytics_enrichment_schema.sql` in Supabase SQL Editor (adds enrichment columns + `tender_prices` + `taba_analytics` tables)
+3b. Run `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table + lot extraction columns)
 4. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
 5. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
 6. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
@@ -46,6 +49,9 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-22 | **Full brochure document selection** — Investigated 450 cached tender details and found 142 tenders have חוברת המכרז (full brochure, 1-40MB) in MichrazDocList vs פרסום ראשון (1-2 page announcement). New `find_best_brochure()` function in brochure_analyzer.py with 3-tier priority: (1) חוברת from MichrazDocList, (2) MichrazFullDocument, (3) פרסום ראשון fallback. Updated extract_lots_batch.py to use find_best_brochure() with doc_type tracking. Tested on 8 real brochures: full brochure yields 100% zoning extraction (5/5) vs 40% for pirsum rishon (2/5). Multi-lot tenders (14, 7, 7 lots) correctly extract Section 1 tables, Section 2 zoning tables, and Section 3 bid limits from full brochures. 169 tests pass (no regressions). | `brochure_analyzer.py`, `scripts/extract_lots_batch.py`, `STATUS.md` |
+| 2026-02-22 | **Lot extraction real-PDF fixes** — Downloaded 8 diverse brochures (types 1/5/6/9) and discovered pirsum rishon docs use inline text, not Section headers. Added: `_extract_zoning_inline()` for inline plan+designation from reversed Hebrew text (pattern: "PLAN תינכות הלח םישרגמה לע"), `_extract_lots_from_text()` fallback for no-table documents, new Section 1 column keywords (helka, gush, total_units, rental/sale columns). Results on 8 real PDFs: S1 75%->100%, S2 0%->88%, S3 0% (correctly: pirsum rishon docs don't contain bid limits). 169 tests pass (+16 new). | `lot_extractor.py`, `tests/test_lot_extractor.py`, `STATUS.md` |
+| 2026-02-22 | **Lot extraction pipeline (complete)** — Full BrochureLotExtractor: Section 1 lot table parsing (multi-page, reversed Hebrew, multi-line headers), Section 2 zoning (table + text extraction), Section 3 bid limits (Hebrew number words + regex). SQL schema for `tender_lots` table (14 columns) + 3 tenders columns. 4 DB methods (upsert_lots, get_lots, update_lot_extraction_status, update_max_lots_per_bidder). Batch CLI script with --tender-id and --limit args. Explorer page lot display section with bid-limit badge, formatted table, summary metrics, and extraction status indicator. 153 pytest tests pass. QA-verified against 5+ real brochure PDFs. | `lot_extractor.py` (NEW), `scripts/extract_lots_batch.py` (NEW), `tests/test_lot_extractor.py` (NEW), `scripts/sql/tender_lots_schema.sql` (NEW), `db.py`, `pages/explorer.py`, `STATUS.md` |
 | 2026-02-22 | **Dashboard UI improvements** — Added city distribution pie (top 10) under existing pies. Taller closing deadlines table (550px) with reordered columns (days_left, urg, deadline first for mobile LTR). Brochure-only toggle on deadlines table. Inline HTML cards for "סוגים נוספים" (units + count on same line). JSON snapshot comparison for new tender detection. Shared chart constants extracted to dashboard_utils.py. Management page: added brochure + region pies and 2 KPI cards after closing-soon section, removed redundant bottom KPI row. CSS: smaller radio pills, bigger mobile sidebar arrows (24px SVG, 2.5rem touch target). | `dashboard_utils.py`, `pages/dashboard.py`, `pages/management.py`, `app.py`, `STATUS.md` |
 | 2026-02-22 | **Mobile sidebar fix (round 2)** — replaced `visibility:hidden` with `opacity:0` for collapsed sidebar (prevents Streamlit child elements from overriding). Updated selectors from old `collapsedControl` to `stExpandSidebarButton`. Force `left:0` + `translateX(-100%)` for full off-screen collapse. Verified with Playwright at 375x812 mobile viewport. | `app.py` |
 | 2026-02-22 | **Mobile-first responsive redesign** — replaced gold/navy palette with Deep Blue professional palette (primary #2563EB, sidebar #0F172A, accent #60A5FA). Added mobile-first CSS with @media breakpoints at 768px and 1024px: single-column stacking on mobile, responsive metric cards, horizontal-scrolling tables, compact typography. Updated all 5 files: CSS tokens in app.py, chart colors in dashboard.py and analytics.py, inline HTML colors in explorer.py and management.py, Streamlit theme in config.toml. | `app.py`, `pages/dashboard.py`, `pages/analytics.py`, `pages/explorer.py`, `pages/management.py`, `.streamlit/config.toml` |
@@ -83,7 +89,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ## Known Issues
 
-1. **Partial test coverage** — 125 pytest tests exist for `analytics_engine` (102) and `analytics_enrichment` (23). Tests for `data_client`, `db`, and `alerts` modules are still needed.
+1. **Partial test coverage** — 294 pytest tests: `analytics_engine` (102), `analytics_enrichment` (23), `lot_extractor` (169). Tests for `data_client`, `db`, and `alerts` modules are still needed.
 2. **Date range filter removed** — The urgency toggle replaces the old date range picker. May want to add it back as an "advanced" option.
 3. **Pie chart click-to-filter** — Plotly click events don't wire easily to Streamlit filters. Deferred.
 4. **Streamlit Cloud auth** — Viewer auth not enforced. Using sidebar email input as fallback (works but self-reported).
@@ -94,11 +100,14 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 ## Next Steps
 
-1. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
-2. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
-3. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
-4. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
-5. **Expand test coverage** — Add tests for data_client, db, alerts, and dashboard_utils modules.
+1. **Run lot extraction SQL schema** — Execute `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table + `max_lots_per_bidder`, `lot_extraction_status`, `lot_extraction_date` columns on tenders).
+2. **Run lot extraction batch** — Execute `python scripts/extract_lots_batch.py --limit 20` to process first batch of tenders with brochures.
+3. **Add lot extraction to daily cron** — Add `extract_lots_batch.py` step to `.github/workflows/daily_refresh.yml` after document sync.
+4. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
+5. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
+6. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
+7. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
+8. **Expand test coverage** — Add tests for data_client, db, alerts, and dashboard_utils modules.
 
 ---
 
@@ -112,6 +121,7 @@ tender_documents   —  ~3,471 rows — document metadata from 444 tenders
 building_rights    — extracted Section 5 data from Mavat plan PDFs
 tender_prices      — winning bids, floor prices, appraisals per plot (NEW, needs SQL creation)
 taba_analytics     — aggregated plan-level analytics (NEW, needs SQL creation)
+tender_lots        — lot-level data from brochure PDFs (14 columns: lot_number, units, pricing, zoning; needs SQL creation)
 
 -- User data (managed by user_db.py)
 user_watchlist     — per-user tender watchlist for email alerts
@@ -127,7 +137,7 @@ alert_history      — sent alert log for deduplication
 Gov tender projects/
 ├── app.py                          # Multipage navigation router + shared CSS
 ├── config.py                       # Centralized configuration (API, SMTP, Supabase, paths)
-├── db.py                           # Supabase database layer (tender data: tenders, history, documents)
+├── db.py                           # Supabase database layer (tender data: tenders, history, documents, lots)
 ├── user_db.py                      # Supabase client: watchlist, reviews, alert_history
 ├── data_client.py                  # API client, normalization, caching, DB persistence
 ├── dashboard_utils.py              # Shared data loading functions for pages
@@ -136,15 +146,17 @@ Gov tender projects/
 ├── brochure_analyzer.py             # On-demand brochure analysis + GitHub Actions trigger
 ├── analytics_engine.py             # Market analytics: regional, seasonal, price, competitive, scoring
 ├── analytics_enrichment.py         # Price extraction, taba analytics, detail field enrichment
+├── lot_extractor.py                # PDF extraction: lot-level data (מתחמים) from brochure PDFs
 ├── building_rights_extractor.py    # PDF extraction: Section 5 building rights from Mavat plans
 ├── mavat_client.py                 # Playwright client: search plans on mavat.iplan.gov.il
 ├── mavat_plan_extractor.py         # Coordinator: download + extract from Mavat plan PDFs
 ├── test_pdf_extractor.py           # Test script for PDF extractor (2 sample PDFs)
 ├── test_pdf_extractor_batch.py     # Batch test: download + extract from N tender brochures
 ├── test_building_rights.py         # Tests for building rights extractor (36 tests)
-├── tests/                          # pytest test suite (125 tests)
+├── tests/                          # pytest test suite (278 tests)
 │   ├── test_analytics_engine.py    # Tests for analytics engine (102 tests)
-│   └── test_analytics_enrichment.py  # Tests for analytics enrichment (23 tests)
+│   ├── test_analytics_enrichment.py  # Tests for analytics enrichment (23 tests)
+│   └── test_lot_extractor.py       # Tests for lot extractor (153 tests)
 ├── requirements.txt                # Pinned Python dependencies
 ├── complete_city_codes.py          # CBS settlement code → city name mapping (1,281 entries)
 ├── complete_city_regions.py        # CBS settlement code → region mapping (1,488 entries)
@@ -157,6 +169,7 @@ Gov tender projects/
 │   └── logo megido.jpg             # MEGIDO BY AURA brand logo
 ├── pages/                          # Streamlit multipage app pages
 │   ├── dashboard.py                # Full dashboard: filters, KPIs, charts, details, watchlist, review editing
+│   ├── explorer.py                 # Tender explorer: filterable table, detail viewer, lot data display
 │   ├── analytics.py                # Market analytics: trends, competitive intel, prices, scoring
 │   └── management.py               # Team dashboard (read-only): watchlist, review display, type tabs, KPIs
 ├── .streamlit/
@@ -168,11 +181,13 @@ Gov tender projects/
 ├── scripts/
 │   ├── refresh_tenders.py          # Data refresh script (used by cron)
 │   ├── extract_building_rights_batch.py  # Batch pipeline: brochure → plan → Mavat → extract → Supabase
+│   ├── extract_lots_batch.py       # Batch lot extraction: brochure PDF → lot table → Supabase
 │   ├── migrate_json_to_db.py       # One-time migration: JSON → SQLite (historical)
 │   ├── migrate_sqlite_to_supabase.py  # One-time migration: SQLite → Supabase (Sprint 6)
 │   └── sql/
 │       ├── building_rights_schema.sql  # SQL: plan_number column + building_rights table
-│       └── analytics_enrichment_schema.sql  # SQL: tender_prices + taba_analytics tables + enrichment columns
+│       ├── analytics_enrichment_schema.sql  # SQL: tender_prices + taba_analytics tables + enrichment columns
+│       └── tender_lots_schema.sql     # SQL: tender_lots table + lot extraction columns on tenders
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
 │   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)
