@@ -52,10 +52,10 @@ active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
 
 st.markdown(
     '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 4px 0;">'
-    '<span style="font-size:1.3rem;font-weight:700;color:#111827;">'
+    '<span style="font-size:1.3rem;font-weight:700;color:#1E293B;">'
     "סייר מכרזים"
     "</span>"
-    f'<span style="font-size:0.8rem;color:#9CA3AF;margin-right:auto;">{today.strftime("%d/%m/%Y")}</span>'
+    f'<span style="font-size:0.8rem;color:#64748B;margin-right:auto;">{today.strftime("%d/%m/%Y")}</span>'
     "</div>",
     unsafe_allow_html=True,
 )

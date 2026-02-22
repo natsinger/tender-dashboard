@@ -46,11 +46,11 @@ from config import CACHE_TTL, NON_ACTIVE_STATUSES, RELEVANT_TENDER_TYPES
 from dashboard_utils import load_data
 
 # ── Chart constants (matching dashboard.py MEGIDO design system) ─────────────
-MEGIDO_CHART_COLORS = ["#D4A017", "#3B82F6", "#1B2A4A", "#10B981", "#EF4444", "#8B5CF6"]
-MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
-PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#111827")
+MEGIDO_CHART_COLORS = ["#2563EB", "#60A5FA", "#1E3A5F", "#10B981", "#F59E0B", "#8B5CF6"]
+MEGIDO_GOLD_SCALE = [[0, "#DBEAFE"], [1, "#2563EB"]]
+PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E293B")
 PLOTLY_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-PLOTLY_GRID = dict(gridcolor="rgba(229,231,235,0.5)", zerolinecolor="rgba(229,231,235,0.7)")
+PLOTLY_GRID = dict(gridcolor="rgba(226,232,240,0.5)", zerolinecolor="rgba(226,232,240,0.7)")
 
 today = datetime.now()
 
@@ -157,10 +157,10 @@ active_df = filtered_df[~filtered_df["status"].isin(NON_ACTIVE_STATUSES)].copy()
 
 st.markdown(
     '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 4px 0;">'
-    '<span style="font-size:1.4rem;font-weight:700;color:#111827;">'
+    '<span style="font-size:1.4rem;font-weight:700;color:#1E293B;">'
     "MEGIDO | ניתוח שוק"
     "</span>"
-    '<span style="font-size:0.85rem;color:#9CA3AF;margin-right:auto;">'
+    '<span style="font-size:0.85rem;color:#64748B;margin-right:auto;">'
     "מגמות, ניקוד ומודיעין תחרותי"
     "</span>"
     "</div>",
@@ -203,8 +203,8 @@ if not pipeline_data.empty:
         y=pipeline_data["new_published"],
         name="מכרזים חדשים",
         fill="tozeroy",
-        line=dict(color="#D4A017", width=2),
-        fillcolor="rgba(212,160,23,0.3)",
+        line=dict(color="#2563EB", width=2),
+        fillcolor="rgba(37,99,235,0.3)",
     ))
     fig_pipeline.add_trace(go.Scatter(
         x=pipeline_data["date"],
@@ -283,7 +283,7 @@ with trend_tab2:
     if not momentum_data.empty:
         # Add direction arrows
         direction_map = {"up": "↑ עולה", "down": "↓ יורד", "stable": "→ יציב"}
-        color_map = {"up": "#10B981", "down": "#EF4444", "stable": "#9CA3AF"}
+        color_map = {"up": "#10B981", "down": "#EF4444", "stable": "#64748B"}
 
         display_mom = momentum_data.copy()
         display_mom["כיוון"] = display_mom["direction"].map(direction_map)
@@ -295,22 +295,22 @@ with trend_tab2:
             color = row["צבע"]
             rows_html += (
                 f"<tr>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;'>{row['region']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['recent_count']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['previous_count']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['change_pct']:.1f}%</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;color:{color};font-weight:600;'>{row['כיוון']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{row['region']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['recent_count']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['previous_count']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['change_pct']:.1f}%</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;color:{color};font-weight:600;'>{row['כיוון']}</td>"
                 f"</tr>"
             )
 
         st.markdown(
-            f"""<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB;">
-            <thead><tr style="background:#F9FAFB;">
-                <th style="padding:8px 12px;text-align:right;font-weight:600;border-bottom:2px solid #E5E7EB;">מחוז</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">תקופה אחרונה</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">תקופה קודמת</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">שינוי %</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">כיוון</th>
+            f"""<table style="width:100%;border-collapse:collapse;background:#FFFFFF;border-radius:8px;overflow:hidden;border:1px solid #E2E8F0;">
+            <thead><tr style="background:#F8FAFC;">
+                <th style="padding:8px 12px;text-align:right;font-weight:600;border-bottom:2px solid #E2E8F0;">מחוז</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">תקופה אחרונה</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">תקופה קודמת</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">שינוי %</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">כיוון</th>
             </tr></thead>
             <tbody>{rows_html}</tbody>
             </table>""",
@@ -350,7 +350,7 @@ with trend_tab4:
     ma_data = volume_moving_averages(filtered_df)
     if not ma_data.empty:
         fig_ma = go.Figure()
-        ma_colors = {"ma_30": "#D4A017", "ma_60": "#3B82F6", "ma_90": "#1B2A4A"}
+        ma_colors = {"ma_30": "#2563EB", "ma_60": "#3B82F6", "ma_90": "#1E3A5F"}
         ma_names = {"ma_30": "30 יום", "ma_60": "60 יום", "ma_90": "90 יום"}
         for col in ["ma_30", "ma_60", "ma_90"]:
             if col in ma_data.columns:
@@ -440,7 +440,7 @@ with ci_tab3:
     saturation_data = region_saturation_index(filtered_df)
     if not saturation_data.empty:
         trend_hebrew = {"saturating": "מתרווה", "opening": "נפתח", "stable": "יציב"}
-        trend_colors = {"saturating": "#EF4444", "opening": "#10B981", "stable": "#9CA3AF"}
+        trend_colors = {"saturating": "#EF4444", "opening": "#10B981", "stable": "#64748B"}
 
         rows_html = ""
         for _, row in saturation_data.iterrows():
@@ -454,29 +454,29 @@ with ci_tab3:
                 badge_color = "#10B981"
 
             trend_label = trend_hebrew.get(row["trend"], row["trend"])
-            trend_color = trend_colors.get(row["trend"], "#9CA3AF")
+            trend_color = trend_colors.get(row["trend"], "#64748B")
 
             rows_html += (
                 f"<tr>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;'>{row['region']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['active_count']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['closed_count']}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>{row['total_units']:,}</td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;'>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{row['region']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['active_count']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['closed_count']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['total_units']:,}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>"
                 f"<span style='background:{badge_color};color:#fff;padding:2px 8px;border-radius:12px;font-size:0.85rem;font-weight:600;'>{score:.0f}</span></td>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E5E7EB;text-align:center;color:{trend_color};font-weight:600;'>{trend_label}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;color:{trend_color};font-weight:600;'>{trend_label}</td>"
                 f"</tr>"
             )
 
         st.markdown(
-            f"""<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB;">
-            <thead><tr style="background:#F9FAFB;">
-                <th style="padding:8px 12px;text-align:right;font-weight:600;border-bottom:2px solid #E5E7EB;">מחוז</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">פעילים</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">סגורים</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">יח"ד</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">ציון רוויה</th>
-                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">מגמה</th>
+            f"""<table style="width:100%;border-collapse:collapse;background:#FFFFFF;border-radius:8px;overflow:hidden;border:1px solid #E2E8F0;">
+            <thead><tr style="background:#F8FAFC;">
+                <th style="padding:8px 12px;text-align:right;font-weight:600;border-bottom:2px solid #E2E8F0;">מחוז</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">פעילים</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">סגורים</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">יח"ד</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">ציון רוויה</th>
+                <th style="padding:8px 12px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">מגמה</th>
             </tr></thead>
             <tbody>{rows_html}</tbody>
             </table>""",
@@ -685,22 +685,22 @@ with score_tab1:
 
             rows_html += (
                 f"<tr>"
-                f"<td style='padding:5px 10px;border-bottom:1px solid #E5E7EB;'>{name}</td>"
-                f"<td style='padding:5px 10px;border-bottom:1px solid #E5E7EB;'>{city}</td>"
-                f"<td style='padding:5px 10px;border-bottom:1px solid #E5E7EB;'>{region}</td>"
-                f"<td style='padding:5px 10px;border-bottom:1px solid #E5E7EB;text-align:center;'>{units}</td>"
-                f"<td style='padding:5px 10px;border-bottom:1px solid #E5E7EB;text-align:center;'>{badge}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #E2E8F0;'>{name}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #E2E8F0;'>{city}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #E2E8F0;'>{region}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #E2E8F0;text-align:center;'>{units}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #E2E8F0;text-align:center;'>{badge}</td>"
                 f"</tr>"
             )
 
         st.markdown(
-            f"""<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB;">
-            <thead><tr style="background:#F9FAFB;">
-                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E5E7EB;">שם מכרז</th>
-                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E5E7EB;">עיר</th>
-                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E5E7EB;">מחוז</th>
-                <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">יח"ד</th>
-                <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #E5E7EB;">ציון</th>
+            f"""<table style="width:100%;border-collapse:collapse;background:#FFFFFF;border-radius:8px;overflow:hidden;border:1px solid #E2E8F0;">
+            <thead><tr style="background:#F8FAFC;">
+                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E2E8F0;">שם מכרז</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E2E8F0;">עיר</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:600;border-bottom:2px solid #E2E8F0;">מחוז</th>
+                <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">יח"ד</th>
+                <th style="padding:8px 10px;text-align:center;font-weight:600;border-bottom:2px solid #E2E8F0;">ציון</th>
             </tr></thead>
             <tbody>{rows_html}</tbody>
             </table>""",
@@ -794,8 +794,8 @@ with score_tab3:
                     r=values_closed,
                     theta=categories_closed,
                     fill="toself",
-                    fillcolor="rgba(212,160,23,0.25)",
-                    line=dict(color="#D4A017", width=2),
+                    fillcolor="rgba(37,99,235,0.2)",
+                    line=dict(color="#2563EB", width=2),
                     name="ציון",
                 ))
                 fig_radar.update_layout(
@@ -803,10 +803,10 @@ with score_tab3:
                         radialaxis=dict(
                             visible=True,
                             range=[0, 100],
-                            tickfont=dict(size=9, color="#9CA3AF"),
+                            tickfont=dict(size=9, color="#64748B"),
                         ),
                         angularaxis=dict(
-                            tickfont=dict(family="Inter, Heebo, sans-serif", size=12, color="#111827"),
+                            tickfont=dict(family="Inter, Heebo, sans-serif", size=12, color="#1E293B"),
                         ),
                         bgcolor="rgba(0,0,0,0)",
                     ),

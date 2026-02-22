@@ -37,9 +37,9 @@ from analytics_engine import score_all_tenders
 from user_db import REVIEW_STAGES, UserDB
 
 # ── Constants ────────────────────────────────────────────────────────────────
-MEGIDO_CHART_COLORS = ["#D4A017", "#3B82F6", "#1B2A4A", "#10B981", "#EF4444", "#8B5CF6"]
-MEGIDO_GOLD_SCALE = [[0, "#FEF3C7"], [1, "#D4A017"]]
-PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#111827")
+MEGIDO_CHART_COLORS = ["#2563EB", "#60A5FA", "#1E3A5F", "#10B981", "#F59E0B", "#8B5CF6"]
+MEGIDO_GOLD_SCALE = [[0, "#DBEAFE"], [1, "#2563EB"]]
+PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E293B")
 PLOTLY_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
 # Purpose filter: only include these ייעוד values across the entire dashboard
@@ -77,7 +77,7 @@ with st.sidebar:
     # ── Team watchlist management ────────────────────────────────────────
     st.markdown("---")
     st.markdown(
-        '<h4 style="color:#E5E7EB !important;">מכרזים מועדפים - חדר עסקאות</h4>',
+        '<h4 style="color:#E2E8F0 !important;">מכרזים מועדפים - חדר עסקאות</h4>',
         unsafe_allow_html=True,
     )
 
@@ -124,10 +124,10 @@ with st.sidebar:
                 _tc1, _tc2 = st.columns([5, 1])
                 with _tc1:
                     st.markdown(
-                        f'<span style="color:#E5E7EB;font-size:0.82rem;">'
+                        f'<span style="color:#E2E8F0;font-size:0.82rem;">'
                         f"{_tdisplay}"
                         f'</span><br>'
-                        f'<span style="color:#D4A017;font-size:0.75rem;">'
+                        f'<span style="color:#60A5FA;font-size:0.75rem;">'
                         f"{_tcity}{_tunits_str}"
                         f'</span>',
                         unsafe_allow_html=True,
@@ -151,10 +151,10 @@ with st.sidebar:
 
 st.markdown(
     '<div style="display:flex;align-items:center;gap:12px;padding:8px 0 4px 0;margin:0;">'
-    '<span style="font-size:1.25rem;font-weight:700;color:#111827;">'
+    '<span style="font-size:1.25rem;font-weight:700;color:#1E293B;">'
     'מכרזי מקרקעין פעילים רמ"י (פומבי, מחיר מטרה, דיור במחיר מופחת)'
     "</span>"
-    f'<span style="font-size:0.8rem;color:#9CA3AF;margin-right:auto;">{today.strftime("%d/%m/%Y")}</span>'
+    f'<span style="font-size:0.8rem;color:#64748B;margin-right:auto;">{today.strftime("%d/%m/%Y")}</span>'
     "</div>",
     unsafe_allow_html=True,
 )
@@ -288,7 +288,7 @@ with col_pies:
             fig1 = px.pie(
                 values=[avail, not_avail],
                 names=["יש חוברת", "בלי חוברת"],
-                color_discrete_sequence=["#D4A017", "#E5E7EB"],
+                color_discrete_sequence=["#2563EB", "#E2E8F0"],
                 hole=0.55,
             )
             fig1.update_traces(textinfo="value", textposition="inside", textfont_size=12)
@@ -650,7 +650,7 @@ with st.expander("ניתוח מפורט", expanded=False):
             fig_tl = px.line(
                 monthly, x="month", y="count", markers=True,
                 labels={"month": "חודש", "count": "מספר"},
-                color_discrete_sequence=["#1B2A4A"],
+                color_discrete_sequence=["#1E3A5F"],
             )
             fig_tl.update_layout(
                 height=260, margin=dict(t=10, b=30, l=10, r=10),
@@ -668,7 +668,7 @@ with st.expander("ניתוח מפורט", expanded=False):
             fig_u = px.bar(
                 units_by_type, x="tender_type", y="units",
                 labels={"units": 'סה"כ יח"ד', "tender_type": "סוג"},
-                color_discrete_sequence=["#D4A017"],
+                color_discrete_sequence=["#2563EB"],
             )
             fig_u.update_layout(
                 height=260, margin=dict(t=10, b=30, l=10, r=10),

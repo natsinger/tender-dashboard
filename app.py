@@ -47,6 +47,11 @@ st.markdown("""
 
 st.markdown("""
 <style>
+    /* ================================================================
+       MEGIDO Design System — Deep Blue Professional Palette
+       Mobile-first responsive layout
+       ================================================================ */
+
     /* ── Global RTL ── */
     html, body, [data-testid="stAppViewContainer"], .main .block-container {
         direction: rtl;
@@ -77,25 +82,34 @@ st.markdown("""
     /* Keep LTR for code / numbers where needed */
     code, pre, [data-testid="stMetricValue"] { direction: ltr; }
 
-    /* ── MEGIDO Design Tokens ── */
+    /* ── MEGIDO Design Tokens (Deep Blue) ── */
     :root {
-        --mg-bg-main: #F0F2F5;
+        --mg-bg-main: #F8FAFC;
         --mg-bg-card: #FFFFFF;
-        --mg-bg-sidebar: #111827;
-        --mg-sidebar-header: #0D1321;
-        --mg-primary: #D4A017;
-        --mg-primary-hover: #B8860B;
-        --mg-navy: #1B2A4A;
-        --mg-text-heading: #111827;
-        --mg-text-body: #374151;
-        --mg-text-muted: #9CA3AF;
-        --mg-text-on-dark: #E5E7EB;
-        --mg-text-on-dark-muted: #6B7280;
-        --mg-border: #E5E7EB;
-        --mg-border-dark: #1F2937;
+        --mg-bg-sidebar: #0F172A;
+        --mg-sidebar-header: #0F172A;
+        --mg-primary: #2563EB;
+        --mg-primary-hover: #1D4ED8;
+        --mg-primary-light: #DBEAFE;
+        --mg-secondary: #1E3A5F;
+        --mg-accent: #60A5FA;
+        --mg-text-heading: #1E293B;
+        --mg-text-body: #334155;
+        --mg-text-muted: #64748B;
+        --mg-text-on-dark: #E2E8F0;
+        --mg-text-on-dark-muted: #94A3B8;
+        --mg-border: #E2E8F0;
+        --mg-border-dark: #1E293B;
         --mg-success: #10B981;
         --mg-warning: #F59E0B;
         --mg-danger: #EF4444;
+
+        /* Spacing scale */
+        --mg-space-xs: 4px;
+        --mg-space-sm: 8px;
+        --mg-space-md: 16px;
+        --mg-space-lg: 24px;
+        --mg-space-xl: 32px;
     }
 
     /* ── Typography & Foundation ── */
@@ -114,7 +128,11 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    .block-container { padding-top: 1rem; padding-bottom: 1rem; }
+    .block-container {
+        padding-top: 0.75rem;
+        padding-bottom: 1rem;
+        max-width: 100%;
+    }
 
     /* ── Sort Icon Fix: Force Font & Align ── */
     [data-testid="stIconMaterial"] {
@@ -128,16 +146,20 @@ st.markdown("""
         float: left !important;
     }
 
-    /* ── Metric Cards (MEGIDO Executive) ── */
+    /* ── Metric Cards ── */
     [data-testid="stMetric"] {
         background-color: var(--mg-bg-card) !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         border: 1px solid var(--mg-border) !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06) !important;
-        padding: 12px 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+        padding: 14px 16px !important;
         position: relative;
+        transition: box-shadow 0.15s ease;
     }
-    /* Gold accent stripe on right (RTL) */
+    [data-testid="stMetric"]:hover {
+        box-shadow: 0 4px 12px rgba(37,99,235,0.1), 0 2px 4px rgba(0,0,0,0.06) !important;
+    }
+    /* Blue accent stripe on right (RTL) */
     [data-testid="stMetric"]::before {
         content: '';
         position: absolute;
@@ -159,7 +181,7 @@ st.markdown("""
         font-size: 12px !important;
     }
 
-    /* ── Sidebar (Dark Executive) ── */
+    /* ── Sidebar (Dark Slate) ── */
     section[data-testid="stSidebar"] > div {
         direction: rtl;
         text-align: right;
@@ -167,8 +189,6 @@ st.markdown("""
     section[data-testid="stSidebar"] {
         background-color: var(--mg-bg-sidebar) !important;
         background-image: none !important;
-        min-width: 285px !important;
-        width: 285px !important;
         box-shadow: 1px 0 0 var(--mg-border-dark);
     }
 
@@ -196,8 +216,8 @@ st.markdown("""
     /* Dark sidebar widget overrides */
     section[data-testid="stSidebar"] [data-baseweb="select"],
     section[data-testid="stSidebar"] [data-baseweb="input"] {
-        background-color: #1F2937 !important;
-        border-color: #374151 !important;
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="select"] input,
     section[data-testid="stSidebar"] [data-baseweb="input"] input {
@@ -205,19 +225,19 @@ st.markdown("""
     }
     section[data-testid="stSidebar"] [data-baseweb="tag"] {
         background-color: var(--mg-primary) !important;
-        color: #111827 !important;
+        color: #FFFFFF !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="select"] [data-baseweb="icon"] {
         color: var(--mg-text-on-dark-muted) !important;
     }
 
-    /* Sidebar text inputs, password fields, auth forms — ensure ALL text visible */
+    /* Sidebar text inputs, password fields, auth forms */
     section[data-testid="stSidebar"] input,
     section[data-testid="stSidebar"] textarea {
         color: var(--mg-text-on-dark) !important;
-        background-color: #1F2937 !important;
-        border-color: #374151 !important;
-        caret-color: var(--mg-primary) !important;
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
+        caret-color: var(--mg-accent) !important;
     }
     section[data-testid="stSidebar"] input::placeholder,
     section[data-testid="stSidebar"] textarea::placeholder {
@@ -228,8 +248,8 @@ st.markdown("""
     section[data-testid="stSidebar"] [data-testid="stTextInput"] > div,
     section[data-testid="stSidebar"] [data-testid="stPasswordInput"] > div,
     section[data-testid="stSidebar"] [data-testid="stForm"] input {
-        background-color: #1F2937 !important;
-        border-color: #374151 !important;
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
     }
     section[data-testid="stSidebar"] [data-testid="stTextInput"] label,
     section[data-testid="stSidebar"] [data-testid="stPasswordInput"] label {
@@ -246,27 +266,27 @@ st.markdown("""
         color: var(--mg-text-on-dark-muted) !important;
     }
 
-    /* ── Tables (Clean bordered) ── */
+    /* ── Tables (Clean bordered + mobile scroll) ── */
     [data-testid="stDataFrame"], .stDataFrame {
         border: 1px solid var(--mg-border) !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         overflow: hidden;
     }
 
-    /* ── Buttons (MEGIDO Gold) ── */
+    /* ── Buttons (Deep Blue) ── */
     .stButton button {
         background-color: var(--mg-primary) !important;
-        color: #111827 !important;
+        color: #FFFFFF !important;
         border-radius: 8px !important;
         border: none !important;
         padding: 10px 24px !important;
         font-weight: 600 !important;
-        box-shadow: 0 1px 2px rgba(212, 160, 23, 0.2) !important;
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2) !important;
         transition: all 0.15s ease;
     }
     .stButton button:hover {
         background-color: var(--mg-primary-hover) !important;
-        box-shadow: 0 4px 12px rgba(212, 160, 23, 0.3) !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
         transform: translateY(-1px);
     }
 
@@ -275,8 +295,8 @@ st.markdown("""
         font-family: 'Inter', 'Heebo', sans-serif !important;
         color: var(--mg-text-heading) !important;
         font-weight: 700 !important;
-        font-size: 16px !important;
-        margin-bottom: 10px !important;
+        font-size: 15px !important;
+        margin-bottom: 8px !important;
         text-align: center !important;
     }
 
@@ -303,13 +323,13 @@ st.markdown("""
         line-height: 1.4;
     }
     div[role="radiogroup"] label:hover {
-        background-color: #FFFBEB;
+        background-color: var(--mg-primary-light);
     }
     /* Active/selected radio pill */
     div[role="radiogroup"] label[data-checked="true"],
     div[role="radiogroup"] label:has(input:checked) {
         background-color: var(--mg-primary) !important;
-        color: #111827 !important;
+        color: #FFFFFF !important;
         font-weight: 600 !important;
         box-shadow: none;
     }
@@ -369,15 +389,15 @@ st.markdown("""
 
     /* ── Sidebar custom header (MEGIDO branding) ── */
     .sidebar-header {
-        background-color: var(--mg-sidebar-header);
+        background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
         border-radius: 12px;
         padding: 24px 16px 20px;
         text-align: center;
         margin-bottom: 16px;
-        border: 1px solid var(--mg-border-dark);
+        border: 1px solid #334155;
     }
     .sidebar-header h2 {
-        color: var(--mg-primary) !important;
+        color: #60A5FA !important;
         font-size: 1.5rem;
         font-weight: 700;
         margin: 0;
@@ -405,8 +425,8 @@ st.markdown("""
 
     /* ── New tenders highlight table ── */
     .new-tenders-card {
-        background: #ECFDF5;
-        border: 1px solid #6EE7B7;
+        background: #EFF6FF;
+        border: 1px solid #93C5FD;
         border-radius: 10px;
         padding: 10px;
         margin-bottom: 8px;
@@ -459,7 +479,7 @@ st.markdown("""
         overflow: visible;
     }
     [data-testid="stHorizontalBlock"] {
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
     /* ── Plotly chart containers: no overflow ── */
@@ -497,6 +517,98 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         border-bottom-color: var(--mg-primary) !important;
         color: var(--mg-primary) !important;
+    }
+
+    /* ================================================================
+       MOBILE-FIRST RESPONSIVE BREAKPOINTS
+       ================================================================ */
+
+    /* ── Mobile: <768px — compact, single-column friendly ── */
+    @media (max-width: 767px) {
+        .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-top: 0.5rem;
+        }
+
+        /* Stack columns vertically on mobile */
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+            gap: 0.5rem;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+
+        /* Smaller metric values on mobile */
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important;
+        }
+        [data-testid="stMetric"] {
+            padding: 10px 12px !important;
+        }
+
+        /* Reduce heading sizes */
+        h1 { font-size: 1.3rem !important; }
+        h2 { font-size: 1.1rem !important; }
+        h3 { font-size: 1rem !important; }
+        h4 { font-size: 0.9rem !important; }
+
+        /* Full-width tables with horizontal scroll */
+        [data-testid="stDataFrame"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Compact section headers */
+        .section-header {
+            font-size: 0.9rem;
+            margin: 0.3rem 0;
+        }
+
+        /* Tabs: smaller text, scroll if needed */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem !important;
+            padding: 8px 12px !important;
+        }
+
+        /* Radio pills: smaller on mobile */
+        div[role="radiogroup"] label {
+            font-size: 0.6rem !important;
+            padding: 2px 6px !important;
+        }
+
+        /* Pie title smaller */
+        .pie-title {
+            font-size: 13px !important;
+        }
+
+        /* Button full-width on mobile */
+        .stButton button {
+            width: 100%;
+            padding: 10px 16px !important;
+        }
+    }
+
+    /* ── Tablet: 768px–1024px ── */
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 20px !important;
+        }
+    }
+
+    /* ── Desktop: >1024px ── */
+    @media (min-width: 1025px) {
+        .block-container {
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
