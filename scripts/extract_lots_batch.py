@@ -208,8 +208,13 @@ def process_tender(
         result["lots_count"] = upserted
         logger.info("Tender %d: upserted %d lots", tender_id, upserted)
 
-    # Step 6: Persist max_lots_per_bidder if found
-    if max_lots is not None:
+    # Step 6: Persist max_lots_per_bidder — only if API didn't already
+    # provide it (MaxToWin in the daily refresh is the source of truth).
+    api_max = details.get("MaxToWin")
+    if api_max is not None:
+        result["max_lots_per_bidder"] = api_max
+        logger.info("Tender %d: using API MaxToWin=%d", tender_id, api_max)
+    elif max_lots is not None:
         db.update_max_lots_per_bidder(tender_id, max_lots)
         result["max_lots_per_bidder"] = max_lots
 

@@ -556,6 +556,7 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         "PirsumDate": "official_publish_date",
         "ChoveretUpdateDate": "brochure_update_date",
         "KhalYaadRashi": "target_audience",
+        "MaxToWin": "max_lots_per_bidder",
     }
 
     df = df.rename(columns=column_mapping)

@@ -41,6 +41,7 @@ TENDER_COLUMNS = [
     "rmi_region_code", "official_publish_date", "brochure_update_date",
     "target_audience", "acquisition_form", "participation_fee",
     "tender_duration_days", "land_area_sqm", "plan_number",
+    "max_lots_per_bidder",
 ]
 
 # Batch size for Supabase upsert operations.
@@ -235,6 +236,7 @@ class TenderDB:
                 "participation_fee": _clean_val(row.get("participation_fee")),
                 "tender_duration_days": _clean_val(row.get("tender_duration_days")),
                 "land_area_sqm": _clean_val(row.get("land_area_sqm")),
+                "max_lots_per_bidder": _clean_val(row.get("max_lots_per_bidder")),
                 "last_updated": now,
             }
             tender_rows.append(tender_row)
