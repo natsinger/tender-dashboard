@@ -353,32 +353,22 @@ with col_pies:
             horizontal=True, key="urgency_pie2", label_visibility="collapsed",
         )
 
-    # ── Pie 3: City distribution (full width under the two pies) ──────────
+    # ── Bar chart: City distribution (full width under the two pies) ─────
     st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
     if "city" in active_df.columns and len(active_df) > 0:
         city_counts = active_df["city"].value_counts().head(10)
         if len(city_counts) > 0:
-            fig_city_pie = px.pie(
-                values=city_counts.values,
-                names=city_counts.index,
-                hole=0.55,
-                color_discrete_sequence=MEGIDO_CHART_COLORS,
+            fig_city_bar = px.bar(
+                x=city_counts.values, y=city_counts.index, orientation="h",
+                labels={"x": "מספר מכרזים", "y": "עיר"},
+                color=city_counts.values, color_continuous_scale=MEGIDO_GOLD_SCALE,
             )
-            fig_city_pie.update_traces(textinfo="value", textposition="inside", textfont_size=12)
-            fig_city_pie.update_layout(
-                height=220, margin=dict(t=5, b=30, l=5, r=5),
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="top",
-                    y=-0.05,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(size=10),
-                ),
+            fig_city_bar.update_layout(
+                showlegend=False, height=220,
+                margin=dict(t=5, b=20, l=5, r=5),
                 font=PLOTLY_FONT, **PLOTLY_BG,
             )
-            st.plotly_chart(fig_city_pie, use_container_width=True, key="pie_city")
+            st.plotly_chart(fig_city_bar, use_container_width=True, key="bar_city")
         else:
             st.info("אין נתוני ערים")
     else:
@@ -394,7 +384,7 @@ with col_deadlines:
     with _toggle_col1:
         show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
     with _toggle_col2:
-        brochure_only = st.toggle("בלי חוברות", value=False, key="brochure_toggle")
+        show_without_brochure = st.toggle("בלי חוברת", value=False, key="brochure_toggle")
 
     upcoming = active_df[
         (active_df["deadline"].notna())
@@ -404,8 +394,8 @@ with col_deadlines:
     if not show_all_deadlines:
         upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
 
-    # Brochure filter: when OFF (default) show only tenders WITH brochure
-    if not brochure_only and "published_booklet" in upcoming.columns:
+    # Default: show only tenders WITH brochure. Toggle ON = include those without.
+    if not show_without_brochure and "published_booklet" in upcoming.columns:
         upcoming = upcoming[upcoming["published_booklet"] == True]
 
     if len(upcoming) > 0:
