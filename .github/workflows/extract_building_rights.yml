@@ -1,0 +1,42 @@
+name: Extract Building Rights
+
+on:
+  workflow_dispatch:
+    inputs:
+      tender_id:
+        description: "Tender ID to extract building rights for"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pandas python-dotenv supabase pdfplumber playwright
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      - name: Extract building rights
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python scripts/extract_building_rights_batch.py \
+            --tender-ids ${{ github.event.inputs.tender_id }} \
+            --max-per-run 1

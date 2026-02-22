@@ -24,7 +24,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests pandas python-dotenv supabase
+          pip install requests pandas python-dotenv supabase pdfplumber playwright
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
 
       - name: Fetch tenders and send alerts
         env:
@@ -37,6 +40,13 @@ jobs:
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
         run: python scripts/refresh_tenders.py
+
+      - name: Extract building rights for watchlisted tenders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/extract_building_rights_batch.py --max-per-run 5
+        continue-on-error: true
 
       - name: Commit and push snapshot
         run: |
