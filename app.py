@@ -303,24 +303,24 @@ st.markdown("""
     /* ── Pill-style Radio Buttons (Main Area) ── */
     div[role="radiogroup"] {
         background-color: var(--mg-bg-card);
-        padding: 2px;
-        border-radius: 8px;
+        padding: 1px;
+        border-radius: 6px;
         display: inline-flex;
         border: 1px solid var(--mg-border);
         box-shadow: none;
-        gap: 2px;
+        gap: 1px;
     }
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
     div[role="radiogroup"] label {
-        padding: 2px 8px !important;
+        padding: 1px 5px !important;
         border-radius: 6px !important;
         margin: 0 !important;
         transition: all 0.15s ease;
-        font-size: 0.65rem !important;
+        font-size: 0.58rem !important;
         cursor: pointer;
-        line-height: 1.4;
+        line-height: 1.2;
     }
     div[role="radiogroup"] label:hover {
         background-color: var(--mg-primary-light);
@@ -340,7 +340,7 @@ st.markdown("""
     }
     /* Shrink the radio container inside columns */
     [data-testid="stColumn"] .stRadio {
-        margin-top: -8px;
+        margin-top: -10px;
         margin-bottom: 0;
     }
 
@@ -576,6 +576,17 @@ st.markdown("""
         [data-testid="stExpandSidebarButton"] {
             z-index: 901 !important;
         }
+        /* Bigger sidebar toggle arrows on mobile (touch-friendly) */
+        [data-testid="stExpandSidebarButton"] button,
+        [data-testid="stSidebarCollapseButton"] button {
+            min-width: 2.5rem !important;
+            min-height: 2.5rem !important;
+        }
+        [data-testid="stExpandSidebarButton"] button svg,
+        [data-testid="stSidebarCollapseButton"] button svg {
+            width: 24px !important;
+            height: 24px !important;
+        }
 
         /* Stack columns vertically on mobile */
         [data-testid="stHorizontalBlock"] {
@@ -628,8 +639,8 @@ st.markdown("""
 
         /* Radio pills: smaller on mobile */
         div[role="radiogroup"] label {
-            font-size: 0.6rem !important;
-            padding: 2px 6px !important;
+            font-size: 0.5rem !important;
+            padding: 1px 4px !important;
         }
 
         /* Pie title smaller */

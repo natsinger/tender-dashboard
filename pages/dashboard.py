@@ -29,18 +29,17 @@ from config import (
     TENDER_DETAIL_API,
 )
 from dashboard_utils import (
+    MEGIDO_CHART_COLORS,
+    MEGIDO_GOLD_SCALE,
+    PLOTLY_BG,
+    PLOTLY_FONT,
+    find_new_tender_ids_from_snapshots,
     get_user_email,
     load_data,
     render_email_input,
 )
 from analytics_engine import score_all_tenders
 from user_db import REVIEW_STAGES, UserDB
-
-# ── Constants ────────────────────────────────────────────────────────────────
-MEGIDO_CHART_COLORS = ["#2563EB", "#60A5FA", "#1E3A5F", "#10B981", "#F59E0B", "#8B5CF6"]
-MEGIDO_GOLD_SCALE = [[0, "#DBEAFE"], [1, "#2563EB"]]
-PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E293B")
-PLOTLY_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
 # Purpose filter: only include these ייעוד values across the entire dashboard
 RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
@@ -176,6 +175,9 @@ def _last_sunday(ref_date: datetime) -> datetime:
 sunday_cutoff = _last_sunday(today)
 since_date_str = sunday_cutoff.strftime("%Y-%m-%d")
 
+# ── Detect new tenders via JSON snapshot comparison ──────────────────────────
+snapshot_new_ids = find_new_tender_ids_from_snapshots()
+
 # ── Fetch new documents from the DB ──────────────────────────────────────────
 from db import TenderDB
 
@@ -197,6 +199,9 @@ if not new_docs_df.empty and "tender_id" in new_docs_df.columns:
     brochure_docs = new_docs_df[brochure_mask]
     if not brochure_docs.empty:
         new_brochure_tender_ids = set(brochure_docs["tender_id"].unique())
+
+# Merge: union of DB-based new docs + snapshot-based new tenders
+new_doc_tender_ids = new_doc_tender_ids | snapshot_new_ids
 
 # Filter to only active tenders within our dataset
 table1_df = active_df[active_df["tender_id"].isin(new_doc_tender_ids)].copy()
@@ -348,13 +353,48 @@ with col_pies:
             horizontal=True, key="urgency_pie2", label_visibility="collapsed",
         )
 
+    # ── Pie 3: City distribution (full width under the two pies) ──────────
+    st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
+    if "city" in active_df.columns and len(active_df) > 0:
+        city_counts = active_df["city"].value_counts().head(10)
+        if len(city_counts) > 0:
+            fig_city_pie = px.pie(
+                values=city_counts.values,
+                names=city_counts.index,
+                hole=0.55,
+                color_discrete_sequence=MEGIDO_CHART_COLORS,
+            )
+            fig_city_pie.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+            fig_city_pie.update_layout(
+                height=220, margin=dict(t=5, b=30, l=5, r=5),
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="top",
+                    y=-0.05,
+                    xanchor="center",
+                    x=0.5,
+                    font=dict(size=10),
+                ),
+                font=PLOTLY_FONT, **PLOTLY_BG,
+            )
+            st.plotly_chart(fig_city_pie, use_container_width=True, key="pie_city")
+        else:
+            st.info("אין נתוני ערים")
+    else:
+        st.info("אין נתונים")
+
 with col_deadlines:
     st.markdown(
         '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">מועדי סגירה</div>',
         unsafe_allow_html=True,
     )
 
-    show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
+    _toggle_col1, _toggle_col2 = st.columns(2)
+    with _toggle_col1:
+        show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
+    with _toggle_col2:
+        brochure_only = st.toggle("בלי חוברות", value=False, key="brochure_toggle")
 
     upcoming = active_df[
         (active_df["deadline"].notna())
@@ -363,6 +403,10 @@ with col_deadlines:
 
     if not show_all_deadlines:
         upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
+
+    # Brochure filter: when OFF (default) show only tenders WITH brochure
+    if not brochure_only and "published_booklet" in upcoming.columns:
+        upcoming = upcoming[upcoming["published_booklet"] == True]
 
     if len(upcoming) > 0:
         up_disp = upcoming[["tender_name", "city", "units", "deadline"]].copy()
@@ -378,19 +422,22 @@ with col_deadlines:
         up_disp.insert(0, "urg", up_disp["days_left"].apply(_urgency))
         up_disp["deadline"] = up_disp["deadline"].dt.strftime("%d/%m")
 
+        # Reorder: days_left, urg, deadline first (leftmost = visible on mobile LTR scroll)
+        up_disp = up_disp[["days_left", "urg", "deadline", "tender_name", "city", "units"]]
+
         st.dataframe(
             up_disp,
             column_config={
+                "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
                 "urg": st.column_config.TextColumn("", width="small"),
+                "deadline": st.column_config.TextColumn("סגירה", width="small"),
                 "tender_name": st.column_config.TextColumn("שם", width="medium"),
                 "city": st.column_config.TextColumn("עיר", width="small"),
                 "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
-                "deadline": st.column_config.TextColumn("סגירה", width="small"),
-                "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
             },
             hide_index=True,
             use_container_width=True,
-            height=min(35 * len(up_disp) + 38, 350),
+            height=min(35 * len(up_disp) + 38, 550),
         )
         st.caption(f"{len(up_disp)} מכרזים")
     else:
@@ -579,23 +626,42 @@ _all_active = _all_typed[~_all_typed["status"].isin(NON_ACTIVE_STATUSES)].copy()
 
 bc1, bc2, bc3 = st.columns(3)
 
+_CARD_HTML = """<div style="
+    background:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;
+    padding:14px 16px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,0.06);
+"><div style="
+    position:absolute;right:0;top:12px;bottom:12px;width:3px;
+    background:#2563EB;border-radius:3px;
+"></div>
+<div style="color:#64748B;font-weight:500;font-size:12px;margin-bottom:4px;">{label}</div>
+<div style="display:flex;align-items:baseline;gap:8px;">
+    <span style="color:#1E293B;font-weight:700;font-size:22px;">{units} יח&quot;ד</span>
+    <span style="color:#64748B;font-size:12px;">{count} מכרזים</span>
+</div></div>"""
+
 with bc1:
     _diur_hashkara = _all_active[_all_active["tender_type"] == "דיור להשכרה"]
     _units_dh = int(_diur_hashkara["units"].sum()) if len(_diur_hashkara) > 0 else 0
-    st.metric("דיור להשכרה", f'{_units_dh:,} יח"ד')
-    st.caption(f"{len(_diur_hashkara)} מכרזים")
+    st.markdown(
+        _CARD_HTML.format(label="דיור להשכרה", units=f"{_units_dh:,}", count=len(_diur_hashkara)),
+        unsafe_allow_html=True,
+    )
 
 with bc2:
     _diur_mugan = _all_active[_all_active["purpose"].str.contains("דיור מוגן", na=False)] if "purpose" in _all_active.columns else pd.DataFrame()
     _units_dm = int(_diur_mugan["units"].sum()) if len(_diur_mugan) > 0 else 0
-    st.metric("דיור מוגן", f'{_units_dm:,} יח"ד')
-    st.caption(f"{len(_diur_mugan)} מכרזים")
+    st.markdown(
+        _CARD_HTML.format(label="דיור מוגן", units=f"{_units_dm:,}", count=len(_diur_mugan)),
+        unsafe_allow_html=True,
+    )
 
 with bc3:
     _yezum = _all_active[_all_active["tender_type"] == "מכרז ייזום"]
     _units_yz = int(_yezum["units"].sum()) if len(_yezum) > 0 else 0
-    st.metric("מכרז ייזום", f'{_units_yz:,} יח"ד')
-    st.caption(f"{len(_yezum)} מכרזים")
+    st.markdown(
+        _CARD_HTML.format(label="מכרז ייזום", units=f"{_units_yz:,}", count=len(_yezum)),
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================================
