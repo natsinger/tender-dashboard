@@ -26,7 +26,7 @@ st.set_page_config(
     page_title="MEGIDO | מגידו",
     page_icon="M",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ── Load fonts: Inter + Heebo (typography), Material (dataframe sort arrows) ──
@@ -520,15 +520,94 @@ st.markdown("""
     }
 
     /* ================================================================
+       TABLES — LTR by default (numbers/data read naturally left→right)
+       Narrow columns minimized.
+       ================================================================ */
+
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] table,
+    [data-testid="stDataFrame"] th,
+    [data-testid="stDataFrame"] td,
+    .stDataFrame,
+    .stDataFrame table {
+        direction: ltr !important;
+        text-align: left !important;
+    }
+    /* Compact table cells */
+    [data-testid="stDataFrame"] th,
+    [data-testid="stDataFrame"] td {
+        white-space: nowrap;
+        padding: 4px 8px !important;
+        font-size: 0.85rem;
+    }
+
+    /* ================================================================
        MOBILE-FIRST RESPONSIVE BREAKPOINTS
        ================================================================ */
 
     /* ── Mobile: <768px — compact, single-column friendly ── */
     @media (max-width: 767px) {
+
+        /* ── Sidebar: fully collapse off-screen on mobile ── */
+        section[data-testid="stSidebar"] {
+            position: fixed !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 85vw !important;
+            max-width: 320px !important;
+            min-width: 0 !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            z-index: 1000 !important;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.3) !important;
+        }
+        /* Scrim behind open sidebar */
+        section[data-testid="stSidebar"]::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            background: rgba(0,0,0,0.4);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* ── Main content: clear the Streamlit header ── */
         .block-container {
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
-            padding-top: 0.5rem;
+            padding-top: 3.5rem !important;
+        }
+        /* Shrink Streamlit's native top header bar */
+        [data-testid="stHeader"] {
+            height: 2.5rem !important;
+            min-height: 2.5rem !important;
+            padding: 0 0.5rem !important;
+            background: var(--mg-bg-main) !important;
+            z-index: 900;
+        }
+        /* Make hamburger button more visible on mobile */
+        [data-testid="collapsedControl"] {
+            position: fixed !important;
+            top: 0.5rem !important;
+            right: 0.5rem !important;
+            z-index: 901 !important;
+        }
+        [data-testid="collapsedControl"] button::after {
+            font-size: 1.5rem;
+            background: var(--mg-primary);
+            color: #FFFFFF;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
         /* Stack columns vertically on mobile */
@@ -559,6 +638,7 @@ st.markdown("""
         [data-testid="stDataFrame"] {
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
+            max-width: 100vw !important;
         }
 
         /* Compact section headers */
@@ -567,10 +647,16 @@ st.markdown("""
             margin: 0.3rem 0;
         }
 
-        /* Tabs: smaller text, scroll if needed */
+        /* Tabs: smaller text, horizontal scroll */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            flex-wrap: nowrap !important;
+        }
         .stTabs [data-baseweb="tab"] {
             font-size: 0.8rem !important;
             padding: 8px 12px !important;
+            white-space: nowrap;
         }
 
         /* Radio pills: smaller on mobile */
@@ -589,6 +675,17 @@ st.markdown("""
             width: 100%;
             padding: 10px 16px !important;
         }
+
+        /* Expanders: tighter on mobile */
+        [data-testid="stExpander"] {
+            margin-top: 0.25rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+
+        /* Plotly charts: constrain height on mobile */
+        .stPlotlyChart {
+            max-height: 280px !important;
+        }
     }
 
     /* ── Tablet: 768px–1024px ── */
@@ -596,6 +693,7 @@ st.markdown("""
         .block-container {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
+            padding-top: 2rem !important;
         }
 
         [data-testid="stMetricValue"] {
