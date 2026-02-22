@@ -344,38 +344,12 @@ st.markdown("""
         margin-bottom: 0;
     }
 
-    /* ── Sidebar Toggle Fix (Force replace broken icons with Unicode) ── */
+    /* ── Sidebar Toggle Buttons ── */
     [data-testid="stSidebarCollapseButton"] button,
-    [data-testid="collapsedControl"] button,
-    button[kind="header"] {
+    [data-testid="stExpandSidebarButton"] button,
+    button[kind="headerNoPadding"] {
         border: none !important;
         background: transparent !important;
-    }
-    [data-testid="stSidebarCollapseButton"] button span,
-    [data-testid="collapsedControl"] button span,
-    button[kind="header"] span {
-        display: none !important;
-    }
-
-    /* Collapsed state (Hamburger) */
-    [data-testid="collapsedControl"] button::after,
-    button[kind="header"]::after {
-        content: "\2630";
-        font-size: 1.8rem;
-        color: var(--mg-text-heading);
-        display: block;
-        line-height: 1;
-        cursor: pointer;
-    }
-
-    /* Expanded state (Close X) — light for dark sidebar */
-    [data-testid="stSidebarCollapseButton"] button::after {
-        content: "\2715";
-        font-size: 1.5rem;
-        color: var(--mg-text-on-dark-muted);
-        display: block;
-        line-height: 1;
-        cursor: pointer;
     }
 
     /* ── Expander Arrow Fix (Hide arrow, keep clickable) ── */
@@ -548,66 +522,59 @@ st.markdown("""
     /* ── Mobile: <768px — compact, single-column friendly ── */
     @media (max-width: 767px) {
 
-        /* ── Sidebar: fully collapse off-screen on mobile ── */
+        /* ── Sidebar: force left:0 so translateX(-100%) hides it fully ── */
         section[data-testid="stSidebar"] {
-            position: fixed !important;
-            top: 0 !important;
-            right: 0 !important;
+            left: 0 !important;
             width: 85vw !important;
             max-width: 320px !important;
             min-width: 0 !important;
-            height: 100vh !important;
-            height: 100dvh !important;
             z-index: 1000 !important;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            box-shadow: -4px 0 24px rgba(0,0,0,0.3) !important;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0.3s ease,
+                        box-shadow 0.3s ease !important;
         }
-        /* Scrim behind open sidebar */
-        section[data-testid="stSidebar"]::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
-            background: rgba(0,0,0,0.4);
-            z-index: -1;
-            pointer-events: none;
+        /* Collapsed: fully off-screen + invisible (opacity prevents child overrides) */
+        section[data-testid="stSidebar"][aria-expanded="false"] {
+            transform: translateX(-100%) !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            overflow: hidden !important;
+            box-shadow: none !important;
+        }
+        /* Expanded: slide in as overlay */
+        section[data-testid="stSidebar"][aria-expanded="true"] {
+            transform: translateX(0) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            overflow-y: auto !important;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.3) !important;
         }
 
-        /* ── Main content: clear the Streamlit header ── */
+        /* ── Main content: full width, no sidebar offset ── */
+        [data-testid="stAppViewContainer"] > section.main,
+        [data-testid="stAppViewContainer"] {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+
+        /* ── Content: clear the Streamlit header ── */
         .block-container {
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
-            padding-top: 3.5rem !important;
+            padding-top: 2.5rem !important;
         }
-        /* Shrink Streamlit's native top header bar */
+        /* Streamlit header: compact, full-width */
         [data-testid="stHeader"] {
+            left: 0 !important;
+            width: 100% !important;
             height: 2.5rem !important;
             min-height: 2.5rem !important;
-            padding: 0 0.5rem !important;
             background: var(--mg-bg-main) !important;
             z-index: 900;
         }
-        /* Make hamburger button more visible on mobile */
-        [data-testid="collapsedControl"] {
-            position: fixed !important;
-            top: 0.5rem !important;
-            right: 0.5rem !important;
+        /* Sidebar expand button: style as clear icon */
+        [data-testid="stExpandSidebarButton"] {
             z-index: 901 !important;
-        }
-        [data-testid="collapsedControl"] button::after {
-            font-size: 1.5rem;
-            background: var(--mg-primary);
-            color: #FFFFFF;
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
         /* Stack columns vertically on mobile */
