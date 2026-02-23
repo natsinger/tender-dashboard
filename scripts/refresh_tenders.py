@@ -64,6 +64,22 @@ def main() -> None:
         else:
             active_ids = df["tender_id"].tolist()
 
+        # Prioritize watchlisted tenders so they are synced first
+        try:
+            from user_db import UserDB as _UserDB_sync
+            watched_entries = _UserDB_sync().get_all_active_watchlists()
+            watched_ids = {entry["tender_id"] for entry in watched_entries}
+            watched_first = [tid for tid in active_ids if tid in watched_ids]
+            rest = [tid for tid in active_ids if tid not in watched_ids]
+            active_ids = watched_first + rest
+            if watched_first:
+                logger.info(
+                    "Prioritized %d watchlisted tenders for doc sync",
+                    len(watched_first),
+                )
+        except Exception as exc:
+            logger.warning("Could not prioritize watchlisted tenders: %s", exc)
+
         # Limit batch size to avoid API rate limits in CI (no cache on fresh checkout)
         max_doc_sync = int(os.environ.get("DOC_SYNC_LIMIT", "50"))
         if len(active_ids) > max_doc_sync:
@@ -88,18 +104,30 @@ def main() -> None:
         logger.warning("Could not read DB stats: %s", exc)
 
     # 6. Check watchlist alerts and send emails (non-fatal)
+    alerts_attempted = 0
+    alerts_sent = 0
     try:
         from alerts import AlertEngine
         from db import TenderDB as _TenderDB
         from user_db import UserDB as _UserDB
 
         engine = AlertEngine(_TenderDB(), _UserDB())
-        sent = engine.check_and_send()
-        logger.info("Alerts: %d email(s) sent", sent)
+        alerts_sent = engine.check_and_send()
+        alerts_attempted = alerts_sent  # engine handles failures internally
+        logger.info("Alerts: %d email(s) sent", alerts_sent)
     except Exception as exc:
-        logger.warning("Alert check failed (non-fatal): %s", exc)
+        logger.error(
+            "Alert check failed (non-fatal): %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
 
-    logger.info("Daily refresh complete.")
+    # 7. Final summary
+    logger.info(
+        "=== Daily refresh complete | emails_sent=%d alerts_attempted=%d ===",
+        alerts_sent,
+        alerts_attempted,
+    )
 
 
 if __name__ == "__main__":

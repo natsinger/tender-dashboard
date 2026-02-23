@@ -1796,6 +1796,161 @@ class TestSection1NewColumns:
 # ============================================================================
 
 
+# ============================================================================
+# Old-format brochure support (pre-2015, e.g. tender 281/2010)
+# ============================================================================
+
+
+class TestOldFormatBrochure:
+    """Tests for old-format brochure columns and confidence scoring.
+
+    Old brochures (pre-2015) have a different table format with columns like
+    שטח מירבי לרישוי במ"ר (max licensable area) and הוצאות פיתוח כללי בש"ח
+    (development costs), and use total_units (מספר יח"ד) without the
+    target-price / free-market split.
+    """
+
+    def test_max_licensable_area_normal_hebrew(self) -> None:
+        """'שטח מירבי' is recognised as max_licensable_area column."""
+        header = ['שטח מירבי לרישוי במ"ר', "מספר מתחם"]
+        mapping = _find_section1_column_mapping(header)
+        assert "max_licensable_area" in mapping
+        assert mapping["max_licensable_area"] == 0
+
+    def test_max_licensable_area_reversed_hebrew(self) -> None:
+        """Reversed 'יברימ חטש' is recognised as max_licensable_area."""
+        header = ["יברימ חטש", "םחתמ"]
+        mapping = _find_section1_column_mapping(header)
+        assert "max_licensable_area" in mapping
+
+    def test_max_licensable_area_partial_keyword(self) -> None:
+        """Partial keyword 'לרישוי' matches max_licensable_area."""
+        header = ['לרישוי במ"ר', "מתחם"]
+        mapping = _find_section1_column_mapping(header)
+        assert "max_licensable_area" in mapping
+
+    def test_development_costs_normal_hebrew(self) -> None:
+        """'הוצאות פיתוח' is recognised as development_costs column."""
+        header = ['הוצאות פיתוח כללי בש"ח', "מספר מתחם"]
+        mapping = _find_section1_column_mapping(header)
+        assert "development_costs" in mapping
+        assert mapping["development_costs"] == 0
+
+    def test_development_costs_reversed_hebrew(self) -> None:
+        """Reversed 'חותיפ תואצוה' is recognised as development_costs."""
+        header = ["חותיפ תואצוה", "םחתמ"]
+        mapping = _find_section1_column_mapping(header)
+        assert "development_costs" in mapping
+
+    def test_development_costs_partial_keyword(self) -> None:
+        """Partial keyword 'פיתוח כללי' matches development_costs."""
+        header = ['פיתוח כללי בש"ח', "מתחם"]
+        mapping = _find_section1_column_mapping(header)
+        assert "development_costs" in mapping
+
+    def test_confidence_total_units_replaces_split(self) -> None:
+        """When total_units is present but target/free-market are absent,
+        confidence should not be penalised for the missing split.
+
+        Old-format: lot_number + total_units -> both critical -> 1.0
+        """
+        mapping = {
+            "lot_number": 0,
+            "total_units": 1,
+        }
+        row = ["1", "52"]
+        lot = _parse_row(row, mapping)
+
+        assert lot is not None
+        assert lot["lot_number"] == 1
+        assert lot["total_units"] == 52
+        # Both effective critical fields present -> 1.0
+        assert lot["confidence"] == 1.0
+
+    def test_confidence_total_units_missing_value(self) -> None:
+        """When total_units column exists but value fails to parse,
+        confidence should reflect the missing value."""
+        mapping = {
+            "lot_number": 0,
+            "total_units": 1,
+        }
+        row = ["1", "N/A"]
+        lot = _parse_row(row, mapping)
+
+        assert lot is not None
+        assert lot["lot_number"] == 1
+        assert lot["total_units"] is None
+        # 1 of 2 effective critical fields present -> 0.5
+        assert lot["confidence"] == 0.5
+
+    def test_confidence_unchanged_when_split_present(self) -> None:
+        """When target/free-market columns ARE present, confidence logic
+        should remain unchanged even if total_units is also present."""
+        mapping = {
+            "lot_number": 0,
+            "units_target_price": 1,
+            "units_free_market": 2,
+            "total_units": 3,
+        }
+        row = ["1", "27", "27", "54"]
+        lot = _parse_row(row, mapping)
+
+        assert lot is not None
+        assert lot["confidence"] == 1.0
+
+    def test_end_to_end_old_format_table(self) -> None:
+        """End-to-end extraction from a simulated old-format table.
+
+        Old-format columns:
+            מספר מתחם | מספרי מגרשים | מספר יח"ד | שטח מגרשים במ"ר |
+            שטח מירבי לרישוי במ"ר | הוצאות פיתוח כללי בש"ח
+        """
+        table = [
+            # Header
+            [
+                "מספר מתחם",
+                "מספרי מגרשים",
+                'מספר יח"ד',
+                'שטח מגרשים במ"ר',
+                'שטח מירבי לרישוי במ"ר',
+                'הוצאות פיתוח כללי בש"ח',
+            ],
+            # Data row 1
+            ["1", "101-105", "52", "4,500", "6,200", "1,200,000"],
+            # Data row 2
+            ["2", "201-210", "80", "7,800", "10,500", "2,400,000"],
+        ]
+        page = _make_mock_page([table])
+        extractor = BrochureLotExtractor()
+        lots = extractor._extract_section1_lots([page])
+
+        assert len(lots) == 2
+
+        lot1 = lots[0]
+        assert lot1["lot_number"] == 1
+        assert lot1["plot_numbers"] == "101-105"
+        assert lot1["total_units"] == 52
+        assert lot1["area_sqm"] == 4500.0
+        assert lot1["max_licensable_area"] == 6200.0
+        assert lot1["development_costs"] == 1200000.0
+        # total_units present, no target/free split -> confidence 1.0
+        assert lot1["confidence"] == 1.0
+
+        lot2 = lots[1]
+        assert lot2["lot_number"] == 2
+        assert lot2["plot_numbers"] == "201-210"
+        assert lot2["total_units"] == 80
+        assert lot2["area_sqm"] == 7800.0
+        assert lot2["max_licensable_area"] == 10500.0
+        assert lot2["development_costs"] == 2400000.0
+        assert lot2["confidence"] == 1.0
+
+    def test_new_fields_are_float_type(self) -> None:
+        """max_licensable_area and development_costs should be in FLOAT_FIELDS."""
+        assert "max_licensable_area" in FLOAT_FIELDS
+        assert "development_costs" in FLOAT_FIELDS
+
+
 class TestExtractAllInlineZoning:
     """Integration tests for extract_all using inline zoning fallback."""
 

@@ -9,7 +9,6 @@ Branded for MEGIDO BY AURA.
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict
 
 import pandas as pd
 import plotly.express as px
@@ -17,9 +16,6 @@ import streamlit as st
 
 from config import (
     CLOSING_SOON_DAYS,
-    DATA_DIR,
-    DEFAULT_FETCH_DELAY,
-    DEFAULT_FETCH_WORKERS,
     DOCUMENT_DOWNLOAD_API,
     LAND_AUTHORITY_API,
     NON_ACTIVE_STATUSES,
@@ -30,7 +26,6 @@ from config import (
 )
 from dashboard_utils import (
     MEGIDO_CHART_COLORS,
-    MEGIDO_GOLD_SCALE,
     PLOTLY_BG,
     PLOTLY_FONT,
     find_new_tender_ids_from_snapshots,
@@ -47,6 +42,16 @@ RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת 
 # The 3 tender types for KPI cards (פומבי=1, מחיר מטרה=5, דיור במחיר מופחת=8)
 CARD_TENDER_TYPES = {1, 5, 8}
 
+
+@st.cache_resource
+def _get_user_db() -> UserDB:
+    """Return a single shared UserDB instance (cached across reruns)."""
+    return UserDB()
+
+
+user_db = _get_user_db()
+
+# Compute `today` fresh on each render (not at module-import time).
 today = datetime.now()
 
 # ── Load & pre-filter data ───────────────────────────────────────────────────
@@ -81,7 +86,7 @@ with st.sidebar:
     )
 
     _sidebar_email = get_user_email()
-    _team_db = UserDB()
+    _team_db = user_db
 
     if not _sidebar_email:
         st.caption("יש להזדהות כדי לנהל מכרזים מועדפים")
@@ -261,8 +266,7 @@ with col_kpi:
     )
     k1, k2 = st.columns(2)
     with k1:
-        st.metric("מספר מכרזים פעילים", f"{len(card_active_df):,}")
-        st.caption("ללא מכרזי ייזום")
+        st.metric("מכרזים פעילים (ללא ייזום)", f"{len(card_active_df):,}")
     with k2:
         st.metric("מכרזים שייסגרו בשבועיים הקרובים", closing_soon_count)
 
@@ -343,12 +347,13 @@ with col_kpi:
         if len(city_counts) > 0:
             fig_city_bar = px.bar(
                 x=city_counts.values, y=city_counts.index, orientation="h",
-                color=city_counts.values, color_continuous_scale=MEGIDO_GOLD_SCALE,
+                color_discrete_sequence=["#2563EB"],
             )
             fig_city_bar.update_layout(
                 showlegend=False, height=220,
                 margin=dict(t=5, b=20, l=5, r=5),
                 xaxis_title=None, yaxis_title=None,
+                coloraxis_showscale=False,
                 font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig_city_bar, use_container_width=True, key="bar_city")
@@ -454,7 +459,7 @@ with st.expander("רשימת מעקב", expanded=False):
         st.warning("לא זוהה משתמש. הגדר DEV_USER_EMAIL בקובץ .env.")
     else:
         st.caption(f"משתמש: {user_email}")
-        watch_db = UserDB()
+        watch_db = user_db
 
         if not watch_db.available:
             st.warning("Supabase לא מוגדר — רשימת המעקב לא תישמר.")
@@ -543,7 +548,7 @@ with st.expander("רשימת מעקב", expanded=False):
 
 with st.expander("מכרזים מועדפים - חדר עסקאות — סטטוס סקירה", expanded=False):
     _review_email = get_user_email()
-    _review_db = UserDB()
+    _review_db = user_db
 
     _team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
     _team_df = df[df["tender_id"].astype(int).isin(_team_ids)].copy() if _team_ids else pd.DataFrame()
@@ -706,11 +711,12 @@ with st.expander("ניתוח מפורט", expanded=False):
             fig_city = px.bar(
                 x=city_counts.values, y=city_counts.index, orientation="h",
                 labels={"x": "מספר מכרזים", "y": "עיר"},
-                color=city_counts.values, color_continuous_scale=MEGIDO_GOLD_SCALE,
+                color_discrete_sequence=["#2563EB"],
             )
             fig_city.update_layout(
                 showlegend=False, height=260,
                 margin=dict(t=10, b=30, l=10, r=10),
+                coloraxis_showscale=False,
                 font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig_city, use_container_width=True)

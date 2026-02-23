@@ -356,7 +356,7 @@ class LandTendersClient:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
                 if df[col].dtype == "datetime64[ns, UTC]":
-                    df[col] = df[col].dt.tz_localize(None)
+                    df[col] = df[col].dt.tz_convert(None)
 
         logger.info("Processed %d tenders", len(df))
         return df
@@ -423,7 +423,7 @@ class LandTendersClient:
                 if col in df.columns:
                     df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
                     if df[col].dtype == "datetime64[ns, UTC]":
-                        df[col] = df[col].dt.tz_localize(None)
+                        df[col] = df[col].dt.tz_convert(None)
 
             return df
 
@@ -459,7 +459,7 @@ class LandTendersClient:
     def save_to_db(
         self, df: pd.DataFrame, snapshot_date: Optional[str] = None,
     ) -> int:
-        """Save tenders DataFrame to SQLite.
+        """Save tenders DataFrame to Supabase.
 
         Args:
             df: Normalized tenders DataFrame.
@@ -696,6 +696,17 @@ def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     lots: List[Dict[str, Any]] = []
 
+    # Numeric fields — direct mapping (API field → lot schema field)
+    _NUMERIC_MAP = {
+        "Shetach": "area_sqm",
+        "Kibolet": "total_units",
+        "MechirSaf": "min_price",
+        "SchumArvut": "guarantee_amount",
+        "mechirShuma": "sqm_value_appraisal",
+        "HotzaotPituach": "development_costs",
+        "SchumZchiya": "winning_amount",
+    }
+
     for tik in tik_list:
         lot: Dict[str, Any] = {"data_source": "api"}
 
@@ -709,16 +720,6 @@ def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
                 lot["lot_number"] = None
                 logger.debug("Non-numeric MitchamName: %r", mitcham_str)
 
-        # Numeric fields — direct mapping
-        _NUMERIC_MAP = {
-            "Shetach": "area_sqm",
-            "Kibolet": "total_units",
-            "MechirSaf": "min_price",
-            "SchumArvut": "guarantee_amount",
-            "mechirShuma": "sqm_value_appraisal",
-            "HotzaotPituach": "development_costs",
-            "SchumZchiya": "winning_amount",
-        }
         for api_field, lot_field in _NUMERIC_MAP.items():
             val = tik.get(api_field)
             if val is not None and val != 0:

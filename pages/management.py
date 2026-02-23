@@ -35,7 +35,9 @@ CARD_TENDER_TYPES = {1, 5, 8}
 # SIDEBAR (read-only stats)
 # ============================================================================
 
+# Compute `today` fresh on each render (not at module-import time).
 today = datetime.now()
+
 df_all = load_data(data_source="latest_file")
 # Apply same filters as dashboard
 df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
@@ -109,6 +111,7 @@ def _build_compact_table(
     Returns:
         Display-ready DataFrame with formatted columns.
     """
+    now = datetime.now()
     tbl = source_df[[
         'tender_name', 'city', 'tender_type', 'units',
         'deadline', 'published_booklet',
@@ -116,7 +119,7 @@ def _build_compact_table(
 
     tbl['deadline'] = pd.to_datetime(tbl['deadline'], errors='coerce')
     tbl['days_left'] = tbl['deadline'].apply(
-        lambda d: (d - today).days if pd.notna(d) else None
+        lambda d: (d - now).days if pd.notna(d) else None
     )
     tbl['urgency'] = tbl['days_left'].apply(_urgency)
 
@@ -220,6 +223,7 @@ closing_soon = active_df[
 @st.dialog("פרטי מכרז", width="large")
 def _show_tender_detail(tender_id: int) -> None:
     """Show tender detail in a modal dialog."""
+    now = datetime.now()
     sqlite_db = TenderDB()
     tender = sqlite_db.get_tender_by_id(tender_id)
     if tender is None:
@@ -241,7 +245,7 @@ def _show_tender_detail(tender_id: int) -> None:
         if dl:
             dl_dt = pd.to_datetime(dl, errors='coerce')
             if pd.notna(dl_dt):
-                days = (dl_dt - today).days
+                days = (dl_dt - now).days
                 st.markdown(
                     f"**מועד סגירה:** {dl_dt.strftime('%d/%m/%Y')} "
                     f"({_urgency(days)} {days} ימים)"

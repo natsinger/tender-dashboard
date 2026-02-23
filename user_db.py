@@ -239,19 +239,32 @@ class UserDB:
     def get_all_active_watchlists(self) -> list[dict]:
         """Return all active watchlist entries (for the alert cron).
 
+        Paginates in batches of 1000 to handle tables that exceed the
+        Supabase default row limit.
+
         Returns:
             List of dicts: {user_email, tender_id, created_at}.
         """
         if not self._client:
             return []
         try:
-            result = (
-                self._client.table("user_watchlist")
-                .select("user_email, tender_id, created_at")
-                .eq("active", 1)
-                .execute()
-            )
-            return result.data or []
+            all_rows: list[dict] = []
+            batch_size = 1000
+            offset = 0
+            while True:
+                result = (
+                    self._client.table("user_watchlist")
+                    .select("user_email, tender_id, created_at")
+                    .eq("active", 1)
+                    .range(offset, offset + batch_size - 1)
+                    .execute()
+                )
+                batch = result.data or []
+                all_rows.extend(batch)
+                if len(batch) < batch_size:
+                    break
+                offset += batch_size
+            return all_rows
         except Exception as exc:
             logger.error("get_all_active_watchlists failed: %s", exc)
             return []
@@ -294,6 +307,8 @@ class UserDB:
     def get_sent_doc_ids(self, user_email: str, tender_id: int) -> set[int]:
         """Get all doc_row_ids already sent to this user for this tender.
 
+        Paginates in batches of 1000 to handle large alert histories.
+
         Args:
             user_email: The user's email.
             tender_id: The tender's MichrazID.
@@ -305,14 +320,24 @@ class UserDB:
             return set()
         email = user_email.lower().strip()
         try:
-            result = (
-                self._client.table("alert_history")
-                .select("doc_row_id")
-                .eq("user_email", email)
-                .eq("tender_id", tender_id)
-                .execute()
-            )
-            return {row["doc_row_id"] for row in (result.data or [])}
+            all_ids: set[int] = set()
+            batch_size = 1000
+            offset = 0
+            while True:
+                result = (
+                    self._client.table("alert_history")
+                    .select("doc_row_id")
+                    .eq("user_email", email)
+                    .eq("tender_id", tender_id)
+                    .range(offset, offset + batch_size - 1)
+                    .execute()
+                )
+                batch = result.data or []
+                all_ids.update(row["doc_row_id"] for row in batch)
+                if len(batch) < batch_size:
+                    break
+                offset += batch_size
+            return all_ids
         except Exception as exc:
             logger.error("get_sent_doc_ids failed: %s", exc)
             return set()
