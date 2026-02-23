@@ -157,8 +157,14 @@ _COMPACT_COLUMNS = {
 
 st.markdown("#### מכרזים מועדפים - חדר עסקאות")
 
-# Build watchlist_df by joining Supabase IDs with the loaded tender data
-_watched_ids_main = watch_db.get_watchlist_ids(TEAM_EMAIL)
+# Build watchlist_df by joining Supabase rows (id, tender_id, created_at, notes) with tender data
+_watched_rows_main = watch_db.get_watchlist_rows(TEAM_EMAIL)
+_watched_ids_main = [int(r["tender_id"]) for r in _watched_rows_main]
+# notes lookup: tender_id -> note string
+_notes_map: dict[int, str] = {
+    int(r["tender_id"]): (r.get("notes") or "") for r in _watched_rows_main
+}
+
 if _watched_ids_main:
     watchlist_df = df[df['tender_id'].astype(int).isin(_watched_ids_main)].copy()
 else:
@@ -177,11 +183,17 @@ if len(watchlist_df) > 0:
         for tid in watchlist_df['tender_id']
     ]
 
+    # Attach personal notes (read-only) from the watchlist table
+    display_sel['notes'] = [
+        _notes_map.get(int(tid), "") for tid in watchlist_df['tender_id']
+    ]
+
     st.dataframe(
         display_sel,
         column_config={
             **_COMPACT_COLUMNS,
             "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
+            "notes": st.column_config.TextColumn("הערות", width="large"),
         },
         hide_index=True,
         use_container_width=True,

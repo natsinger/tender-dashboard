@@ -164,16 +164,8 @@ st.markdown(
 # ============================================================================
 
 
-def _last_sunday(ref_date: datetime) -> datetime:
-    """Return the most recent Sunday (00:00) on or before ref_date."""
-    days_since = ref_date.weekday() + 1
-    if days_since == 7:
-        days_since = 0
-    return (ref_date - timedelta(days=days_since)).replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-sunday_cutoff = _last_sunday(today)
-since_date_str = sunday_cutoff.strftime("%Y-%m-%d")
+cutoff_date = (today - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+since_date_str = cutoff_date.strftime("%Y-%m-%d")
 
 # ── Detect new tenders via JSON snapshot comparison ──────────────────────────
 snapshot_new_ids = find_new_tender_ids_from_snapshots()
@@ -247,7 +239,7 @@ col_tables, col_kpi = st.columns([3, 2])
 with col_tables:
     _render_new_table(
         table1_df,
-        f"מודעות חדשות במכרזים (מ-{sunday_cutoff.strftime('%d/%m')})",
+        f"מודעות חדשות במכרזים (7 הימים האחרונים)",
         "new_docs",
     )
     st.markdown("")
@@ -270,6 +262,7 @@ with col_kpi:
     k1, k2 = st.columns(2)
     with k1:
         st.metric("מספר מכרזים פעילים", f"{len(card_active_df):,}")
+        st.caption("ללא מכרזי ייזום")
     with k2:
         st.metric("מכרזים שייסגרו בשבועיים הקרובים", closing_soon_count)
 
@@ -354,7 +347,7 @@ with col_pies:
         )
 
     # ── Bar chart: City distribution (full width under the two pies) ─────
-    st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
     if "city" in active_df.columns and len(active_df) > 0:
         city_counts = active_df["city"].value_counts().head(10)
         if len(city_counts) > 0:
@@ -384,7 +377,7 @@ with col_deadlines:
     with _toggle_col1:
         show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
     with _toggle_col2:
-        show_without_brochure = st.toggle("בלי חוברת", value=False, key="brochure_toggle")
+        show_without_brochure = st.toggle("הצג גם ללא חוברת", value=False, key="brochure_toggle", help="כשמופעל, מציג גם מכרזים שטרם פורסמה בהם חוברת מכרז")
 
     upcoming = active_df[
         (active_df["deadline"].notna())
@@ -399,7 +392,11 @@ with col_deadlines:
         upcoming = upcoming[upcoming["published_booklet"] == True]
 
     if len(upcoming) > 0:
-        up_disp = upcoming[["tender_name", "city", "units", "deadline"]].copy()
+        # Include lot_count and max_lots_per_bidder only if present in the DataFrame
+        # (they may be absent from older JSON snapshots before the DB migration runs).
+        _base_cols = ["tender_name", "city", "units", "deadline"]
+        _extra_cols = [c for c in ["lot_count", "max_lots_per_bidder"] if c in upcoming.columns]
+        up_disp = upcoming[_base_cols + _extra_cols].copy()
         up_disp["days_left"] = (up_disp["deadline"] - today).dt.days
 
         def _urgency(d: int) -> str:
@@ -413,18 +410,29 @@ with col_deadlines:
         up_disp["deadline"] = up_disp["deadline"].dt.strftime("%d/%m")
 
         # Reorder: days_left, urg, deadline first (leftmost = visible on mobile LTR scroll)
-        up_disp = up_disp[["days_left", "urg", "deadline", "tender_name", "city", "units"]]
+        _ordered = ["days_left", "urg", "deadline", "tender_name", "city", "units"] + _extra_cols
+        up_disp = up_disp[_ordered]
+
+        _deadline_col_config = {
+            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
+            "urg": st.column_config.TextColumn("", width="small"),
+            "deadline": st.column_config.TextColumn("סגירה", width="small"),
+            "tender_name": st.column_config.TextColumn("שם", width="medium"),
+            "city": st.column_config.TextColumn("עיר", width="small"),
+            "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
+        }
+        if "lot_count" in up_disp.columns:
+            _deadline_col_config["lot_count"] = st.column_config.NumberColumn(
+                "מתחמים", format="%d", width="small",
+            )
+        if "max_lots_per_bidder" in up_disp.columns:
+            _deadline_col_config["max_lots_per_bidder"] = st.column_config.NumberColumn(
+                "מקס' לזוכה", format="%d", width="small",
+            )
 
         st.dataframe(
             up_disp,
-            column_config={
-                "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
-                "urg": st.column_config.TextColumn("", width="small"),
-                "deadline": st.column_config.TextColumn("סגירה", width="small"),
-                "tender_name": st.column_config.TextColumn("שם", width="medium"),
-                "city": st.column_config.TextColumn("עיר", width="small"),
-                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
-            },
+            column_config=_deadline_col_config,
             hide_index=True,
             use_container_width=True,
             height=min(35 * len(up_disp) + 38, 550),
@@ -507,6 +515,24 @@ with st.expander("רשימת מעקב", expanded=False):
                     if st.button("🗑️", key=f"rm_watch_{row['id']}"):
                         watch_db.remove_from_watchlist(user_email, tid)
                         st.rerun()
+
+                # Notes row — pre-populated from the notes column returned by get_watchlist_rows
+                _saved_note = row.get("notes") or ""
+                _note_col, _save_col = st.columns([5, 1])
+                with _note_col:
+                    _new_note = st.text_input(
+                        "הערה אישית",
+                        value=_saved_note,
+                        placeholder="הוסף הערה אישית למכרז זה...",
+                        key=f"note_input_{tid}",
+                        label_visibility="collapsed",
+                    )
+                with _save_col:
+                    if st.button("שמור", key=f"note_save_{tid}"):
+                        watch_db.set_watchlist_note(user_email, tid, _new_note)
+                        st.success("נשמר!")
+                        st.rerun()
+
             st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים.")
         else:
             st.info("רשימת המעקב ריקה.")
@@ -585,7 +611,14 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
                     key="dash_review_status_select",
                 )
 
-            _rev_notes = st.text_input("הערות (אופציונלי)", key="dash_review_notes", placeholder="...")
+            # Pre-populate notes from the saved review for the selected tender
+            _cur_notes = _rev_map.get(_rev_tid, {}).get("notes", "") or ""
+            _rev_notes = st.text_input(
+                "הערות (אופציונלי)",
+                value=_cur_notes,
+                key="dash_review_notes",
+                placeholder="...",
+            )
 
             if st.button("עדכן סטטוס", key="dash_btn_update_review"):
                 _prev = _review_db.set_review_status(
@@ -662,7 +695,7 @@ with st.expander("ניתוח מפורט", expanded=False):
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
-        st.markdown("**מכרזים לפי עיר**")
+        st.markdown("**מכרזים פעילים לפי עיר**")
         city_counts = active_df["city"].value_counts().head(10)
         if len(city_counts) > 0:
             fig_city = px.bar(

@@ -477,6 +477,9 @@ class LandTendersClient:
     def sync_documents_to_db(self, tender_ids: List[int]) -> int:
         """Fetch details for given tenders and save their documents to DB.
 
+        Also backfills lot_count on the tenders table from the Tik[] array
+        in the detail response.
+
         Args:
             tender_ids: List of tender IDs to sync documents for.
 
@@ -500,6 +503,13 @@ class LandTendersClient:
 
             new_docs = db.upsert_documents(tid, doc_list)
             new_doc_count += len(new_docs)
+
+            # Backfill lot_count from Tik[] length in detail response.
+            tik_list = details.get("Tik", [])
+            if tik_list is not None:
+                lot_count = len(tik_list)
+                db.update_tender_fields(tid, {"lot_count": lot_count})
+                logger.debug("Backfilled lot_count=%d for tender %d", lot_count, tid)
 
         return new_doc_count
 
@@ -587,6 +597,11 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         ded = pd.to_datetime(df["deadline"], errors="coerce", utc=True)
         duration = (ded - pub).dt.days
         df["tender_duration_days"] = duration.where(duration > 0, other=None)
+
+    # lot_count is not available from the list API (Tik[] only comes from detail endpoint).
+    # Ensure the column exists with None so downstream code can backfill it per-tender.
+    if "lot_count" not in df.columns:
+        df["lot_count"] = None
 
     return df
 

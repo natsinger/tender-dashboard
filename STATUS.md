@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-23 (session 13 — API-first lot data integration)
+**Last updated:** 2026-02-23 (session 14 — UI bug-fix batch + watchlist notes + Explorer enhancements)
 
 ---
 
@@ -38,6 +38,8 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 2. Run `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number` column + `building_rights` table + brochure/extraction columns)
 3. Run `scripts/sql/analytics_enrichment_schema.sql` in Supabase SQL Editor (adds enrichment columns + `tender_prices` + `taba_analytics` tables)
 3b. Run `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table + lot extraction columns)
+3c. Run `scripts/sql/watchlist_notes_schema.sql` in Supabase SQL Editor (adds `notes` column to `user_watchlist`)
+3d. Run `scripts/sql/lot_count_schema.sql` in Supabase SQL Editor (adds `lot_count` + `max_lots_per_bidder` columns to `tenders`)
 4. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
 5. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
 6. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
@@ -50,6 +52,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-23 | **UI bug-fix batch + watchlist notes + Explorer enhancements** — (1) Fixed city chart title "מכרזים לפי עיר" → "מכרזים פעילים לפי עיר" (2 locations). (2) Fixed brochure toggle label "בלי חוברת" → "הצג גם ללא חוברת" with help tooltip. (3) Changed new-announcement detection from last-Sunday cutoff to rolling 7-day window. (4) Added KPI caption "ללא מכרזי ייזום" to clarify active tender count (248 excludes type 9). (5) Added per-tender notes to watchlist: `notes` column on `user_watchlist`, `set_watchlist_note()` + `get_watchlist_note()` in user_db.py, editable text_area in Dashboard. (6) Fixed review-notes pre-population in Dashboard (added `value=` parameter). (7) Added lot_count and max_lots_per_bidder columns to Dashboard deadlines table and Explorer table. (8) Row selection in Explorer table auto-opens detail viewer. (9) Management page team watchlist now shows notes read-only. (10) Improved save_to_db() error handling: `_KNOWN_DB_COLUMNS` safelist blocks unknown columns, explicit error logging with full traceback. | `pages/dashboard.py`, `pages/explorer.py`, `pages/management.py`, `user_db.py`, `db.py`, `data_client.py`, `scripts/refresh_tenders.py`, `scripts/sql/watchlist_notes_schema.sql` (NEW), `scripts/sql/lot_count_schema.sql` (NEW) |
 | 2026-02-23 | **API-first lot data integration** — New `extract_lots_from_api()` function in data_client.py maps Tik[] array fields (MitchamName, Shetach, Kibolet, MechirSaf, SchumArvut, mechirShuma, HotzaotPituach, TochnitMigrash, GushHelka, ShemZoche, SchumZchiya) to lot schema. Pipeline rewritten: API lots upserted first (data_source='api'), then PDF-only fields (units_target_price, units_free_market, zoning_designation) overlaid via merge (data_source='merged'). 7 new columns on tender_lots: total_units, development_costs, gush, helka, winner_name, winning_amount, data_source. Explorer page updated with new columns + 4-column summary metrics. 294 tests pass (no regressions). | `data_client.py`, `db.py`, `scripts/extract_lots_batch.py`, `pages/explorer.py`, `scripts/sql/tender_lots_schema.sql`, `STATUS.md` |
 | 2026-02-22 | **Full brochure document selection** — Investigated 450 cached tender details and found 142 tenders have חוברת המכרז (full brochure, 1-40MB) in MichrazDocList vs פרסום ראשון (1-2 page announcement). New `find_best_brochure()` function in brochure_analyzer.py with 3-tier priority: (1) חוברת from MichrazDocList, (2) MichrazFullDocument, (3) פרסום ראשון fallback. Updated extract_lots_batch.py to use find_best_brochure() with doc_type tracking. Tested on 8 real brochures: full brochure yields 100% zoning extraction (5/5) vs 40% for pirsum rishon (2/5). Multi-lot tenders (14, 7, 7 lots) correctly extract Section 1 tables, Section 2 zoning tables, and Section 3 bid limits from full brochures. 169 tests pass (no regressions). | `brochure_analyzer.py`, `scripts/extract_lots_batch.py`, `STATUS.md` |
 | 2026-02-22 | **Lot extraction real-PDF fixes** — Downloaded 8 diverse brochures (types 1/5/6/9) and discovered pirsum rishon docs use inline text, not Section headers. Added: `_extract_zoning_inline()` for inline plan+designation from reversed Hebrew text (pattern: "PLAN תינכות הלח םישרגמה לע"), `_extract_lots_from_text()` fallback for no-table documents, new Section 1 column keywords (helka, gush, total_units, rental/sale columns). Results on 8 real PDFs: S1 75%->100%, S2 0%->88%, S3 0% (correctly: pirsum rishon docs don't contain bid limits). 169 tests pass (+16 new). | `lot_extractor.py`, `tests/test_lot_extractor.py`, `STATUS.md` |
@@ -97,6 +100,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 4. **Streamlit Cloud auth** — Viewer auth not enforced. Using sidebar email input as fallback (works but self-reported).
 5. **SMTP not configured** — Need working SMTP credentials (SMTP2GO) for alert emails.
 6. **Supabase setup pending** — Need to run SQL schema creation + GRANT SQL + migrate data before app will load from Supabase.
+7. **Streamlit use_container_width deprecation** — Streamlit warns that `use_container_width` on `st.dataframe` / `st.table` is deprecated; migrate to the `width` parameter in a future cleanup pass.
 
 ---
 
@@ -189,7 +193,9 @@ Gov tender projects/
 │   └── sql/
 │       ├── building_rights_schema.sql  # SQL: plan_number column + building_rights table
 │       ├── analytics_enrichment_schema.sql  # SQL: tender_prices + taba_analytics tables + enrichment columns
-│       └── tender_lots_schema.sql     # SQL: tender_lots table + lot extraction columns on tenders
+│       ├── tender_lots_schema.sql     # SQL: tender_lots table + lot extraction columns on tenders
+│       ├── watchlist_notes_schema.sql # SQL: notes column on user_watchlist
+│       └── lot_count_schema.sql       # SQL: lot_count + max_lots_per_bidder columns on tenders
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── data/
 │   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)

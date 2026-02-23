@@ -92,8 +92,11 @@ with f4:
     if sel_status:
         explorer_df = explorer_df[explorer_df["status"].isin(sel_status)]
 
-# Fixed display columns
-EXP_COLS = ["total_score", "tender_name", "city", "region", "tender_type", "purpose", "units", "deadline", "status", "published_booklet"]
+# Fixed display columns — lot_count and max_lots_per_bidder appear after units
+EXP_COLS = [
+    "total_score", "tender_name", "city", "region", "tender_type", "purpose",
+    "units", "lot_count", "max_lots_per_bidder", "deadline", "status", "published_booklet",
+]
 display_cols = [c for c in EXP_COLS if c in explorer_df.columns]
 
 if display_cols:
@@ -101,15 +104,31 @@ if display_cols:
     if "deadline" in exp_display.columns:
         exp_display = exp_display.sort_values("deadline", ascending=True, na_position="last")
 
+    # Reset index so positional row indices from selection events align with DataFrame rows.
+    exp_display = exp_display.reset_index(drop=True)
+
+    # Keep a parallel index mapping: display-row position → tender_id from explorer_df.
+    # exp_display only has EXP_COLS, so we need tender_id alongside it for the lookup.
+    _tender_id_by_row = (
+        explorer_df[["tender_id"] + display_cols]
+        .copy()
+    )
+    if "deadline" in _tender_id_by_row.columns:
+        _tender_id_by_row = _tender_id_by_row.sort_values("deadline", ascending=True, na_position="last")
+    _tender_id_by_row = _tender_id_by_row.reset_index(drop=True)
+
     for col in ["publish_date", "deadline", "committee_date"]:
         if col in exp_display.columns:
             exp_display[col] = pd.to_datetime(exp_display[col], errors="coerce")
 
-    st.caption(f"{len(exp_display):,} רשומות")
-    st.dataframe(
+    st.caption(f"{len(exp_display):,} רשומות — לחץ על שורה לצפייה בפרטי המכרז")
+
+    table_event = st.dataframe(
         exp_display,
         hide_index=True,
         use_container_width=True,
+        selection_mode="single-row",
+        on_select="rerun",
         column_config={
             "total_score": st.column_config.ProgressColumn("ציון", min_value=0, max_value=100, format="%.0f"),
             "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
@@ -118,11 +137,27 @@ if display_cols:
             "tender_type": st.column_config.TextColumn("סוג", width="medium"),
             "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
             "units": st.column_config.NumberColumn('יח"ד', format="%d"),
+            "lot_count": st.column_config.NumberColumn("מתחמים", format="%d"),
+            "max_lots_per_bidder": st.column_config.NumberColumn("מקס' לזוכה", format="%d"),
             "deadline": st.column_config.DateColumn("מועד סגירה", format="YYYY-MM-DD"),
             "status": st.column_config.TextColumn("סטטוס", width="small"),
             "published_booklet": st.column_config.CheckboxColumn("חוברת"),
         },
     )
+
+    # If the user clicked a row, sync its tender_id into session_state so the
+    # detail viewer's selectbox pre-selects it and the expander auto-opens.
+    _selected_rows = (
+        table_event.selection.rows
+        if table_event and hasattr(table_event, "selection") and table_event.selection
+        else []
+    )
+    if _selected_rows:
+        _row_idx = _selected_rows[0]
+        if 0 <= _row_idx < len(_tender_id_by_row):
+            _clicked_tid = _tender_id_by_row.iloc[_row_idx]["tender_id"]
+            st.session_state["detail_select"] = _clicked_tid
+            st.session_state["detail_expander_open"] = True
 
     csv = explorer_df[display_cols].to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
@@ -137,7 +172,8 @@ if display_cols:
 # TENDER DETAIL VIEWER (expander)
 # ============================================================================
 
-with st.expander("צפייה בפרטי מכרז", expanded=False):
+_expander_open = st.session_state.get("detail_expander_open", False)
+with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
     col_select, col_refresh = st.columns([4, 1])
 
     with col_select:
