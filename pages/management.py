@@ -146,7 +146,7 @@ _COMPACT_COLUMNS = {
     "city": st.column_config.TextColumn("עיר", width="medium"),
     "tender_type": st.column_config.TextColumn("סוג", width="medium"),
     "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
-    "deadline_fmt": st.column_config.TextColumn("מועד", width="small"),
+    "deadline_fmt": st.column_config.TextColumn("מועד סגירה", width="small"),
     "booklet": st.column_config.TextColumn("חוברת", width="small"),
 }
 
