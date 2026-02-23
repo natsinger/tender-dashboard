@@ -50,6 +50,15 @@ SECTION1_HEADERS = {
     ],
     "helka": ["חלקה", "הקלח", "תוקלח"],
     "gush": ["גוש", "שוג"],
+    # max_licensable_area MUST appear before area_sqm so that "שטח מירבי"
+    # is matched specifically rather than being claimed by the generic "שטח".
+    "max_licensable_area": [
+        "שטח מירבי",        # normal Hebrew
+        "יברימ חטש",        # reversed
+        "לרישוי",           # normal Hebrew partial
+        "יושירל",           # reversed partial
+        "שטח מירבי לרישוי",  # full phrase
+    ],
     "area_sqm": ["שטח", "חטש"],
     "units_target_price": [
         "מחיר מטרה", "הרטמ ריחמ",
@@ -78,6 +87,12 @@ SECTION1_HEADERS = {
     "sqm_value_appraisal": ["שווי.*שומה", "המוש.*יווש", "יווש.*המוש"],
     "sqm_value_current": ["שומה עדכנית", "תינכדע המוש", "תינכדע"],
     "discount_amount": ["הנחה", "החנה"],
+    "development_costs": [
+        "הוצאות פיתוח",     # normal Hebrew
+        "חותיפ תואצוה",     # reversed
+        "פיתוח כללי",       # partial normal
+        "יללכ חותיפ",       # reversed partial
+    ],
 }
 
 # Section 2 keywords for zoning data.
@@ -340,6 +355,8 @@ INT_FIELDS: set[str] = {
 # Fields that should be parsed as floats.
 FLOAT_FIELDS: set[str] = {
     "area_sqm",
+    "max_licensable_area",
+    "development_costs",
     "min_price",
     "guarantee_amount",
     "sqm_value_appraisal",
@@ -509,11 +526,30 @@ def _parse_row(
         return None
 
     # Confidence: fraction of critical fields that were parsed.
+    # Special case: if total_units is present in the mapping but
+    # units_target_price and units_free_market are both absent (old-format
+    # brochures), treat total_units as satisfying the units requirement.
+    effective_critical = list(CRITICAL_FIELDS)
+    has_target = "units_target_price" in col_mapping
+    has_free = "units_free_market" in col_mapping
+    has_total = "total_units" in col_mapping
+
+    if has_total and not has_target and not has_free:
+        # Replace both unit split fields with total_units in the
+        # effective critical list so old-format brochures are not
+        # unfairly penalised.
+        effective_critical = [
+            f for f in effective_critical
+            if f not in ("units_target_price", "units_free_market")
+        ]
+        if "total_units" not in effective_critical:
+            effective_critical.append("total_units")
+
     critical_present = sum(
-        1 for f in CRITICAL_FIELDS
+        1 for f in effective_critical
         if f in col_mapping and lot.get(f) is not None
     )
-    critical_expected = sum(1 for f in CRITICAL_FIELDS if f in col_mapping)
+    critical_expected = sum(1 for f in effective_critical if f in col_mapping)
     lot["confidence"] = (
         round(critical_present / critical_expected, 2)
         if critical_expected > 0

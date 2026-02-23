@@ -17,6 +17,7 @@ Sections:
 Branded for MEGIDO BY AURA (מגידו י.ק.).
 """
 
+import html
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -52,8 +53,6 @@ PLOTLY_FONT = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E293B")
 PLOTLY_BG = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 PLOTLY_GRID = dict(gridcolor="rgba(226,232,240,0.5)", zerolinecolor="rgba(226,232,240,0.7)")
 
-today = datetime.now()
-
 
 # ============================================================================
 # DATA LOADING (cached)
@@ -80,6 +79,9 @@ def _load_taba() -> pd.DataFrame:
 
 
 # ── Load all data ────────────────────────────────────────────────────────────
+# Compute `today` fresh on each render (not at module-import time).
+today = datetime.now()
+
 df_all = load_data(data_source="latest_file")
 df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
 prices_df = _load_prices()
@@ -147,8 +149,6 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
 
 if selected_regions:
     filtered_df = filtered_df[filtered_df["region"].isin(selected_regions)]
-
-active_df = filtered_df[~filtered_df["status"].isin(NON_ACTIVE_STATUSES)].copy()
 
 
 # ============================================================================
@@ -293,9 +293,10 @@ with trend_tab2:
         rows_html = ""
         for _, row in display_mom.iterrows():
             color = row["צבע"]
+            region_safe = html.escape(str(row["region"]))
             rows_html += (
                 f"<tr>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{row['region']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{region_safe}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['recent_count']}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['previous_count']}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['change_pct']:.1f}%</td>"
@@ -455,10 +456,11 @@ with ci_tab3:
 
             trend_label = trend_hebrew.get(row["trend"], row["trend"])
             trend_color = trend_colors.get(row["trend"], "#64748B")
+            region_safe = html.escape(str(row["region"]))
 
             rows_html += (
                 f"<tr>"
-                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{row['region']}</td>"
+                f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;'>{region_safe}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['active_count']}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['closed_count']}</td>"
                 f"<td style='padding:6px 12px;border-bottom:1px solid #E2E8F0;text-align:center;'>{row['total_units']:,}</td>"
@@ -677,9 +679,9 @@ with score_tab1:
 
         rows_html = ""
         for _, row in display_top.iterrows():
-            name = str(row.get("tender_name", ""))[:40]
-            city = str(row.get("city", "")) if pd.notna(row.get("city")) else ""
-            region = str(row.get("region", "")) if pd.notna(row.get("region")) else ""
+            name = html.escape(str(row.get("tender_name", ""))[:40])
+            city = html.escape(str(row.get("city", "")) if pd.notna(row.get("city")) else "")
+            region = html.escape(str(row.get("region", "")) if pd.notna(row.get("region")) else "")
             units = int(row.get("units", 0)) if pd.notna(row.get("units")) else 0
             badge = _score_badge(row["total_score"])
 

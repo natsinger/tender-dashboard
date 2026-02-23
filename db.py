@@ -228,18 +228,20 @@ class TenderDB:
                 "min_price": _clean_val(row.get("min_price")),
                 "gush": _clean_val(row.get("gush")),
                 "helka": _clean_val(row.get("helka")),
-                # Analytics enrichment fields
+                # Analytics enrichment fields from list API
                 "rmi_region_code": _clean_val(row.get("rmi_region_code")),
                 "official_publish_date": _clean_val(row.get("official_publish_date")),
                 "brochure_update_date": _clean_val(row.get("brochure_update_date")),
                 "target_audience": _clean_val(row.get("target_audience")),
-                "acquisition_form": _clean_val(row.get("acquisition_form")),
-                "participation_fee": _clean_val(row.get("participation_fee")),
                 "tender_duration_days": _clean_val(row.get("tender_duration_days")),
-                "land_area_sqm": _clean_val(row.get("land_area_sqm")),
                 "max_lots_per_bidder": _clean_val(row.get("max_lots_per_bidder")),
                 "lot_count": _clean_val(row.get("lot_count")),
                 "last_updated": now,
+                # NOTE: acquisition_form, participation_fee, and land_area_sqm
+                # are intentionally EXCLUDED here. The list API never provides
+                # these values, so including them would overwrite enrichment
+                # data with None on every daily refresh. They are set only via
+                # update_tender_fields() from the analytics enrichment pipeline.
             }
             tender_rows.append(tender_row)
 
@@ -403,7 +405,7 @@ class TenderDB:
         for col in ("publish_date", "deadline", "committee_date"):
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
-                df[col] = df[col].dt.tz_localize(None)
+                df[col] = df[col].dt.tz_convert(None)
 
         # Convert boolean-like columns
         if "published_booklet" in df.columns:

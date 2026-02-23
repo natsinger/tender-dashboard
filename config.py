@@ -123,7 +123,7 @@ NON_ACTIVE_STATUSES: list = [
 ]
 
 # ============================================================================
-# EMAIL ALERTS (Microsoft 365 SMTP)
+# EMAIL ALERTS (SMTP2GO)
 # ============================================================================
 
 SMTP_HOST: str = _get("SMTP_HOST", "mail.smtp2go.com")

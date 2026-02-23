@@ -343,7 +343,7 @@ st.markdown("""
     }
     /* Shrink the radio container inside columns */
     [data-testid="stColumn"] .stRadio {
-        margin-top: -10px;
+        margin-top: 0;
         margin-bottom: 0;
     }
 
@@ -654,6 +654,11 @@ st.markdown("""
         div[role="radiogroup"] label {
             font-size: 9px !important;
             padding: 0px 3px !important;
+        }
+        /* Ensure radio pills don't float on mobile */
+        [data-testid="stColumn"] .stRadio {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
 
         /* Pie title smaller */

@@ -5,23 +5,19 @@ Extracted from the main dashboard into its own page for cleaner navigation.
 Allows filtering by city, region, purpose, and status with CSV export.
 """
 
-from datetime import datetime, timedelta
-from pathlib import Path
+import html
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
 from config import (
-    CLOSING_SOON_DAYS,
     DATA_DIR,
-    DOCUMENT_DOWNLOAD_API,
     NON_ACTIVE_STATUSES,
     RELEVANT_TENDER_TYPES,
     RMI_SITE_URL,
-    TENDER_DETAIL_API,
 )
 from dashboard_utils import (
-    get_user_email,
     load_building_rights_data,
     load_data,
     load_tender_details,
@@ -33,6 +29,7 @@ from analytics_engine import score_all_tenders
 # ── Constants ────────────────────────────────────────────────────────────────
 RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
 
+# Compute `today` fresh on each render (not at module-import time).
 today = datetime.now()
 
 # ── Load & pre-filter data ───────────────────────────────────────────────────
@@ -200,6 +197,8 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
         force_refresh = st.checkbox("רענן", value=False, help="עקוף מטמון")
 
     if selected_tender_id:
+        if force_refresh:
+            load_tender_details.clear()
         with st.spinner(f"טוען פרטי מכרז {selected_tender_id}..."):
             details = load_tender_details(selected_tender_id)
             list_data = active_df[active_df["tender_id"] == selected_tender_id]
@@ -228,11 +227,11 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
             info_left, info_right = st.columns(2)
 
             with info_left:
-                tender_name = details.get("MichrazName", "N/A")
-                city_val = list_data.get("city", "N/A") if list_data else "N/A"
-                location = details.get("Shchuna", list_data.get("location", "") if list_data else "")
-                tender_type_val = list_data.get("tender_type", "N/A") if list_data else "N/A"
-                purpose_val = list_data.get("purpose", "N/A") if list_data else "N/A"
+                tender_name = html.escape(str(details.get("MichrazName", "N/A")))
+                city_val = html.escape(str(list_data.get("city", "N/A") if list_data else "N/A"))
+                location = html.escape(str(details.get("Shchuna", list_data.get("location", "") if list_data else "")))
+                tender_type_val = html.escape(str(list_data.get("tender_type", "N/A") if list_data else "N/A"))
+                purpose_val = html.escape(str(list_data.get("purpose", "N/A") if list_data else "N/A"))
                 st.markdown(
                     f'<div class="detail-field">'
                     f"<strong>שם מכרז:</strong> {tender_name}<br>"

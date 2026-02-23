@@ -74,12 +74,49 @@ class AlertEngine:
         self.user_db = user_db
         self.dry_run = dry_run
 
+    def _verify_smtp_connection(self) -> bool:
+        """Quick SMTP EHLO test to verify credentials before processing.
+
+        Returns:
+            True if SMTP connection and login succeed, False otherwise.
+        """
+        if not SMTP_USER or not SMTP_PASSWORD:
+            logger.error(
+                "SMTP credentials not configured (SMTP_USER or SMTP_PASSWORD empty). "
+                "Alert emails cannot be sent."
+            )
+            return False
+
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+            logger.info("SMTP connectivity check passed (%s:%d)", SMTP_HOST, SMTP_PORT)
+            return True
+        except Exception as exc:
+            logger.error(
+                "SMTP connectivity check FAILED (%s:%d): %s",
+                SMTP_HOST, SMTP_PORT, exc,
+            )
+            return False
+
     def check_and_send(self) -> int:
         """Main entry point. Check all watchlists and send alert emails.
 
         Returns:
             Number of emails sent (or would be sent in dry-run mode).
         """
+        # Verify SMTP connectivity before doing any work (skip in dry-run mode)
+        if not self.dry_run:
+            if not self._verify_smtp_connection():
+                logger.error(
+                    "Aborting alert check — SMTP is not reachable. "
+                    "Fix SMTP_HOST/SMTP_USER/SMTP_PASSWORD and retry."
+                )
+                return 0
+
         watchlist_entries = self.user_db.get_all_active_watchlists()
         if not watchlist_entries:
             logger.info("No active watchlist entries found")
@@ -96,11 +133,14 @@ class AlertEngine:
         )
 
         emails_sent = 0
+        emails_failed = 0
+        total_new_docs = 0
         for user_email, entries in user_entries.items():
             bundle = self._build_user_bundle(user_email, entries)
             if not bundle or not bundle.tender_alerts:
                 continue
 
+            total_new_docs += bundle.total_docs
             logger.info(
                 "User %s: %d tenders with %d new documents",
                 user_email, len(bundle.tender_alerts), bundle.total_docs,
@@ -114,8 +154,18 @@ class AlertEngine:
                 if success:
                     self._record_sent_alerts(bundle)
                     emails_sent += 1
+                else:
+                    emails_failed += 1
 
-        logger.info("Alert check complete: %d emails sent", emails_sent)
+        # Structured summary for CI visibility
+        logger.info(
+            "=== Alert summary | watchlist_entries=%d docs_found=%d "
+            "emails_sent=%d emails_failed=%d ===",
+            len(watchlist_entries),
+            total_new_docs,
+            emails_sent,
+            emails_failed,
+        )
         return emails_sent
 
     def _build_user_bundle(
