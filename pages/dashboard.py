@@ -602,11 +602,15 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
                     key="dash_review_status_select",
                 )
 
-            # Pre-populate notes from the saved review for the selected tender
+            # Pre-populate notes only when the selected tender changes,
+            # so user edits aren't overwritten on rerun.
             _cur_notes = _rev_map.get(_rev_tid, {}).get("notes", "") or ""
+            if st.session_state.get("_prev_rev_tid") != _rev_tid:
+                st.session_state["dash_review_notes"] = _cur_notes
+                st.session_state["_prev_rev_tid"] = _rev_tid
+
             _rev_notes = st.text_input(
                 "הערות (אופציונלי)",
-                value=_cur_notes,
                 key="dash_review_notes",
                 placeholder="...",
             )
@@ -618,6 +622,8 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
                     updated_by=_review_email,
                     notes=_rev_notes or None,
                 )
+                # Update session state to reflect saved notes
+                st.session_state["dash_review_notes"] = _rev_notes
                 st.success(f"מכרז {_rev_labels.get(_rev_tid, _rev_tid)}: {_prev or 'חדש'} → {_new_status}")
                 st.rerun()
     else:
