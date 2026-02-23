@@ -354,6 +354,17 @@ STRING_FIELDS: set[str] = {
     "gush",
 }
 
+# Summable fields — when merging continuation rows into a parent מתחם row,
+# these values are added together rather than overwritten.
+_SUMMABLE_INT_FIELDS: set[str] = {
+    "units_target_price",
+    "units_free_market",
+    "total_units",
+}
+_SUMMABLE_FLOAT_FIELDS: set[str] = {
+    "area_sqm",
+}
+
 
 def _find_section1_column_mapping(
     header_cells: list[Optional[str]],
@@ -445,7 +456,7 @@ def _clean_cell_value(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     cleaned = " ".join(str(value).split()).strip()
-    if not cleaned or cleaned == "-" or cleaned == "--":
+    if not cleaned or cleaned.strip("-") == "":
         return None
     return cleaned
 
@@ -510,6 +521,93 @@ def _parse_row(
     )
 
     return lot
+
+
+def _merge_continuation_rows(lots: list[dict]) -> list[dict]:
+    """Merge continuation rows (lot_number=None) into their parent מתחם rows.
+
+    In brochure tables each מתחם (lot) may span multiple rows — a main row
+    containing the lot number plus one or more continuation rows for
+    additional מגרש (sub-plot) groups.  Continuation rows have
+    lot_number=None and typically carry extra plot_numbers and
+    units_free_market values.
+
+    Merge rules:
+        - plot_numbers: concatenate with ``", "`` separator.
+        - Summable int/float fields (units_target_price, units_free_market,
+          total_units, area_sqm): add continuation values to parent.
+        - All other fields: keep the parent's value.
+
+    Args:
+        lots: Raw list of parsed lot dicts from ``_parse_row()``.
+
+    Returns:
+        Consolidated list where each dict represents one unique מתחם.
+    """
+    if not lots:
+        return lots
+
+    merged: list[dict] = []
+    current_parent: Optional[dict] = None
+
+    for lot in lots:
+        lot_num = lot.get("lot_number")
+
+        if lot_num is not None:
+            # New parent row — flush previous parent first
+            if current_parent is not None:
+                merged.append(current_parent)
+            current_parent = dict(lot)  # shallow copy
+        else:
+            # Continuation row — fold into current parent
+            if current_parent is None:
+                logger.debug("Skipping orphan continuation row (no parent)")
+                continue
+
+            # Concatenate plot_numbers
+            parent_plots = current_parent.get("plot_numbers") or ""
+            cont_plots = lot.get("plot_numbers") or ""
+            if cont_plots:
+                if parent_plots:
+                    current_parent["plot_numbers"] = f"{parent_plots}, {cont_plots}"
+                else:
+                    current_parent["plot_numbers"] = cont_plots
+
+            # Sum integer fields
+            for field in _SUMMABLE_INT_FIELDS:
+                cont_val = lot.get(field)
+                if cont_val is not None:
+                    parent_val = current_parent.get(field) or 0
+                    current_parent[field] = parent_val + cont_val
+
+            # Sum float fields
+            for field in _SUMMABLE_FLOAT_FIELDS:
+                cont_val = lot.get(field)
+                if cont_val is not None:
+                    parent_val = current_parent.get(field) or 0.0
+                    current_parent[field] = parent_val + cont_val
+
+            logger.debug(
+                "Merged continuation row into parent lot %s "
+                "(plots=%s, free_market +%s)",
+                current_parent.get("lot_number"),
+                cont_plots,
+                lot.get("units_free_market"),
+            )
+
+    # Flush the last parent
+    if current_parent is not None:
+        merged.append(current_parent)
+
+    if len(merged) < len(lots):
+        logger.info(
+            "Merged %d continuation rows: %d raw rows → %d lots",
+            len(lots) - len(merged),
+            len(lots),
+            len(merged),
+        )
+
+    return merged
 
 
 def _score_section1_table(col_mapping: dict[str, int]) -> int:
@@ -1237,6 +1335,10 @@ class BrochureLotExtractor:
 
         if not best_lots:
             logger.debug("No qualifying lot table found across %d pages", len(pages))
+            return best_lots
+
+        # Merge continuation rows (sub-מגרש groups) into their parent מתחם.
+        best_lots = _merge_continuation_rows(best_lots)
 
         return best_lots
 

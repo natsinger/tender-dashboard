@@ -307,12 +307,16 @@ with col_pies:
         else:
             st.info("אין נתונים")
 
-    # ── Pie 2: Brochures by region (with week slider) ────────────────────
+    # ── Pie 2: Brochures by region (with week pills) ─────────────────────
     with p2:
         st.markdown('<p class="pie-title" style="font-size:13px;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
         pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
-        urg = st.session_state.get("urgency_pie2", "4W")
-        pie2_days = pie2_opts.get(urg, 28)
+        # Week selector pills — legend-styled, sits between title and chart
+        _sel = st.radio(
+            "טווח", list(pie2_opts.keys()), index=2,
+            horizontal=True, key="urgency_pie2", label_visibility="collapsed",
+        )
+        pie2_days = pie2_opts.get(_sel, 28)
         pie2_df = active_df[active_df["published_booklet"] == True].copy()
         pie2_cut = today + timedelta(days=pie2_days)
         pie2_df = pie2_df[(pie2_df["deadline"].notna()) & (pie2_df["deadline"] >= today) & (pie2_df["deadline"] <= pie2_cut)]
@@ -321,18 +325,10 @@ with col_pies:
             br = pie2_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
             if not br.empty:
                 fig2 = px.pie(br, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
-                fig2.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                fig2.update_traces(textinfo="label+value", textposition="inside", textfont_size=10)
                 fig2.update_layout(
-                    height=220, margin=dict(t=5, b=30, l=5, r=5),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.05,
-                        xanchor="center",
-                        x=0.5,
-                        font=dict(size=10),
-                    ),
+                    height=220, margin=dict(t=5, b=5, l=5, r=5),
+                    showlegend=False,
                     font=PLOTLY_FONT, **PLOTLY_BG,
                 )
                 st.plotly_chart(fig2, use_container_width=True, key="pie_brochure_region")
@@ -340,11 +336,6 @@ with col_pies:
                 st.info("אין מכרזים בטווח")
         else:
             st.info("אין נתונים")
-        # Week selector pills
-        _sel = st.radio(
-            "טווח", list(pie2_opts.keys()), index=2,
-            horizontal=True, key="urgency_pie2", label_visibility="collapsed",
-        )
 
     # ── Bar chart: City distribution (full width under the two pies) ─────
     st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
@@ -353,12 +344,12 @@ with col_pies:
         if len(city_counts) > 0:
             fig_city_bar = px.bar(
                 x=city_counts.values, y=city_counts.index, orientation="h",
-                labels={"x": "מספר מכרזים", "y": "עיר"},
                 color=city_counts.values, color_continuous_scale=MEGIDO_GOLD_SCALE,
             )
             fig_city_bar.update_layout(
                 showlegend=False, height=220,
                 margin=dict(t=5, b=20, l=5, r=5),
+                xaxis_title=None, yaxis_title=None,
                 font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig_city_bar, use_container_width=True, key="bar_city")

@@ -504,12 +504,19 @@ class LandTendersClient:
             new_docs = db.upsert_documents(tid, doc_list)
             new_doc_count += len(new_docs)
 
-            # Backfill lot_count from Tik[] length in detail response.
+            # Backfill lot_count and max_lots_per_bidder from detail response.
             tik_list = details.get("Tik", [])
             if tik_list is not None:
                 lot_count = len(tik_list)
-                db.update_tender_fields(tid, {"lot_count": lot_count})
-                logger.debug("Backfilled lot_count=%d for tender %d", lot_count, tid)
+                backfill: dict = {"lot_count": lot_count}
+                max_to_win = details.get("MaxToWin")
+                if max_to_win is not None:
+                    backfill["max_lots_per_bidder"] = int(max_to_win)
+                db.update_tender_fields(tid, backfill)
+                logger.debug(
+                    "Backfilled lot_count=%d, max_lots=%s for tender %d",
+                    lot_count, max_to_win, tid,
+                )
 
         return new_doc_count
 
