@@ -183,9 +183,10 @@ if len(watchlist_df) > 0:
         for tid in watchlist_df['tender_id']
     ]
 
-    # Attach personal notes (read-only) from the watchlist table
+    # Attach review notes from the tender_reviews table (saved via "עדכן סטטוס")
     display_sel['notes'] = [
-        _notes_map.get(int(tid), "") for tid in watchlist_df['tender_id']
+        review_map.get(int(tid), {}).get("notes", "") or ""
+        for tid in watchlist_df['tender_id']
     ]
 
     st.dataframe(
