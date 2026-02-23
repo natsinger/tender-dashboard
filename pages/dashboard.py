@@ -622,9 +622,9 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
                     updated_by=_review_email,
                     notes=_rev_notes or None,
                 )
-                # Update session state to reflect saved notes
-                st.session_state["dash_review_notes"] = _rev_notes
                 st.success(f"מכרז {_rev_labels.get(_rev_tid, _rev_tid)}: {_prev or 'חדש'} → {_new_status}")
+                # Reset tracker so next rerun re-fetches notes from DB
+                st.session_state["_prev_rev_tid"] = None
                 st.rerun()
     else:
         st.info("אין מכרזים מועדפים. הוסף מכרזים דרך התפריט הצדדי ←")
