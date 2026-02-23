@@ -274,6 +274,9 @@ st.markdown("""
     }
 
     /* ── Buttons (Deep Blue) ── */
+    .stButton {
+        background: transparent !important;
+    }
     .stButton button {
         background-color: var(--mg-primary) !important;
         color: #FFFFFF !important;
