@@ -166,7 +166,7 @@ class UserDB:
         try:
             result = (
                 self._client.table("user_watchlist")
-                .select("id, tender_id, created_at")
+                .select("id, tender_id, created_at, notes")
                 .eq("user_email", email)
                 .eq("active", 1)
                 .order("created_at", desc=True)
@@ -176,6 +176,65 @@ class UserDB:
         except Exception as exc:
             logger.error("get_watchlist_rows failed: %s", exc)
             return []
+
+    def set_watchlist_note(self, user_email: str, tender_id: int, notes: str) -> bool:
+        """Save a personal note for a specific watched tender.
+
+        Uses an UPDATE so the notes column is written without touching other fields.
+        The row must already exist (added via add_to_watchlist) before calling this.
+
+        Args:
+            user_email: The user's email (lowercased for consistency).
+            tender_id: The tender's MichrazID.
+            notes: Free-text note string (may be empty to clear the note).
+
+        Returns:
+            True on success, False on error or if Supabase is not configured.
+        """
+        if not self._client:
+            return False
+        email = user_email.lower().strip()
+        try:
+            (
+                self._client.table("user_watchlist")
+                .update({"notes": notes})
+                .eq("user_email", email)
+                .eq("tender_id", tender_id)
+                .execute()
+            )
+            return True
+        except Exception as exc:
+            logger.error("set_watchlist_note failed: %s", exc)
+            return False
+
+    def get_watchlist_note(self, user_email: str, tender_id: int) -> Optional[str]:
+        """Retrieve the saved personal note for a watched tender.
+
+        Args:
+            user_email: The user's email.
+            tender_id: The tender's MichrazID.
+
+        Returns:
+            The saved note string, or None if not found / on error.
+        """
+        if not self._client:
+            return None
+        email = user_email.lower().strip()
+        try:
+            result = (
+                self._client.table("user_watchlist")
+                .select("notes")
+                .eq("user_email", email)
+                .eq("tender_id", tender_id)
+                .execute()
+            )
+            rows = result.data or []
+            if not rows:
+                return None
+            return rows[0].get("notes") or None
+        except Exception as exc:
+            logger.error("get_watchlist_note failed: %s", exc)
+            return None
 
     def get_all_active_watchlists(self) -> list[dict]:
         """Return all active watchlist entries (for the alert cron).

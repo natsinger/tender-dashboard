@@ -92,8 +92,11 @@ with f4:
     if sel_status:
         explorer_df = explorer_df[explorer_df["status"].isin(sel_status)]
 
-# Fixed display columns
-EXP_COLS = ["total_score", "tender_name", "city", "region", "tender_type", "purpose", "units", "deadline", "status", "published_booklet"]
+# Fixed display columns — lot_count and max_lots_per_bidder appear after units
+EXP_COLS = [
+    "total_score", "tender_name", "city", "region", "tender_type", "purpose",
+    "units", "lot_count", "max_lots_per_bidder", "deadline", "status", "published_booklet",
+]
 display_cols = [c for c in EXP_COLS if c in explorer_df.columns]
 
 if display_cols:
@@ -101,15 +104,31 @@ if display_cols:
     if "deadline" in exp_display.columns:
         exp_display = exp_display.sort_values("deadline", ascending=True, na_position="last")
 
+    # Reset index so positional row indices from selection events align with DataFrame rows.
+    exp_display = exp_display.reset_index(drop=True)
+
+    # Keep a parallel index mapping: display-row position → tender_id from explorer_df.
+    # exp_display only has EXP_COLS, so we need tender_id alongside it for the lookup.
+    _tender_id_by_row = (
+        explorer_df[["tender_id"] + display_cols]
+        .copy()
+    )
+    if "deadline" in _tender_id_by_row.columns:
+        _tender_id_by_row = _tender_id_by_row.sort_values("deadline", ascending=True, na_position="last")
+    _tender_id_by_row = _tender_id_by_row.reset_index(drop=True)
+
     for col in ["publish_date", "deadline", "committee_date"]:
         if col in exp_display.columns:
             exp_display[col] = pd.to_datetime(exp_display[col], errors="coerce")
 
-    st.caption(f"{len(exp_display):,} רשומות")
-    st.dataframe(
+    st.caption(f"{len(exp_display):,} רשומות — לחץ על שורה לצפייה בפרטי המכרז")
+
+    table_event = st.dataframe(
         exp_display,
         hide_index=True,
         use_container_width=True,
+        selection_mode="single-row",
+        on_select="rerun",
         column_config={
             "total_score": st.column_config.ProgressColumn("ציון", min_value=0, max_value=100, format="%.0f"),
             "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
@@ -118,11 +137,27 @@ if display_cols:
             "tender_type": st.column_config.TextColumn("סוג", width="medium"),
             "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
             "units": st.column_config.NumberColumn('יח"ד', format="%d"),
+            "lot_count": st.column_config.NumberColumn("מתחמים", format="%d"),
+            "max_lots_per_bidder": st.column_config.NumberColumn("מקס' לזוכה", format="%d"),
             "deadline": st.column_config.DateColumn("מועד סגירה", format="YYYY-MM-DD"),
             "status": st.column_config.TextColumn("סטטוס", width="small"),
             "published_booklet": st.column_config.CheckboxColumn("חוברת"),
         },
     )
+
+    # If the user clicked a row, sync its tender_id into session_state so the
+    # detail viewer's selectbox pre-selects it and the expander auto-opens.
+    _selected_rows = (
+        table_event.selection.rows
+        if table_event and hasattr(table_event, "selection") and table_event.selection
+        else []
+    )
+    if _selected_rows:
+        _row_idx = _selected_rows[0]
+        if 0 <= _row_idx < len(_tender_id_by_row):
+            _clicked_tid = _tender_id_by_row.iloc[_row_idx]["tender_id"]
+            st.session_state["detail_select"] = _clicked_tid
+            st.session_state["detail_expander_open"] = True
 
     csv = explorer_df[display_cols].to_csv(index=False, encoding="utf-8-sig")
     st.download_button(
@@ -137,7 +172,8 @@ if display_cols:
 # TENDER DETAIL VIEWER (expander)
 # ============================================================================
 
-with st.expander("צפייה בפרטי מכרז", expanded=False):
+_expander_open = st.session_state.get("detail_expander_open", False)
+with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
     col_select, col_refresh = st.columns([4, 1])
 
     with col_select:
@@ -482,12 +518,18 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
                     _COL_MAP = {
                         "lot_number": "מתחם",
                         "plot_numbers": "מגרש",
+                        "gush": "גוש",
+                        "helka": "חלקה",
                         "area_sqm": 'שטח מ"ר',
+                        "total_units": 'סה"כ יח"ד',
                         "units_target_price": 'יח"ד מטרה',
                         "units_free_market": 'יח"ד שוק חופשי',
                         "min_price": "מחיר מינימום \u20aa",
                         "guarantee_amount": "ערבות \u20aa",
+                        "development_costs": "עלויות פיתוח \u20aa",
                         "zoning_plan": 'תב"ע',
+                        "winner_name": "זוכה",
+                        "winning_amount": "סכום זכייה \u20aa",
                     }
                     _display_cols = [
                         c for c in _COL_MAP if c in _lots_df.columns
@@ -498,8 +540,11 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
 
                     # Numeric formatting config
                     _col_config = {}
-                    _num_cols_fmt_d = ['שטח מ"ר', 'יח"ד מטרה', 'יח"ד שוק חופשי']
-                    _num_cols_fmt_money = ["מחיר מינימום \u20aa", "ערבות \u20aa"]
+                    _num_cols_fmt_d = ['שטח מ"ר', 'סה"כ יח"ד', 'יח"ד מטרה', 'יח"ד שוק חופשי']
+                    _num_cols_fmt_money = [
+                        "מחיר מינימום \u20aa", "ערבות \u20aa",
+                        "עלויות פיתוח \u20aa", "סכום זכייה \u20aa",
+                    ]
                     for _nc in _num_cols_fmt_d:
                         if _nc in _lots_display.columns:
                             _col_config[_nc] = st.column_config.NumberColumn(
@@ -510,7 +555,7 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
                             _col_config[_mc] = st.column_config.NumberColumn(
                                 _mc, format="%,.0f",
                             )
-                    for _tc in ["מתחם", "מגרש", 'תב"ע']:
+                    for _tc in ["מתחם", "מגרש", "גוש", "חלקה", 'תב"ע', "זוכה"]:
                         if _tc in _lots_display.columns:
                             _col_config[_tc] = st.column_config.TextColumn(_tc)
 
@@ -524,6 +569,13 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
 
                     # ── Summary metrics ───────────────────────────────
                     _total_lots = len(_lots_display)
+                    _total_units = (
+                        pd.to_numeric(
+                            _lots_df.get("total_units"), errors="coerce",
+                        ).sum()
+                        if "total_units" in _lots_df.columns
+                        else 0
+                    )
                     _total_target = (
                         pd.to_numeric(
                             _lots_df.get("units_target_price"), errors="coerce",
@@ -539,12 +591,14 @@ with st.expander("צפייה בפרטי מכרז", expanded=False):
                         else 0
                     )
 
-                    _sm1, _sm2, _sm3 = st.columns(3)
+                    _sm1, _sm2, _sm3, _sm4 = st.columns(4)
                     with _sm1:
                         st.metric("סה\"כ מתחמים", f"{_total_lots:,}")
                     with _sm2:
-                        st.metric('יח"ד מטרה', f"{_total_target:,.0f}")
+                        st.metric('סה"כ יח"ד', f"{_total_units:,.0f}")
                     with _sm3:
+                        st.metric('יח"ד מטרה', f"{_total_target:,.0f}")
+                    with _sm4:
                         st.metric('יח"ד שוק חופשי', f"{_total_free:,.0f}")
                 else:
                     st.info("אין נתוני מתחמים למכרז זה")

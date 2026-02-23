@@ -477,6 +477,9 @@ class LandTendersClient:
     def sync_documents_to_db(self, tender_ids: List[int]) -> int:
         """Fetch details for given tenders and save their documents to DB.
 
+        Also backfills lot_count on the tenders table from the Tik[] array
+        in the detail response.
+
         Args:
             tender_ids: List of tender IDs to sync documents for.
 
@@ -500,6 +503,13 @@ class LandTendersClient:
 
             new_docs = db.upsert_documents(tid, doc_list)
             new_doc_count += len(new_docs)
+
+            # Backfill lot_count from Tik[] length in detail response.
+            tik_list = details.get("Tik", [])
+            if tik_list is not None:
+                lot_count = len(tik_list)
+                db.update_tender_fields(tid, {"lot_count": lot_count})
+                logger.debug("Backfilled lot_count=%d for tender %d", lot_count, tid)
 
         return new_doc_count
 
@@ -588,6 +598,11 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         duration = (ded - pub).dt.days
         df["tender_duration_days"] = duration.where(duration > 0, other=None)
 
+    # lot_count is not available from the list API (Tik[] only comes from detail endpoint).
+    # Ensure the column exists with None so downstream code can backfill it per-tender.
+    if "lot_count" not in df.columns:
+        df["lot_count"] = None
+
     return df
 
 
@@ -646,6 +661,109 @@ def generate_sample_data() -> pd.DataFrame:
         })
 
     return pd.DataFrame(data)
+
+
+def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract lot-level data from the API Tik[] array.
+
+    Maps structured API fields to the same schema used by BrochureLotExtractor,
+    so the output can be upserted directly via db.upsert_lots().
+
+    Fields extracted per lot:
+        MitchamName → lot_number, Shetach → area_sqm, Kibolet → total_units,
+        MechirSaf → min_price, SchumArvut → guarantee_amount,
+        mechirShuma → sqm_value_appraisal, HotzaotPituach → development_costs,
+        TochnitMigrash → zoning_plan + plot_numbers,
+        GushHelka → gush + helka,
+        ShemZoche → winner_name, SchumZchiya → winning_amount.
+
+    Args:
+        details: Tender details dict from the API (fetch_tender_details output).
+
+    Returns:
+        List of lot dicts ready for db.upsert_lots(). Empty list if no Tik data.
+    """
+    tik_list = details.get("Tik", [])
+    if not tik_list:
+        return []
+
+    lots: List[Dict[str, Any]] = []
+
+    for tik in tik_list:
+        lot: Dict[str, Any] = {"data_source": "api"}
+
+        # Lot number — parse MitchamName as int if possible
+        mitcham_name = tik.get("MitchamName")
+        if mitcham_name is not None:
+            mitcham_str = str(mitcham_name).strip()
+            try:
+                lot["lot_number"] = int(mitcham_str)
+            except ValueError:
+                lot["lot_number"] = None
+                logger.debug("Non-numeric MitchamName: %r", mitcham_str)
+
+        # Numeric fields — direct mapping
+        _NUMERIC_MAP = {
+            "Shetach": "area_sqm",
+            "Kibolet": "total_units",
+            "MechirSaf": "min_price",
+            "SchumArvut": "guarantee_amount",
+            "mechirShuma": "sqm_value_appraisal",
+            "HotzaotPituach": "development_costs",
+            "SchumZchiya": "winning_amount",
+        }
+        for api_field, lot_field in _NUMERIC_MAP.items():
+            val = tik.get(api_field)
+            if val is not None and val != 0:
+                lot[lot_field] = val
+
+        # Winner name (string, only meaningful for awarded tenders)
+        winner = tik.get("ShemZoche")
+        if winner and str(winner).strip():
+            lot["winner_name"] = str(winner).strip()
+
+        # Zoning plan + plot numbers from TochnitMigrash[]
+        tochnit_list = tik.get("TochnitMigrash", [])
+        if tochnit_list:
+            plans = []
+            plots = []
+            for tm in tochnit_list:
+                plan = tm.get("Tochnit")
+                if plan and str(plan).strip():
+                    plans.append(str(plan).strip())
+                plot = tm.get("MigrashName")
+                if plot and str(plot).strip():
+                    plots.append(str(plot).strip())
+            if plans:
+                lot["zoning_plan"] = ", ".join(dict.fromkeys(plans))
+            if plots:
+                lot["plot_numbers"] = ", ".join(dict.fromkeys(plots))
+
+        # Gush + Helka from GushHelka[]
+        gush_helka_list = tik.get("GushHelka", [])
+        if gush_helka_list:
+            gushim = []
+            helkot = []
+            for gh in gush_helka_list:
+                g = gh.get("Gush")
+                if g and str(g).strip():
+                    gushim.append(str(g).strip())
+                h = gh.get("Helka")
+                if h and str(h).strip():
+                    helkot.append(str(h).strip())
+            if gushim:
+                lot["gush"] = ", ".join(dict.fromkeys(gushim))
+            if helkot:
+                lot["helka"] = ", ".join(dict.fromkeys(helkot))
+
+        lots.append(lot)
+
+    logger.info(
+        "Extracted %d lots from API Tik[] (tender %s)",
+        len(lots),
+        details.get("MichrazID", "?"),
+    )
+    return lots
 
 
 if __name__ == "__main__":

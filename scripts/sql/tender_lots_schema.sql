@@ -55,3 +55,14 @@ CREATE POLICY "Allow service_role full access on tender_lots"
     TO service_role
     USING (true)
     WITH CHECK (true);
+
+-- 5. API-first lot integration — new columns for structured API data
+--    These columns were previously only available via PDF extraction;
+--    now populated from the Tik[] array in tender details API response.
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS total_units         INT;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS development_costs   NUMERIC;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS gush                TEXT;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS helka               TEXT;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS winner_name         TEXT;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS winning_amount      NUMERIC;
+ALTER TABLE tender_lots ADD COLUMN IF NOT EXISTS data_source         TEXT DEFAULT 'pdf';

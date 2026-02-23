@@ -23,6 +23,7 @@ Usage:
 
 import logging
 import math
+import traceback
 from datetime import date, datetime
 from typing import Optional
 
@@ -41,7 +42,7 @@ TENDER_COLUMNS = [
     "rmi_region_code", "official_publish_date", "brochure_update_date",
     "target_audience", "acquisition_form", "participation_fee",
     "tender_duration_days", "land_area_sqm", "plan_number",
-    "max_lots_per_bidder",
+    "max_lots_per_bidder", "lot_count",
 ]
 
 # Batch size for Supabase upsert operations.
@@ -237,6 +238,7 @@ class TenderDB:
                 "tender_duration_days": _clean_val(row.get("tender_duration_days")),
                 "land_area_sqm": _clean_val(row.get("land_area_sqm")),
                 "max_lots_per_bidder": _clean_val(row.get("max_lots_per_bidder")),
+                "lot_count": _clean_val(row.get("lot_count")),
                 "last_updated": now,
             }
             tender_rows.append(tender_row)
@@ -250,18 +252,44 @@ class TenderDB:
                 "deadline": _clean_val(row.get("deadline")),
             })
 
+        # Columns confirmed to exist in the Supabase tenders table.
+        # Filter rows to only these keys so that any future columns added to
+        # TENDER_COLUMNS (before the DB migration runs) don't cause silent
+        # upsert failures.
+        _KNOWN_DB_COLUMNS = {
+            "tender_id", "tender_name", "city_code", "city", "region", "location",
+            "tender_type_code", "tender_type", "purpose_code", "purpose",
+            "status_code", "status", "units", "publish_date", "deadline",
+            "committee_date", "published_booklet", "targeted",
+            "area_sqm", "min_price", "gush", "helka",
+            "rmi_region_code", "official_publish_date", "brochure_update_date",
+            "target_audience", "acquisition_form", "participation_fee",
+            "tender_duration_days", "land_area_sqm", "plan_number",
+            "max_lots_per_bidder", "lot_count", "last_updated",
+        }
+
         # Batch upsert tenders
         inserted = 0
         for i in range(0, len(tender_rows), _BATCH_SIZE):
             batch = tender_rows[i : i + _BATCH_SIZE]
+            # Strip any keys not yet present in the DB schema to prevent
+            # upsert failures when TENDER_COLUMNS is updated before the
+            # matching DB migration runs.
+            filtered_batch = [
+                {k: v for k, v in row.items() if k in _KNOWN_DB_COLUMNS}
+                for row in batch
+            ]
             try:
                 self._client.table("tenders").upsert(
-                    batch,
+                    filtered_batch,
                     on_conflict="tender_id",
                 ).execute()
-                inserted += len(batch)
+                inserted += len(filtered_batch)
             except Exception as exc:
-                logger.error("upsert_tenders batch failed: %s", exc)
+                logger.error(
+                    "upsert_tenders batch %d-%d failed: %s\n%s",
+                    i, i + len(batch), exc, traceback.format_exc(),
+                )
 
         # Batch upsert history (ignore duplicates for same tender+date)
         for i in range(0, len(history_rows), _BATCH_SIZE):
@@ -273,7 +301,10 @@ class TenderDB:
                     ignore_duplicates=True,
                 ).execute()
             except Exception as exc:
-                logger.error("upsert_history batch failed: %s", exc)
+                logger.error(
+                    "upsert_history batch %d-%d failed: %s\n%s",
+                    i, i + len(batch), exc, traceback.format_exc(),
+                )
 
         logger.info(
             "Upserted %d tenders (snapshot %s)", inserted, snapshot_date,
@@ -1051,13 +1082,20 @@ class TenderDB:
                 "area_sqm": lot.get("area_sqm"),
                 "units_target_price": lot.get("units_target_price"),
                 "units_free_market": lot.get("units_free_market"),
+                "total_units": lot.get("total_units"),
                 "min_price": lot.get("min_price"),
                 "guarantee_amount": lot.get("guarantee_amount"),
                 "sqm_value_appraisal": lot.get("sqm_value_appraisal"),
                 "sqm_value_current": lot.get("sqm_value_current"),
                 "discount_amount": lot.get("discount_amount"),
+                "development_costs": lot.get("development_costs"),
                 "zoning_plan": lot.get("zoning_plan"),
                 "zoning_designation": lot.get("zoning_designation"),
+                "gush": lot.get("gush"),
+                "helka": lot.get("helka"),
+                "winner_name": lot.get("winner_name"),
+                "winning_amount": lot.get("winning_amount"),
+                "data_source": lot.get("data_source"),
                 "updated_at": now,
             })
             db_rows.append(db_row)

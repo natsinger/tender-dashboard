@@ -14,6 +14,7 @@ Usage:
 import logging
 import os
 import sys
+import traceback
 from pathlib import Path
 
 # Add project root to path
@@ -50,7 +51,11 @@ def main() -> None:
         rows = client.save_to_db(df)
         logger.info("Saved %d tenders to database", rows)
     except Exception as exc:
-        logger.warning("Failed to save to database (non-fatal): %s", exc)
+        logger.error(
+            "Failed to save to database: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
 
     # 4. Sync documents for active tenders (non-fatal — skipped if API is slow)
     try:
