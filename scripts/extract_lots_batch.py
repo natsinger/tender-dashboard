@@ -352,6 +352,8 @@ def process_tender(
         upserted = db.upsert_lots(tender_id, merged_lots)
         result["lots_count"] = upserted
         logger.info("Tender %d: upserted %d merged lots", tender_id, upserted)
+        # Persist lot_count on the tenders table for dashboard display
+        db.update_tender_fields(tender_id, {"lot_count": len(merged_lots)})
 
     # ── Step 7: Persist max_lots_per_bidder ───────────────────────────
     # API MaxToWin is the source of truth; PDF extraction is fallback.
@@ -359,6 +361,7 @@ def process_tender(
     pdf_max = pdf_extraction.get("max_lots_per_bidder") if pdf_extraction else None
 
     if api_max is not None:
+        db.update_max_lots_per_bidder(tender_id, int(api_max))
         result["max_lots_per_bidder"] = api_max
         logger.info("Tender %d: using API MaxToWin=%d", tender_id, api_max)
     elif pdf_max is not None:
