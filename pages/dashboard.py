@@ -283,7 +283,7 @@ with col_kpi:
             )
             fig1.update_traces(textinfo="value", textposition="inside", textfont_size=12)
             fig1.update_layout(
-                height=200, margin=dict(t=5, b=30, l=5, r=5),
+                height=190, margin=dict(t=0, b=25, l=0, r=0),
                 showlegend=True,
                 legend=dict(
                     orientation="h",
@@ -301,8 +301,15 @@ with col_kpi:
 
     with _pie2:
         st.markdown('<p class="pie-title" style="font-size:13px;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
+        # Week selector — horizontal radio pills (1W / 2W / 4W)
+        pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
+        _sel = st.radio(
+            "טווח", list(pie2_opts.keys()), index=2,
+            horizontal=True, key="urgency_pie2", label_visibility="collapsed",
+        )
+        pie2_days = pie2_opts.get(_sel, 28)
         pie2_df = active_df[active_df["published_booklet"] == True].copy()
-        pie2_cut = today + timedelta(days=28)
+        pie2_cut = today + timedelta(days=pie2_days)
         pie2_df = pie2_df[(pie2_df["deadline"].notna()) & (pie2_df["deadline"] >= today) & (pie2_df["deadline"] <= pie2_cut)]
 
         if "region" in pie2_df.columns and len(pie2_df) > 0:
@@ -311,7 +318,7 @@ with col_kpi:
                 fig2 = px.pie(br, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
                 fig2.update_traces(textinfo="value", textposition="inside", textfont_size=12)
                 fig2.update_layout(
-                    height=200, margin=dict(t=5, b=30, l=5, r=5),
+                    height=190, margin=dict(t=0, b=25, l=0, r=0),
                     showlegend=True,
                     legend=dict(
                         orientation="h",
@@ -325,18 +332,11 @@ with col_kpi:
                 )
                 st.plotly_chart(fig2, use_container_width=True, key="pie_brochure_region")
             else:
-                st.info("אין חוברות ב-4 שבועות הקרובים")
+                st.info("אין מכרזים בטווח")
         else:
             st.info("אין נתונים")
 
-
-# ============================================================================
-# ROW 2: CITY BAR CHART + CLOSING DEADLINES
-# ============================================================================
-
-col_city, col_deadlines = st.columns([3, 2])
-
-with col_city:
+    # ── Bar chart: City distribution (full width under pies, same column) ─
     st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
     if "city" in active_df.columns and len(active_df) > 0:
         city_counts = active_df["city"].value_counts().head(10)
@@ -357,17 +357,25 @@ with col_city:
     else:
         st.info("אין נתונים")
 
+
+# ============================================================================
+# ROW 2: CLOSING DEADLINES (full width)
+# ============================================================================
+
+col_deadlines = st.container()
+
 with col_deadlines:
     st.markdown(
         '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">מועדי סגירה</div>',
         unsafe_allow_html=True,
     )
 
-    show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
-
-    # Initialize brochure filter state
-    if "show_no_brochure" not in st.session_state:
-        st.session_state["show_no_brochure"] = False
+    # Controls row: הצג הכל toggle + brochure ON/OFF toggle
+    _ctrl1, _ctrl2 = st.columns(2)
+    with _ctrl1:
+        show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
+    with _ctrl2:
+        _show_all_brochure = st.toggle("ללא חוברת", value=False, key="brochure_toggle")
 
     upcoming = active_df[
         (active_df["deadline"].notna())
@@ -377,8 +385,9 @@ with col_deadlines:
     if not show_all_deadlines:
         upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
 
-    # Default: show only tenders WITH brochure.
-    if not st.session_state["show_no_brochure"] and "published_booklet" in upcoming.columns:
+    # Default (toggle OFF = עם חוברת): show only tenders WITH brochure.
+    # Toggle ON (ללא חוברת): show all including without brochure.
+    if not _show_all_brochure and "published_booklet" in upcoming.columns:
         upcoming = upcoming[upcoming["published_booklet"] == True]
 
     if len(upcoming) > 0:
@@ -430,12 +439,6 @@ with col_deadlines:
         st.caption(f"{len(up_disp)} מכרזים")
     else:
         st.info("אין מכרזים קרובים לסגירה")
-
-    # Small button to include tenders without brochure
-    _brochure_label = "מציג גם בלי חוברת ❌" if st.session_state["show_no_brochure"] else "הצג גם מכרזים בלי חוברת"
-    if st.button(_brochure_label, key="brochure_filter_btn"):
-        st.session_state["show_no_brochure"] = not st.session_state["show_no_brochure"]
-        st.rerun()
 
 st.markdown("---")
 

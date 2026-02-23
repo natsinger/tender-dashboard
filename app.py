@@ -468,9 +468,10 @@ st.markdown("""
         gap: 0.75rem;
     }
 
-    /* ── Plotly chart containers: no overflow ── */
+    /* ── Plotly chart containers: no overflow, tight spacing ── */
     .stPlotlyChart {
         overflow: visible !important;
+        margin-bottom: -10px !important;
     }
     .js-plotly-plot, .plot-container {
         overflow: visible !important;
