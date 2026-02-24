@@ -179,7 +179,7 @@ def _aggregate_lot_data(tender_ids: list[int]) -> dict[int, dict]:
 # SECTION 1: SELECTED TENDERS + REVIEW STATUS (מכרזים מועדפים - חדר עסקאות)
 # ============================================================================
 
-st.markdown("#### מכרזים מועדפים - חדר עסקאות")
+st.markdown('<h4 style="text-align:left;">מכרזים מועדפים - חדר עסקאות</h4>', unsafe_allow_html=True)
 
 # Build watchlist_df by joining Supabase rows (id, tender_id, created_at, notes) with tender data
 _watched_rows_main = watch_db.get_watchlist_rows(TEAM_EMAIL)
@@ -336,6 +336,13 @@ with st.expander(f"נסגרים ב14 ימים הקרובים ({len(closing_soon)
         # Reorder: add purpose between tender_type and units (RTL visual order)
         display_cs = display_cs[['deadline_fmt', 'units', 'purpose', 'tender_type', 'city', 'tender_name', 'booklet']]
 
+        _cs_brochure = st.pills(
+            "חוברת", ["הכל", "עם חוברת"], default="הכל",
+            key="mgmt_closing_brochure", label_visibility="collapsed",
+        )
+        if _cs_brochure == "עם חוברת":
+            display_cs = display_cs[display_cs["booklet"] == "✅"]
+
         _cs_columns = {
             **_COMPACT_COLUMNS,
             "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
@@ -380,7 +387,7 @@ with st.expander(f"נסגרים ב14 ימים הקרובים ({len(closing_soon)
 # ============================================================================
 
 st.markdown("---")
-st.markdown("#### מכרזי מקרקעין לדיור למכירה")
+st.markdown('<h4 style="text-align:left;">מכרזי מקרקעין לדיור למכירה</h4>', unsafe_allow_html=True)
 
 # ============================================================================
 # SECTION 2B: PIE CHARTS + KPI CARDS
@@ -409,7 +416,7 @@ with _pie_col:
             # CHANGE 7: Aligned pie parameters
             _fig_b.update_traces(textinfo="value", textposition="inside", textfont_size=14)
             _fig_b.update_layout(
-                height=220, margin=dict(t=5, b=30, l=5, r=5),
+                height=264, margin=dict(t=5, b=36, l=5, r=5),
                 showlegend=True,
                 legend=dict(
                     orientation="h", yanchor="top", y=-0.05,
@@ -434,7 +441,7 @@ with _pie_col:
                 # CHANGE 7: Aligned pie parameters (identical to booklet pie)
                 _fig_r.update_traces(textinfo="value", textposition="inside", textfont_size=14)
                 _fig_r.update_layout(
-                    height=220, margin=dict(t=5, b=30, l=5, r=5),
+                    height=264, margin=dict(t=5, b=36, l=5, r=5),
                     showlegend=True,
                     legend=dict(
                         orientation="h", yanchor="top", y=-0.05,
@@ -480,15 +487,28 @@ st.markdown(
     unsafe_allow_html=True,
 )
 if "city" in _card_active.columns and len(_card_active) > 0:
-    _city_counts = _card_active["city"].value_counts().head(10)
-    if len(_city_counts) > 0:
+    _city_grp = _card_active.groupby("city").agg(
+        tender_count=("tender_id", "count"),
+        total_units=("units", "sum"),
+    ).sort_values("tender_count", ascending=False).head(10)
+    if not _city_grp.empty:
         _fig_city = px.bar(
-            x=_city_counts.values, y=_city_counts.index, orientation="h",
-            color_discrete_sequence=["#2563EB"],
+            x=_city_grp.index, y=_city_grp["tender_count"],
+            orientation="v", color_discrete_sequence=["#2563EB"],
+            text=_city_grp["tender_count"],
         )
+        # Add unit totals as annotations above each bar
+        for i, (city_name, row) in enumerate(_city_grp.iterrows()):
+            _fig_city.add_annotation(
+                x=city_name, y=row["tender_count"],
+                text=f'סה"כ {int(row["total_units"]):,} יח"ד',
+                showarrow=False, yshift=14,
+                font=dict(size=10, color="#1E293B"),
+            )
+        _fig_city.update_traces(textposition="inside", textfont_size=13)
         _fig_city.update_layout(
-            showlegend=False, height=260,
-            margin=dict(t=5, b=20, l=100, r=5),
+            showlegend=False, height=320,
+            margin=dict(t=30, b=60, l=5, r=5),
             xaxis_title=None, yaxis_title=None,
             coloraxis_showscale=False,
             font=PLOTLY_FONT, **PLOTLY_BG,
@@ -506,7 +526,7 @@ st.markdown("---")
 # SECTION 3: BOTTOM CATEGORY CARDS — דיור להשכרה, דיור מוגן, מכרז ייזום
 # ============================================================================
 
-st.markdown("#### סוגים נוספים")
+st.markdown('<h4 style="text-align:left;">סוגים נוספים</h4>', unsafe_allow_html=True)
 
 # _all_typed / _all_active already computed above (before closing-soon section)
 
@@ -517,8 +537,13 @@ with tab_diur_h:
     if len(diur_h_df) > 0:
         _units_dh = int(diur_h_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_dh:,}")
-        # CHANGE 10: show_days_count=False (date only, no parenthesized days)
         display_dh = _build_compact_table(diur_h_df, show_days_count=False)
+        _dh_brochure = st.pills(
+            "חוברת", ["הכל", "עם חוברת"], default="הכל",
+            key="mgmt_dh_brochure", label_visibility="collapsed",
+        )
+        if _dh_brochure == "עם חוברת":
+            display_dh = display_dh[display_dh["booklet"] == "✅"]
         st.dataframe(
             display_dh,
             column_config=_COMPACT_COLUMNS,
@@ -534,8 +559,13 @@ with tab_diur_m:
     if len(diur_m_df) > 0:
         _units_dm = int(diur_m_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_dm:,}")
-        # CHANGE 10: show_days_count=False
         display_dm = _build_compact_table(diur_m_df, show_days_count=False)
+        _dm_brochure = st.pills(
+            "חוברת", ["הכל", "עם חוברת"], default="הכל",
+            key="mgmt_dm_brochure", label_visibility="collapsed",
+        )
+        if _dm_brochure == "עם חוברת":
+            display_dm = display_dm[display_dm["booklet"] == "✅"]
         st.dataframe(
             display_dm,
             column_config=_COMPACT_COLUMNS,
@@ -551,8 +581,13 @@ with tab_yezum:
     if len(yezum_df) > 0:
         _units_yz = int(yezum_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_yz:,}")
-        # CHANGE 10: show_days_count=False
         display_y = _build_compact_table(yezum_df, show_days_count=False)
+        _yz_brochure = st.pills(
+            "חוברת", ["הכל", "עם חוברת"], default="הכל",
+            key="mgmt_yz_brochure", label_visibility="collapsed",
+        )
+        if _yz_brochure == "עם חוברת":
+            display_y = display_y[display_y["booklet"] == "✅"]
         st.dataframe(
             display_y,
             column_config=_COMPACT_COLUMNS,
