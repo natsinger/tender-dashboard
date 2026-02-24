@@ -137,6 +137,20 @@ DEV_USER_EMAIL: str = _get("DEV_USER_EMAIL", "")
 # Shared team email for the management watchlist (all members see the same list)
 TEAM_EMAIL: str = _get("TEAM_EMAIL", "team@tender-dashboard.local")
 
+# Comma-separated list of email addresses that receive alert notifications.
+# Defaults to TEAM_EMAIL if not set.
+ALERT_RECIPIENTS: list[str] = [
+    e.strip() for e in _get("ALERT_RECIPIENTS", "").split(",") if e.strip()
+] or [TEAM_EMAIL]
+
+# Comma-separated list of emails allowed to view the management page (לוח הנהלה).
+# If empty, the management page is visible to everyone (no restriction).
+MANAGEMENT_ALLOWED_EMAILS: list[str] = [
+    e.strip().lower()
+    for e in _get("MANAGEMENT_ALLOWED_EMAILS", "").split(",")
+    if e.strip()
+]
+
 # ============================================================================
 # SUPABASE (persistent user data: watchlist, reviews, alert_history)
 # ============================================================================

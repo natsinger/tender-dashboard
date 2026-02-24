@@ -21,7 +21,6 @@ from dashboard_utils import (
     load_building_rights_data,
     load_data,
     load_tender_details,
-    render_email_input,
 )
 from data_client import LandTendersClient, build_document_url
 from analytics_engine import score_all_tenders
@@ -33,8 +32,6 @@ RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת 
 today = datetime.now()
 
 # ── Load & pre-filter data ───────────────────────────────────────────────────
-render_email_input()
-
 df_all = load_data(data_source="latest_file")
 df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
 if "purpose" in df.columns:
