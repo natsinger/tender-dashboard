@@ -12,6 +12,9 @@ import logging
 
 import streamlit as st
 
+from config import MANAGEMENT_ALLOWED_EMAILS
+from dashboard_utils import get_user_email, render_email_input
+
 # ── Logging setup ─────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -734,13 +737,25 @@ st.markdown("""
 
 
 # ============================================================================
+# EMAIL IDENTIFICATION (must run before navigation so page list is dynamic)
+# ============================================================================
+
+render_email_input()
+_current_email = get_user_email().strip().lower()
+
+# ============================================================================
 # MULTIPAGE NAVIGATION
 # ============================================================================
 
-management = st.Page("pages/management.py", title="לוח הנהלה", icon="📊", default=True)
-dashboard = st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋")
-explorer = st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍")
-analytics = st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈")
+# Management page — restricted to allowed emails (or open if list is empty)
+_show_management = not MANAGEMENT_ALLOWED_EMAILS or _current_email in MANAGEMENT_ALLOWED_EMAILS
 
-pg = st.navigation([management, dashboard, explorer, analytics])
+_pages: list = []
+if _show_management:
+    _pages.append(st.Page("pages/management.py", title="לוח הנהלה", icon="📊", default=True))
+_pages.append(st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋", default=not _show_management))
+_pages.append(st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍"))
+_pages.append(st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈"))
+
+pg = st.navigation(_pages)
 pg.run()

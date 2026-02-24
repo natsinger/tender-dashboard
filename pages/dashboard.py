@@ -31,7 +31,6 @@ from dashboard_utils import (
     find_new_tender_ids_from_snapshots,
     get_user_email,
     load_data,
-    render_email_input,
 )
 from analytics_engine import score_all_tenders
 from user_db import REVIEW_STAGES, UserDB
@@ -55,8 +54,6 @@ user_db = _get_user_db()
 today = datetime.now()
 
 # ── Load & pre-filter data ───────────────────────────────────────────────────
-render_email_input()
-
 df_all = load_data(data_source="latest_file")
 # Pre-filter: only relevant types
 df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
