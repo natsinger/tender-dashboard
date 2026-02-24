@@ -2,8 +2,8 @@
 Full dashboard page — daily user view (דאשבורד חדר עסקאות).
 
 Compact executive layout: pre-filtered to relevant tender types + purposes.
-Sections: header, new documents tables, KPIs, pies + deadlines,
-watchlist, review status, bottom category cards, debug.
+Sections: header, new documents tables, KPIs + deadlines,
+review status table, bottom category cards, analytics, debug.
 Branded for MEGIDO BY AURA.
 """
 
@@ -70,22 +70,101 @@ active_df = filter_active(df)
 
 
 # ============================================================================
-# SIDEBAR — brand + team watchlist (מכרזים מועדפים - חדר עסקאות)
+# SIDEBAR — brand + watchlist management + review status editing
 # ============================================================================
+
+_REVIEW_EMOJI: dict[str, str] = {
+    "לא נסקר": "⬜",
+    "סקירה ראשונית": "🔵",
+    "בדיקה מעמיקה": "🟣",
+    "הוצג בפורום": "🟠",
+    "אושר בפורום": "🟢",
+}
 
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
     if logo_path.exists():
         st.image(str(logo_path), width=140)
 
-    # ── Team watchlist management ────────────────────────────────────────
+    # ── Personal watchlist management (moved from ROW 3) ──────────────
     st.markdown("---")
     st.markdown(
-        '<h4 style="color:#E2E8F0 !important;">מכרזים מועדפים - חדר עסקאות</h4>',
+        '<h4 style="color:#E2E8F0 !important;">ניהול מועדפים</h4>',
         unsafe_allow_html=True,
     )
 
     _sidebar_email = get_user_email()
+
+    if not _sidebar_email:
+        st.caption("יש להזדהות כדי לנהל מכרזים מועדפים")
+    else:
+        st.caption(f"משתמש: {_sidebar_email}")
+        _personal_db = user_db
+
+        if not _personal_db.available:
+            st.warning("Supabase לא מוגדר — רשימת המעקב לא תישמר.")
+
+        # ── Personal watchlist: add tender ──────────────────────────
+        _watch_labels: dict[int, str] = {}
+        for _, _r in df[["tender_id", "tender_name", "city"]].iterrows():
+            _name = str(_r["tender_name"])[:40] if pd.notna(_r["tender_name"]) else ""
+            _city = str(_r["city"])[:15] if pd.notna(_r["city"]) else ""
+            _watch_labels[int(_r["tender_id"])] = f"{_name} — {_city}" if _city else _name
+
+        watch_tender_id = st.selectbox(
+            "הוספה למעקב אישי",
+            options=list(_watch_labels.keys()),
+            index=None,
+            format_func=lambda tid: _watch_labels[tid],
+            placeholder="הקלד שם מכרז או עיר...",
+            key="watch_tender_input",
+        )
+
+        if st.button("הוסף למעקב", key="btn_add_watch", use_container_width=True):
+            if watch_tender_id is not None:
+                added = _personal_db.add_to_watchlist(_sidebar_email, int(watch_tender_id))
+                if added:
+                    st.success("נוסף!")
+                    st.rerun()
+                else:
+                    st.info("כבר ברשימה.")
+
+        # ── Personal watchlist: current items ──────────────────────
+        watchlist_rows = _personal_db.get_watchlist_rows(_sidebar_email)
+        if watchlist_rows:
+            _tender_lookup = df.set_index("tender_id").to_dict("index") if not df.empty else {}
+            for row in watchlist_rows:
+                tid = int(row["tender_id"])
+                t = _tender_lookup.get(tid, {})
+                _tdisplay = str(t.get("tender_name", tid))[:25]
+                _tcity = str(t.get("city", ""))[:12]
+                _tunits = t.get("units", "")
+                _tunits_str = f' | {int(_tunits)} יח"ד' if _tunits and pd.notna(_tunits) and int(_tunits) > 0 else ""
+                _wc1, _wc2 = st.columns([5, 1])
+                with _wc1:
+                    st.markdown(
+                        f'<span style="color:#E2E8F0;font-size:0.82rem;">'
+                        f"{_tdisplay}"
+                        f'</span><br>'
+                        f'<span style="color:#60A5FA;font-size:0.75rem;">'
+                        f"{_tcity}{_tunits_str}"
+                        f'</span>',
+                        unsafe_allow_html=True,
+                    )
+                with _wc2:
+                    if st.button("🗑️", key=f"rm_watch_{row['id']}"):
+                        _personal_db.remove_from_watchlist(_sidebar_email, tid)
+                        st.rerun()
+        else:
+            st.caption("אין מכרזים במעקב אישי")
+
+    # ── Team watchlist management ────────────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        '<h4 style="color:#E2E8F0 !important;">מועדפים - חדר עסקאות</h4>',
+        unsafe_allow_html=True,
+    )
+
     _team_db = user_db
 
     if not _sidebar_email:
@@ -143,6 +222,72 @@ with st.sidebar:
         else:
             st.caption("אין מכרזים מועדפים")
 
+    # ── Review status editing (moved from ROW 4 form) ─────────────────
+    st.markdown("---")
+    st.markdown(
+        '<h4 style="color:#E2E8F0 !important;">עדכון סטטוס סקירה</h4>',
+        unsafe_allow_html=True,
+    )
+
+    _review_email = get_user_email()
+    _review_db = user_db
+
+    _team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
+    _team_df = df[df["tender_id"].astype(int).isin(_team_ids)].copy() if _team_ids else pd.DataFrame()
+
+    if not _review_email:
+        st.caption("יש להזדהות כדי לעדכן סטטוס סקירה.")
+    elif len(_team_df) > 0:
+        _rev_ids = _team_df["tender_id"].astype(int).tolist()
+        _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
+
+        _rev_labels: dict[int, str] = {}
+        for _, _r in _team_df.iterrows():
+            _rname = str(_r.get("tender_name", ""))[:30]
+            _rcity = str(_r.get("city", ""))[:15]
+            _rev_labels[int(_r["tender_id"])] = f"{_rname} — {_rcity}"
+
+        _rev_tid = st.selectbox(
+            "מכרז",
+            options=list(_rev_labels.keys()),
+            format_func=lambda tid: _rev_labels[tid],
+            key="dash_review_tender_select",
+        )
+
+        _cur_status = _rev_map.get(_rev_tid, {}).get("status", REVIEW_STAGES[0])
+        _cur_idx = REVIEW_STAGES.index(_cur_status) if _cur_status in REVIEW_STAGES else 0
+        _new_status = st.selectbox(
+            "סטטוס חדש",
+            options=REVIEW_STAGES,
+            index=_cur_idx,
+            key="dash_review_status_select",
+        )
+
+        # Pre-populate notes only when the selected tender changes
+        _cur_notes = _rev_map.get(_rev_tid, {}).get("notes", "") or ""
+        if st.session_state.get("_prev_rev_tid") != _rev_tid:
+            st.session_state["dash_review_notes"] = _cur_notes
+            st.session_state["_prev_rev_tid"] = _rev_tid
+
+        _rev_notes = st.text_input(
+            "הערות",
+            key="dash_review_notes",
+            placeholder="...",
+        )
+
+        if st.button("עדכן סטטוס", key="dash_btn_update_review", use_container_width=True):
+            _prev = _review_db.set_review_status(
+                tender_id=_rev_tid,
+                status=_new_status,
+                updated_by=_review_email,
+                notes=_rev_notes or None,
+            )
+            st.success(f"{_prev or 'חדש'} → {_new_status}")
+            st.session_state["_prev_rev_tid"] = None
+            st.rerun()
+    else:
+        st.caption("אין מכרזים מועדפים לעדכון")
+
     # ── Stats footer ─────────────────────────────────────────────────────
     st.markdown("---")
     st.caption(f"עדכון: {today.strftime('%d/%m/%Y %H:%M')}")
@@ -165,7 +310,7 @@ st.markdown(
 
 
 # ============================================================================
-# ROW 1: NEW DOCUMENT TABLES + KPI CARDS
+# ROW 1: NEW DOCUMENT TABLES + KPI CARDS + CLOSING DEADLINES
 # ============================================================================
 
 
@@ -238,7 +383,7 @@ def _render_new_table(source_df: pd.DataFrame, title: str, key_prefix: str) -> N
         st.info("אין פריטים חדשים השבוע")
 
 
-# ── Layout: two tables left, KPI cards right ─────────────────────────────────
+# ── Layout: two tables left, KPI cards + deadlines right ─────────────────────
 col_tables, col_kpi = st.columns([3, 2])
 
 with col_tables:
@@ -270,71 +415,7 @@ with col_kpi:
     with k2:
         st.metric("מכרזים שייסגרו בשבועיים הקרובים", closing_soon_count)
 
-    # ── Pie charts — right column, below KPI cards ────────────────────────
-    # Read week selection from session_state (radio widget rendered below pies).
-    pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
-    _sel_value = st.session_state.get("urgency_pie2", "4W")
-    pie2_days = pie2_opts.get(_sel_value, 28)
-
-    _pie1, _pie2 = st.columns(2)
-
-    with _pie1:
-        st.markdown('<p class="pie-title" style="font-size:13px;">חוברת מכרז</p>', unsafe_allow_html=True)
-        if "published_booklet" in active_df.columns and len(active_df) > 0:
-            bc = active_df["published_booklet"].value_counts()
-            avail = int(bc.get(True, 0))
-            not_avail = int(bc.get(False, 0))
-            fig1 = px.pie(
-                values=[avail, not_avail],
-                names=["יש חוברת", "בלי חוברת"],
-                color_discrete_sequence=["#2563EB", "#E2E8F0"],
-                hole=0.55,
-            )
-            fig1.update_traces(
-                textinfo="label+value", textposition="inside", textfont_size=11,
-            )
-            fig1.update_layout(
-                height=180, margin=dict(t=5, b=5, l=5, r=5),
-                showlegend=False,
-                font=PLOTLY_FONT, **PLOTLY_BG,
-            )
-            st.plotly_chart(fig1, use_container_width=True, key="pie_booklet")
-        else:
-            st.info("אין נתונים")
-
-    with _pie2:
-        st.markdown('<p class="pie-title" style="font-size:13px;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
-        pie2_df = active_df[active_df["published_booklet"] == True].copy()
-        pie2_cut = today + timedelta(days=pie2_days)
-        pie2_df = pie2_df[(pie2_df["deadline"].notna()) & (pie2_df["deadline"] >= today) & (pie2_df["deadline"] <= pie2_cut)]
-
-        if "region" in pie2_df.columns and len(pie2_df) > 0:
-            br = pie2_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
-            if not br.empty:
-                fig2 = px.pie(br, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
-                fig2.update_traces(
-                    textinfo="label+value", textposition="inside", textfont_size=11,
-                )
-                fig2.update_layout(
-                    height=180, margin=dict(t=5, b=5, l=5, r=5),
-                    showlegend=False,
-                    font=PLOTLY_FONT, **PLOTLY_BG,
-                )
-                st.plotly_chart(fig2, use_container_width=True, key="pie_brochure_region")
-            else:
-                st.info("אין מכרזים בטווח")
-        else:
-            st.info("אין נתונים")
-
-    # Week toggle — native st.pills, right-aligned under pie2
-    _tgl_spacer, _tgl_col = st.columns([1, 1])
-    with _tgl_col:
-        st.pills(
-            "טווח", list(pie2_opts.keys()), default="4W",
-            key="urgency_pie2", label_visibility="collapsed",
-        )
-
-    # ── Closing deadlines — inside col_kpi, below pies ──────────────
+    # ── Closing deadlines — directly after KPI cards (pies removed) ──
     st.markdown(
         '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">מועדי סגירה</div>',
         unsafe_allow_html=True,
@@ -370,7 +451,6 @@ with col_kpi:
 
     if len(upcoming) > 0:
         # Include lot_count and max_lots_per_bidder only if present in the DataFrame
-        # (they may be absent from older JSON snapshots before the DB migration runs).
         _base_cols = ["tender_name", "city", "units", "deadline"]
         _extra_cols = [c for c in ["lot_count", "max_lots_per_bidder"] if c in upcoming.columns]
         up_disp = upcoming[_base_cols + _extra_cols].copy()
@@ -451,208 +531,55 @@ st.markdown("---")
 
 
 # ============================================================================
-# ROW 3: WATCHLIST (compact expander)
+# ROW 3: TEAM REVIEW STATUS — read-only table (editing moved to sidebar)
 # ============================================================================
 
-with st.expander("רשימת מעקב", expanded=False):
-    user_email = get_user_email()
+st.markdown(
+    '<div class="section-header" style="font-size:1rem;margin:0 0 6px 0;">'
+    "מכרזים מועדפים - סטטוס סקירה"
+    "</div>",
+    unsafe_allow_html=True,
+)
 
-    if not user_email:
-        st.warning("לא זוהה משתמש. הגדר DEV_USER_EMAIL בקובץ .env.")
-    else:
-        st.caption(f"משתמש: {user_email}")
-        watch_db = user_db
+# Reuse _team_df and _rev_map from sidebar (already computed above for review form)
+if len(_team_df) > 0:
+    _rev_tbl = _team_df[["tender_name", "units", "city", "tender_type"]].copy()
+    _rev_ids_main = _team_df["tender_id"].astype(int).tolist()
+    _rev_map_main = _review_db.get_review_statuses_for_tenders(_rev_ids_main)
 
-        if not watch_db.available:
-            st.warning("Supabase לא מוגדר — רשימת המעקב לא תישמר.")
-
-        _watch_labels: dict[int, str] = {}
-        for _, _r in df[["tender_id", "tender_name", "city"]].iterrows():
-            _name = str(_r["tender_name"])[:50] if pd.notna(_r["tender_name"]) else ""
-            _city = str(_r["city"])[:20] if pd.notna(_r["city"]) else ""
-            _watch_labels[int(_r["tender_id"])] = f"{_name} — {_city}" if _city else _name
-
-        add_col, btn_col = st.columns([3, 1])
-        with add_col:
-            watch_tender_id = st.selectbox(
-                "בחר מכרז להוספה",
-                options=list(_watch_labels.keys()),
-                index=None,
-                format_func=lambda tid: _watch_labels[tid],
-                placeholder="הקלד שם מכרז או עיר...",
-                key="watch_tender_input",
-            )
-        with btn_col:
-            st.markdown("<br>", unsafe_allow_html=True)
-            add_clicked = st.button("הוסף למעקב", key="btn_add_watch")
-
-        if add_clicked and watch_tender_id is not None:
-            added = watch_db.add_to_watchlist(user_email, int(watch_tender_id))
-            if added:
-                st.success("מכרז נוסף! תקבל/י התראה במייל כשיתווספו מסמכים.")
-                st.rerun()
-            else:
-                st.info("מכרז כבר ברשימת המעקב.")
-
-        watchlist_rows = watch_db.get_watchlist_rows(user_email)
-        if watchlist_rows:
-            st.markdown(f"##### מכרזים במעקב ({len(watchlist_rows)})")
-            _tender_lookup = df.set_index("tender_id").to_dict("index") if not df.empty else {}
-            for row in watchlist_rows:
-                tid = int(row["tender_id"])
-                t = _tender_lookup.get(tid, {})
-                w_cols = st.columns([2, 2, 2, 2, 1, 1])
-                with w_cols[0]:
-                    st.write(str(t.get("tender_name", tid))[:50])
-                with w_cols[1]:
-                    st.write(str(t.get("city", "")))
-                with w_cols[2]:
-                    st.write(str(t.get("region", "")))
-                with w_cols[3]:
-                    dl = t.get("deadline", "")
-                    if dl and pd.notna(dl):
-                        dt = pd.to_datetime(dl, errors="coerce")
-                        st.write(dt.strftime("%d/%m/%Y") if pd.notna(dt) else "")
-                    else:
-                        st.write("")
-                with w_cols[4]:
-                    st.write(str(t.get("status", "")))
-                with w_cols[5]:
-                    if st.button("🗑️", key=f"rm_watch_{row['id']}"):
-                        watch_db.remove_from_watchlist(user_email, tid)
-                        st.rerun()
-
-                # Notes row — pre-populated from the notes column returned by get_watchlist_rows
-                _saved_note = row.get("notes") or ""
-                _note_col, _save_col = st.columns([5, 1])
-                with _note_col:
-                    _new_note = st.text_input(
-                        "הערה אישית",
-                        value=_saved_note,
-                        placeholder="הוסף הערה אישית למכרז זה...",
-                        key=f"note_input_{tid}",
-                        label_visibility="collapsed",
-                    )
-                with _save_col:
-                    if st.button("שמור", key=f"note_save_{tid}"):
-                        watch_db.set_watchlist_note(user_email, tid, _new_note)
-                        st.success("נשמר!")
-                        st.rerun()
-
-            st.info("תקבל/י התראה במייל כשיתווספו מסמכים חדשים.")
-        else:
-            st.info("רשימת המעקב ריקה.")
-
-
-# ============================================================================
-# ROW 4: TEAM REVIEW STATUS — מכרזים מועדפים - חדר עסקאות
-# ============================================================================
-
-with st.expander("מכרזים מועדפים - חדר עסקאות — סטטוס סקירה", expanded=False):
-    _review_email = get_user_email()
-    _review_db = user_db
-
-    _team_ids = _review_db.get_watchlist_ids(TEAM_EMAIL)
-    _team_df = df[df["tender_id"].astype(int).isin(_team_ids)].copy() if _team_ids else pd.DataFrame()
-
-    _REVIEW_EMOJI: dict[str, str] = {
-        "לא נסקר": "⬜",
-        "סקירה ראשונית": "🔵",
-        "בדיקה מעמיקה": "🟣",
-        "הוצג בפורום": "🟠",
-        "אושר בפורום": "🟢",
-    }
-
-    if len(_team_df) > 0:
-        _rev_tbl = _team_df[["tender_name", "units", "city", "tender_type"]].copy()
-        _rev_ids = _team_df["tender_id"].astype(int).tolist()
-        _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
-
-        _rev_tbl["review"] = [
-            _REVIEW_EMOJI.get(
-                _rev_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
-            )
-            + " "
-            + _rev_map.get(int(tid), {}).get("status", "לא נסקר")
-            for tid in _team_df["tender_id"]
-        ]
-
-        _rev_tbl["notes"] = [
-            _rev_map.get(int(tid), {}).get("notes", "") or ""
-            for tid in _team_df["tender_id"]
-        ]
-
-        st.dataframe(
-            _rev_tbl,
-            column_config={
-                "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
-                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
-                "city": st.column_config.TextColumn("עיר", width="small"),
-                "tender_type": st.column_config.TextColumn("סוג", width="small"),
-                "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
-                "notes": st.column_config.TextColumn("הערות", width="large"),
-            },
-            hide_index=True,
-            use_container_width=True,
+    _rev_tbl["review"] = [
+        _REVIEW_EMOJI.get(
+            _rev_map_main.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
         )
+        + " "
+        + _rev_map_main.get(int(tid), {}).get("status", "לא נסקר")
+        for tid in _team_df["tender_id"]
+    ]
 
-        if not _review_email:
-            st.info("יש להזדהות כדי לעדכן סטטוס סקירה.")
-        else:
-            _rev_labels: dict[int, str] = {}
-            for _, _r in _team_df.iterrows():
-                _rname = str(_r.get("tender_name", ""))[:30]
-                _rcity = str(_r.get("city", ""))[:15]
-                _rev_labels[int(_r["tender_id"])] = f"{_rname} — {_rcity}"
+    _rev_tbl["notes"] = [
+        _rev_map_main.get(int(tid), {}).get("notes", "") or ""
+        for tid in _team_df["tender_id"]
+    ]
 
-            _rc1, _rc2 = st.columns([2, 2])
-            with _rc1:
-                _rev_tid = st.selectbox(
-                    "מכרז",
-                    options=list(_rev_labels.keys()),
-                    format_func=lambda tid: _rev_labels[tid],
-                    key="dash_review_tender_select",
-                )
-            with _rc2:
-                _cur_status = _rev_map.get(_rev_tid, {}).get("status", REVIEW_STAGES[0])
-                _cur_idx = REVIEW_STAGES.index(_cur_status) if _cur_status in REVIEW_STAGES else 0
-                _new_status = st.selectbox(
-                    "סטטוס חדש",
-                    options=REVIEW_STAGES,
-                    index=_cur_idx,
-                    key="dash_review_status_select",
-                )
-
-            # Pre-populate notes only when the selected tender changes,
-            # so user edits aren't overwritten on rerun.
-            _cur_notes = _rev_map.get(_rev_tid, {}).get("notes", "") or ""
-            if st.session_state.get("_prev_rev_tid") != _rev_tid:
-                st.session_state["dash_review_notes"] = _cur_notes
-                st.session_state["_prev_rev_tid"] = _rev_tid
-
-            _rev_notes = st.text_input(
-                "הערות (אופציונלי)",
-                key="dash_review_notes",
-                placeholder="...",
-            )
-
-            if st.button("עדכן סטטוס", key="dash_btn_update_review"):
-                _prev = _review_db.set_review_status(
-                    tender_id=_rev_tid,
-                    status=_new_status,
-                    updated_by=_review_email,
-                    notes=_rev_notes or None,
-                )
-                st.success(f"מכרז {_rev_labels.get(_rev_tid, _rev_tid)}: {_prev or 'חדש'} → {_new_status}")
-                # Reset tracker so next rerun re-fetches notes from DB
-                st.session_state["_prev_rev_tid"] = None
-                st.rerun()
-    else:
-        st.info("אין מכרזים מועדפים. הוסף מכרזים דרך התפריט הצדדי ←")
+    st.dataframe(
+        _rev_tbl,
+        column_config={
+            "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
+            "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
+            "city": st.column_config.TextColumn("עיר", width="small"),
+            "tender_type": st.column_config.TextColumn("סוג", width="small"),
+            "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
+            "notes": st.column_config.TextColumn("הערות", width="large"),
+        },
+        hide_index=True,
+        use_container_width=True,
+    )
+else:
+    st.info("אין מכרזים מועדפים. הוסף מכרזים דרך התפריט הצדדי ←")
 
 
 # ============================================================================
-# ROW 5: BOTTOM CATEGORY CARDS — דיור להשכרה, דיור מוגן, מכרז ייזום
+# ROW 4: BOTTOM CATEGORY CARDS — דיור להשכרה, דיור מוגן, מכרז ייזום
 # ============================================================================
 
 st.markdown("---")
@@ -706,7 +633,7 @@ with bc3:
 
 
 # ============================================================================
-# ROW 6: DETAILED ANALYTICS (compact expander)
+# ROW 5: DETAILED ANALYTICS (compact expander)
 # ============================================================================
 
 with st.expander("ניתוח מפורט", expanded=False):
@@ -788,7 +715,7 @@ with st.expander("ניתוח מפורט", expanded=False):
 
 
 # ============================================================================
-# ROW 7: DEBUG (compact expander)
+# ROW 6: DEBUG (compact expander)
 # ============================================================================
 
 with st.expander("ניהול ודיבוג", expanded=False):

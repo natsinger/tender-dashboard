@@ -45,6 +45,7 @@ df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
 if "purpose" in df.columns:
     df = df[df["purpose"].isin(RELEVANT_PURPOSES)].copy()
 watch_db = UserDB()
+tender_db = TenderDB()
 
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
@@ -141,18 +142,45 @@ def _build_compact_table(
         lambda x: "✅" if x else "❌"
     )
 
-    return tbl[['tender_name', 'units', 'city', 'tender_type',
-                'deadline_fmt', 'booklet']].copy()
+    # Column order reversed for RTL display in LTR grid
+    # Visual RTL reading: מועד סגירה ← יח"ד ← סוג ← עיר ← מספר מכרז ← חוברת
+    return tbl[['deadline_fmt', 'units', 'tender_type', 'city',
+                'tender_name', 'booklet']].copy()
 
 
+# CHANGE 1: RTL column order in config
 _COMPACT_COLUMNS = {
-    "tender_name": st.column_config.TextColumn("מכרז", width="small"),
-    "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
+    "booklet": st.column_config.TextColumn("חוברת", width="small"),
+    "tender_name": st.column_config.TextColumn("מספר מכרז", width="small"),
     "city": st.column_config.TextColumn("עיר", width="medium"),
     "tender_type": st.column_config.TextColumn("סוג", width="medium"),
+    "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
     "deadline_fmt": st.column_config.TextColumn("מועד סגירה", width="small"),
-    "booklet": st.column_config.TextColumn("חוברת", width="small"),
 }
+
+
+def _aggregate_lot_data(tender_ids: list[int]) -> dict[int, dict]:
+    """Fetch and aggregate lot-level data for a list of tender IDs.
+
+    Args:
+        tender_ids: List of tender MichrazIDs.
+
+    Returns:
+        Dict mapping tender_id to aggregated lot data:
+        {tender_id: {free_market: int, target_price: int, total: int, pct: str}}
+    """
+    result: dict[int, dict] = {}
+    for tid in tender_ids:
+        lots = tender_db.get_lots(tid)
+        if not lots:
+            result[tid] = {"free_market": 0, "target_price": 0, "total": 0, "pct": "—"}
+            continue
+        fm = sum(int(lot.get("units_free_market") or 0) for lot in lots)
+        tp = sum(int(lot.get("units_target_price") or 0) for lot in lots)
+        total = sum(int(lot.get("total_units") or 0) for lot in lots)
+        pct = f"{int(tp / total * 100)}%" if total > 0 else "—"
+        result[tid] = {"free_market": fm, "target_price": tp, "total": total, "pct": pct}
+    return result
 
 
 # ============================================================================
@@ -180,6 +208,7 @@ if len(watchlist_df) > 0:
     watched_ids = watchlist_df['tender_id'].astype(int).tolist()
     review_map = watch_db.get_review_statuses_for_tenders(watched_ids)
 
+    # Add review status
     display_sel['review'] = [
         _REVIEW_EMOJI.get(
             review_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
@@ -187,18 +216,58 @@ if len(watchlist_df) > 0:
         for tid in watchlist_df['tender_id']
     ]
 
-    # Attach review notes from the tender_reviews table (saved via "עדכן סטטוס")
+    # Add review notes
     display_sel['notes'] = [
         review_map.get(int(tid), {}).get("notes", "") or ""
         for tid in watchlist_df['tender_id']
     ]
 
+    # Add lot data columns
+    _lot_agg = _aggregate_lot_data(watched_ids)
+    display_sel['שוק חופשי'] = [
+        _lot_agg.get(int(tid), {}).get("free_market", 0) or 0
+        for tid in watchlist_df['tender_id']
+    ]
+    display_sel['מחיר מטרה'] = [
+        _lot_agg.get(int(tid), {}).get("target_price", 0) or 0
+        for tid in watchlist_df['tender_id']
+    ]
+    display_sel['סה"כ'] = [
+        _lot_agg.get(int(tid), {}).get("total", 0) or 0
+        for tid in watchlist_df['tender_id']
+    ]
+    display_sel['% מחיר מטרה'] = [
+        _lot_agg.get(int(tid), {}).get("pct", "—")
+        for tid in watchlist_df['tender_id']
+    ]
+
+    # Reorder columns for RTL display in LTR grid
+    # Rightmost visually (= last in array) → סטטוס, חוברת, מספר מכרז...
+    # Leftmost visually (= first in array) → הערות, % מחיר מטרה, סה"כ...
+    display_sel = display_sel[[
+        'notes', '% מחיר מטרה', 'סה"כ', 'מחיר מטרה', 'שוק חופשי',
+        'deadline_fmt', 'units', 'tender_type', 'city',
+        'tender_name', 'booklet', 'review',
+    ]]
+
+    # CHANGE 2: Brochure toggle
+    _brochure_filter = st.pills(
+        "חוברת", ["הכל", "עם חוברת"], default="הכל",
+        key="mgmt_watchlist_brochure", label_visibility="collapsed",
+    )
+    if _brochure_filter == "עם חוברת":
+        display_sel = display_sel[display_sel["booklet"] == "✅"]
+
     st.dataframe(
         display_sel,
         column_config={
-            **_COMPACT_COLUMNS,
-            "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
             "notes": st.column_config.TextColumn("הערות", width="large"),
+            "% מחיר מטרה": st.column_config.TextColumn("% מחיר מטרה", width="small"),
+            'סה"כ': st.column_config.NumberColumn('סה"כ', format="%d", width="small"),
+            "מחיר מטרה": st.column_config.NumberColumn("מחיר מטרה", format="%d", width="small"),
+            "שוק חופשי": st.column_config.NumberColumn("שוק חופשי", format="%d", width="small"),
+            **_COMPACT_COLUMNS,
+            "review": st.column_config.TextColumn("סטטוס", width="medium"),
         },
         hide_index=True,
         use_container_width=True,
@@ -225,8 +294,8 @@ closing_soon = active_df[
 def _show_tender_detail(tender_id: int) -> None:
     """Show tender detail in a modal dialog."""
     now = datetime.now()
-    sqlite_db = TenderDB()
-    tender = sqlite_db.get_tender_by_id(tender_id)
+    detail_db = TenderDB()
+    tender = detail_db.get_tender_by_id(tender_id)
     if tender is None:
         st.error("מכרז לא נמצא")
         return
@@ -260,7 +329,8 @@ def _show_tender_detail(tender_id: int) -> None:
         st.markdown(f"**גוש/חלקה:** {tender.get('gush', '')} / {tender.get('helka', '')}")
 
 
-with st.expander(f"מכרזים שייסגרו בשבועיים הקרובים ({len(closing_soon)})", expanded=False):
+# CHANGE 4: Updated title
+with st.expander(f"נסגרים ב14 ימים הקרובים ({len(closing_soon)})", expanded=False):
     if len(closing_soon) > 0:
         display_cs = _build_compact_table(closing_soon, show_days_count=True)
 
@@ -293,16 +363,24 @@ with st.expander(f"מכרזים שייסגרו בשבועיים הקרובים (
                 if popup_tender is not None:
                     _show_tender_detail(int(popup_tender))
 
-        st.caption(f"מציג {len(closing_soon)} מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום")
+        # CHANGE 5: Updated caption
+        st.caption(f"כלל המכרזים שייסגרו ב14 הימים הקרובים — {len(closing_soon)} מכרזים")
     else:
-        st.info(f"אין מכרזים שנסגרים תוך {CLOSING_SOON_DAYS} יום.")
+        st.info("אין מכרזים שנסגרים תוך 14 יום.")
+
+
+# ============================================================================
+# CHANGE 6: DIVIDER + HEADER BEFORE PIES
+# ============================================================================
 
 st.markdown("---")
-
+st.markdown("#### מכרזי מקרקעין לדיור למכירה")
 
 # ============================================================================
 # SECTION 2B: PIE CHARTS + KPI CARDS
 # ============================================================================
+
+_card_active = active_df[active_df["tender_type_code"].isin(CARD_TENDER_TYPES)]
 
 _pie_col, _kpi_col = st.columns([3, 2])
 
@@ -312,8 +390,8 @@ with _pie_col:
     # ── Pie: Brochure availability ────────────────────────────────────
     with _mp1:
         st.markdown('<p class="pie-title" style="font-size:13px;">חוברת מכרז</p>', unsafe_allow_html=True)
-        if "published_booklet" in active_df.columns and len(active_df) > 0:
-            _bc = active_df["published_booklet"].value_counts()
+        if "published_booklet" in _card_active.columns and len(_card_active) > 0:
+            _bc = _card_active["published_booklet"].value_counts()
             _avail = int(_bc.get(True, 0))
             _not_avail = int(_bc.get(False, 0))
             _fig_b = px.pie(
@@ -322,7 +400,8 @@ with _pie_col:
                 color_discrete_sequence=["#2563EB", "#E2E8F0"],
                 hole=0.55,
             )
-            _fig_b.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+            # CHANGE 7: Aligned pie parameters
+            _fig_b.update_traces(textinfo="value", textposition="inside", textfont_size=14)
             _fig_b.update_layout(
                 height=220, margin=dict(t=5, b=30, l=5, r=5),
                 showlegend=True,
@@ -339,20 +418,21 @@ with _pie_col:
     # ── Pie: Region distribution ──────────────────────────────────────
     with _mp2:
         st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים לפי מחוז</p>', unsafe_allow_html=True)
-        if "region" in active_df.columns and len(active_df) > 0:
-            _reg = active_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
+        if "region" in _card_active.columns and len(_card_active) > 0:
+            _reg = _card_active.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
             if not _reg.empty:
                 _fig_r = px.pie(
                     _reg, values="count", names="region",
                     hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS,
                 )
-                _fig_r.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                # CHANGE 7: Aligned pie parameters (identical to booklet pie)
+                _fig_r.update_traces(textinfo="value", textposition="inside", textfont_size=14)
                 _fig_r.update_layout(
                     height=220, margin=dict(t=5, b=30, l=5, r=5),
                     showlegend=True,
                     legend=dict(
                         orientation="h", yanchor="top", y=-0.05,
-                        xanchor="center", x=0.5, font=dict(size=10),
+                        xanchor="center", x=0.5, font=dict(size=11),
                     ),
                     font=PLOTLY_FONT, **PLOTLY_BG,
                 )
@@ -363,13 +443,55 @@ with _pie_col:
             st.info("אין נתונים")
 
 with _kpi_col:
-    _card_active = active_df[active_df["tender_type_code"].isin(CARD_TENDER_TYPES)]
     _closing_count = len(closing_soon)
     _mk1, _mk2 = st.columns(2)
     with _mk1:
         st.metric("מכרזים פעילים", f"{len(_card_active):,}")
     with _mk2:
         st.metric("נסגרים ב-14 יום", f"{_closing_count}")
+
+    # CHANGE 8: KPI metrics for unit breakdown
+    _total_units = int(_card_active["units"].sum()) if len(_card_active) > 0 else 0
+    _card_lot_agg = _aggregate_lot_data(_card_active["tender_id"].astype(int).tolist())
+    _total_fm = sum(v.get("free_market", 0) for v in _card_lot_agg.values())
+    _total_tp = sum(v.get("target_price", 0) for v in _card_lot_agg.values())
+
+    _mk3, _mk4, _mk5 = st.columns(3)
+    with _mk3:
+        st.metric('סה"כ יח"ד', f"{_total_units:,}")
+    with _mk4:
+        st.metric("שוק חופשי", f"{_total_fm:,}")
+    with _mk5:
+        st.metric("מחיר מטרה", f"{_total_tp:,}")
+
+
+# ============================================================================
+# CHANGE 9: TOP 10 CITIES BAR CHART
+# ============================================================================
+
+st.markdown(
+    '<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>',
+    unsafe_allow_html=True,
+)
+if "city" in _card_active.columns and len(_card_active) > 0:
+    _city_counts = _card_active["city"].value_counts().head(10)
+    if len(_city_counts) > 0:
+        _fig_city = px.bar(
+            x=_city_counts.values, y=_city_counts.index, orientation="h",
+            color_discrete_sequence=["#2563EB"],
+        )
+        _fig_city.update_layout(
+            showlegend=False, height=260,
+            margin=dict(t=5, b=20, l=100, r=5),
+            xaxis_title=None, yaxis_title=None,
+            coloraxis_showscale=False,
+            font=PLOTLY_FONT, **PLOTLY_BG,
+        )
+        st.plotly_chart(_fig_city, use_container_width=True, key="mgmt_bar_city")
+    else:
+        st.info("אין נתוני ערים")
+else:
+    st.info("אין נתונים")
 
 st.markdown("---")
 
@@ -391,7 +513,8 @@ with tab_diur_h:
     if len(diur_h_df) > 0:
         _units_dh = int(diur_h_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_dh:,}")
-        display_dh = _build_compact_table(diur_h_df, show_days_count=True)
+        # CHANGE 10: show_days_count=False (date only, no parenthesized days)
+        display_dh = _build_compact_table(diur_h_df, show_days_count=False)
         st.dataframe(
             display_dh,
             column_config=_COMPACT_COLUMNS,
@@ -407,7 +530,8 @@ with tab_diur_m:
     if len(diur_m_df) > 0:
         _units_dm = int(diur_m_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_dm:,}")
-        display_dm = _build_compact_table(diur_m_df, show_days_count=True)
+        # CHANGE 10: show_days_count=False
+        display_dm = _build_compact_table(diur_m_df, show_days_count=False)
         st.dataframe(
             display_dm,
             column_config=_COMPACT_COLUMNS,
@@ -423,7 +547,8 @@ with tab_yezum:
     if len(yezum_df) > 0:
         _units_yz = int(yezum_df["units"].sum())
         st.metric(f"סה\"כ יח\"ד", f"{_units_yz:,}")
-        display_y = _build_compact_table(yezum_df, show_days_count=True)
+        # CHANGE 10: show_days_count=False
+        display_y = _build_compact_table(yezum_df, show_days_count=False)
         st.dataframe(
             display_y,
             column_config=_COMPACT_COLUMNS,

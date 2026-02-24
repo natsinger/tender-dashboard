@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-02-24 (session 17 — Dashboard UI polish: RTL tables, pie alignment, pills, page order)
+**Last updated:** 2026-02-24 (session 18 — Management page overhaul + Dashboard simplification)
 
 ---
 
@@ -20,14 +20,14 @@ API-First Lot Integration — **complete** (API Tik[] as source of truth, PDF ov
 **All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
 
 The app is now **multipage** with four views:
-- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts, tender details, watchlist management (with autocomplete), team watchlist controls (sidebar), review status editing, analytics, debug
+- **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts (no pies), tender details, closing deadlines, watchlist management in sidebar (personal + team + review editing), analytics, debug
 - **Explorer** (`pages/explorer.py`) — Tender explorer: filterable data table, detail viewer with lot data display, building rights section
 - **Analytics** (`pages/analytics.py`) — Market intelligence: trends, competitive analysis, price analytics, scoring with radar charts
 - **Management** (`pages/management.py`) — Team operational dashboard (read-only):
-  1. **Selected Tenders** — shared team watchlist with review status display
-  2. **Closing Soon** — active tenders closing within 14 days, with popup detail dialog
-  3. **Tender Type Tabs** — dedicated views for "מכרז ייזום" and "דיור להשכרה"
-  4. **Compact KPIs** — single row with key metrics
+  1. **Selected Tenders** — shared team watchlist with lot data columns (שוק חופשי, מחיר מטרה, סה"כ, % מחיר מטרה), brochure toggle, RTL column order
+  2. **Closing Soon** — "נסגרים ב14 ימים הקרובים" with popup detail dialog
+  3. **Pies + KPIs** — dual pie charts (aligned), 3 unit-breakdown KPIs, top 10 cities bar chart
+  4. **Tender Type Tabs** — dedicated views for "מכרז ייזום", "דיור להשכרה", "סוגים נוספים" (date-only deadlines)
 
 Review tracking has 5 stages: לא נסקר → סקירה ראשונית → בדיקה מעמיקה → הוצג בפורום → אושר בפורום. Editing is in the Dashboard (requires login). Management is read-only.
 
@@ -52,6 +52,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-02-24 | **Management page overhaul + Dashboard simplification** — 12 user-reported changes across 2 pages. **Management** (10 items + 4 refinements): (1) Watchlist table RTL column reorder via reversed DataFrame columns, (2) brochure toggle filter (st.pills הכל/עם חוברת), (3) lot data columns (שוק חופשי, מחיר מטרה, סה"כ, % מחיר מטרה) via new `_aggregate_lot_data()` helper calling `TenderDB.get_lots()`, (4) closing-soon title → "נסגרים ב14 ימים הקרובים", (5) updated caption, (6) divider + "מכרזי מקרקעין לדיור למכירה" header before pies, (7) aligned pie chart params (textfont_size=14, height=220), (8) 3 KPI unit-breakdown metrics (סה"כ/שוק חופשי/מחיר מטרה), (9) top 10 cities bar chart, (10) date-only deadlines in bottom tabs. Refinements: reversed column order for RTL, renamed מכרז→מספר מכרז, fixed בה"כ→סה"כ, fixed % מ.מ.→% מחיר מטרה. **Dashboard** (2 items): (1) removed pie charts + week toggle from main area (kept KPI cards), (2) moved all watchlist management (personal + team add/remove, review editing form) to sidebar with 3 sections. 305 tests pass, both pages import cleanly, app returns HTTP 200. | `pages/management.py`, `pages/dashboard.py` |
 | 2026-02-24 | **Dashboard UI polish** — 6 user-reported fixes: (1) Unified all table columns to RTL direction with consistent order (שם מכרז → יח"ד → עיר) across 7 tables in 4 pages. (2) Dashboard layout reorganized — closing deadlines moved up, bar chart full-width below. (3) Notes/הערות column added to team review table. (4) Building rights in Explorer auto-loads from Supabase (no button press required). (5) Page order changed: לוח הנהלה → דאשבורד → סייר מכרזים → ניתוח שוק. (6) Pie charts fixed: identical size, label+value on slices, st.pills for week toggle + deadline/brochure filters. City bar chart left margin increased for Hebrew names. | `app.py`, `pages/dashboard.py`, `pages/explorer.py`, `pages/management.py` |
 | 2026-02-24 | **Explorer UX: auto-show lot data, optional building rights button** — Reordered tender detail viewer sections: lot data (from API/tender_lots) now renders BEFORE building rights section so existing data is always visible without clicking. When br_status=="none", existing brochure data (plan_number, lots_data, brochure_summary) is now displayed automatically. Extraction button relabeled from "נתח זכויות בנייה" to "ניתוח מעמיק מחוברת המכרז" and presented as optional with contextual caption ("נתוני מתחמים בסיסיים זמינים למעלה") when API lot data exists. No functionality removed — button still triggers full brochure extraction workflow. | `pages/explorer.py` |
 | 2026-02-23 | **Full app audit & fix** — Comprehensive static+runtime audit of all 4 pages + 5 core modules, addressing 4 user-reported issues + all high/medium code findings. **(1) Dashboard UI** — fixed week pills overlap (removed negative margin in CSS), merged orphaned caption into metric label, replaced meaningless color gradient with single-color bars on city chart. **(2) Alert system** — made failures visible (logger.error + structured summary), added SMTP connectivity check, prioritized watchlisted tenders in DOC_SYNC_LIMIT. **(3) Supabase schema** — CRITICAL: fixed enrichment overwrite bug where daily upsert_tenders() was resetting acquisition_form/participation_fee/land_area_sqm to None. Fixed tz_localize→tz_convert for UTC-aware datetimes (3 locations). **(4) Old brochure format** — added max_licensable_area and development_costs keyword groups to lot_extractor SECTION1_HEADERS, adjusted confidence scoring so total_units counts as alternative to target/free-market split. 11 new tests. **Code quality** — removed unused imports across 3 pages, consolidated 3 UserDB instances to 1 in dashboard.py, moved stale `today = datetime.now()` to rendering blocks (4 pages), added HTML escaping for unsafe_allow_html (explorer+analytics), wired up dead force_refresh checkbox (explorer), added pagination to user_db.get_all_active_watchlists() and get_sent_doc_ids(). 305 tests pass (294 original + 11 new), 0 regressions. | `app.py`, `pages/dashboard.py`, `pages/explorer.py`, `pages/analytics.py`, `pages/management.py`, `db.py`, `data_client.py`, `user_db.py`, `alerts.py`, `scripts/refresh_tenders.py`, `config.py`, `lot_extractor.py`, `tests/test_lot_extractor.py` |
