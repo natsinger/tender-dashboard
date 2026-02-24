@@ -14,18 +14,19 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from config import CLOSING_SOON_DAYS, NON_ACTIVE_STATUSES, RELEVANT_TENDER_TYPES, TEAM_EMAIL
+from config import CLOSING_SOON_DAYS, RELEVANT_TENDER_TYPES, TEAM_EMAIL
 from dashboard_utils import (
     MEGIDO_CHART_COLORS,
     PLOTLY_BG,
     PLOTLY_FONT,
+    filter_active,
     load_data,
 )
 from db import TenderDB
 from user_db import UserDB
 
 # Purpose filter: same as dashboard
-RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
+RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "מגורים/מסחר/מלונאות/נופש", "דיור מוגן (בית אבות)", "אחר"}
 
 # The 3 tender types for the active card
 CARD_TENDER_TYPES = {1, 5, 8}
@@ -67,7 +68,7 @@ with st.sidebar:
 # FILTER TO ACTIVE TENDERS
 # ============================================================================
 
-active_df = df[~df['status'].isin(NON_ACTIVE_STATUSES)].copy()
+active_df = filter_active(df)
 
 if 'deadline' in active_df.columns:
     active_df['deadline'] = pd.to_datetime(active_df['deadline'], errors='coerce')
@@ -381,7 +382,7 @@ st.markdown("#### סוגים נוספים")
 
 # Use unfiltered-by-purpose data for these categories
 _all_typed = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
-_all_active = _all_typed[~_all_typed["status"].isin(NON_ACTIVE_STATUSES)].copy()
+_all_active = filter_active(_all_typed)
 
 tab_diur_h, tab_diur_m, tab_yezum = st.tabs(["דיור להשכרה", "דיור מוגן", "מכרז ייזום"])
 

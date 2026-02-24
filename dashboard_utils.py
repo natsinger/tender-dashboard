@@ -28,6 +28,27 @@ PLOTLY_FONT: dict = dict(family="Inter, Heebo, sans-serif", size=11, color="#1E2
 PLOTLY_BG: dict = dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
 
 
+def filter_active(df: pd.DataFrame) -> pd.DataFrame:
+    """Return only tenders with a future deadline (open for bidding).
+
+    The RMI website defines "active" as having a SgiraDate (deadline) that
+    hasn't passed yet.  Status-code 3 ("פעיל") actually means the contract
+    is awarded/running and all such tenders have past deadlines, so the old
+    status-based filter was wrong.
+
+    Args:
+        df: DataFrame with a 'deadline' column.
+
+    Returns:
+        Filtered copy containing only future-deadline tenders.
+    """
+    if df.empty or "deadline" not in df.columns:
+        return df.copy()
+    deadlines = pd.to_datetime(df["deadline"], utc=True, errors="coerce")
+    now = pd.Timestamp.now(tz="UTC")
+    return df[deadlines > now].copy()
+
+
 def _add_days_to_deadline(df: pd.DataFrame) -> pd.DataFrame:
     """Add computed days_to_deadline column to a tenders DataFrame.
 
