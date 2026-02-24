@@ -415,89 +415,6 @@ with col_kpi:
     with k2:
         st.metric("מכרזים שייסגרו בשבועיים הקרובים", closing_soon_count)
 
-    # ── Closing deadlines — directly after KPI cards (pies removed) ──
-    st.markdown(
-        '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">מועדי סגירה</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Controls row: deadline range + brochure filter as pills
-    _ctrl1, _ctrl2 = st.columns(2)
-    with _ctrl1:
-        _deadline_sel = st.pills(
-            "טווח", ["14 ימים", "הכל"], default="14 ימים",
-            key="deadline_pills", label_visibility="collapsed",
-        )
-    with _ctrl2:
-        _brochure_sel = st.pills(
-            "חוברת", ["עם חוברת", "הכל"], default="עם חוברת",
-            key="brochure_pills", label_visibility="collapsed",
-        )
-    show_all_deadlines = _deadline_sel == "הכל"
-    _show_all_brochure = _brochure_sel == "הכל"
-
-    upcoming = active_df[
-        (active_df["deadline"].notna())
-        & (active_df["deadline"] >= today)
-    ].sort_values("deadline")
-
-    if not show_all_deadlines:
-        upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
-
-    # Default (עם חוברת): show only tenders WITH brochure.
-    # "הכל": show all including without brochure.
-    if not _show_all_brochure and "published_booklet" in upcoming.columns:
-        upcoming = upcoming[upcoming["published_booklet"] == True]
-
-    if len(upcoming) > 0:
-        # Include lot_count and max_lots_per_bidder only if present in the DataFrame
-        _base_cols = ["tender_name", "city", "units", "deadline"]
-        _extra_cols = [c for c in ["lot_count", "max_lots_per_bidder"] if c in upcoming.columns]
-        up_disp = upcoming[_base_cols + _extra_cols].copy()
-        up_disp["days_left"] = (up_disp["deadline"] - today).dt.days
-
-        def _urgency(d: int) -> str:
-            if d <= 7:
-                return "🔴"
-            if d <= 14:
-                return "🟡"
-            return "🟢"
-
-        up_disp["urg"] = up_disp["days_left"].apply(_urgency)
-        up_disp["deadline"] = up_disp["deadline"].dt.strftime("%d/%m")
-
-        # Reorder: tender_name first (rightmost in RTL), then units, city, days/deadline/urg
-        _ordered = ["tender_name", "units", "city", "days_left", "deadline", "urg"] + _extra_cols
-        up_disp = up_disp[_ordered]
-
-        _deadline_col_config = {
-            "tender_name": st.column_config.TextColumn("שם", width="medium"),
-            "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
-            "city": st.column_config.TextColumn("עיר", width="small"),
-            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
-            "deadline": st.column_config.TextColumn("סגירה", width="small"),
-            "urg": st.column_config.TextColumn("", width="small"),
-        }
-        if "lot_count" in up_disp.columns:
-            _deadline_col_config["lot_count"] = st.column_config.NumberColumn(
-                "מתחמים", format="%d", width="small",
-            )
-        if "max_lots_per_bidder" in up_disp.columns:
-            _deadline_col_config["max_lots_per_bidder"] = st.column_config.NumberColumn(
-                "מקס' לזוכה", format="%d", width="small",
-            )
-
-        st.dataframe(
-            up_disp,
-            column_config=_deadline_col_config,
-            hide_index=True,
-            use_container_width=True,
-            height=min(35 * len(up_disp) + 38, 550),
-        )
-        st.caption(f"{len(up_disp)} מכרזים")
-    else:
-        st.info("אין מכרזים קרובים לסגירה")
-
 
 # ============================================================================
 # ROW 2: CITY BAR CHART (full width)
@@ -508,15 +425,27 @@ st.markdown(
     unsafe_allow_html=True,
 )
 if "city" in active_df.columns and len(active_df) > 0:
-    city_counts = active_df["city"].value_counts().head(10)
-    if len(city_counts) > 0:
+    _city_grp = active_df.groupby("city").agg(
+        tender_count=("tender_id", "count"),
+        total_units=("units", "sum"),
+    ).sort_values("tender_count", ascending=False).head(10)
+    if not _city_grp.empty:
         fig_city_bar = px.bar(
-            x=city_counts.values, y=city_counts.index, orientation="h",
-            color_discrete_sequence=["#2563EB"],
+            x=_city_grp.index, y=_city_grp["tender_count"],
+            orientation="v", color_discrete_sequence=["#2563EB"],
+            text=_city_grp["tender_count"],
         )
+        for i, (city_name, row) in enumerate(_city_grp.iterrows()):
+            fig_city_bar.add_annotation(
+                x=city_name, y=row["tender_count"],
+                text=f'סה"כ {int(row["total_units"]):,} יח"ד',
+                showarrow=False, yshift=14,
+                font=dict(size=10, color="#1E293B"),
+            )
+        fig_city_bar.update_traces(textposition="inside", textfont_size=13)
         fig_city_bar.update_layout(
-            showlegend=False, height=260,
-            margin=dict(t=5, b=20, l=100, r=5),
+            showlegend=False, height=320,
+            margin=dict(t=30, b=60, l=5, r=5),
             xaxis_title=None, yaxis_title=None,
             coloraxis_showscale=False,
             font=PLOTLY_FONT, **PLOTLY_BG,
