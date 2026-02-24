@@ -134,78 +134,212 @@ def get_tenders_needing_extraction(
         return []
 
 
+def _overlay_pdf_onto_api(
+    api_lot: dict,
+    pdf_lot: dict,
+) -> dict:
+    """Overlay PDF-only fields onto an API lot base.
+
+    Creates a new merged lot dict starting from the API lot. PDF-only
+    fields are copied unconditionally; shared fields use the API value
+    when non-null, falling back to PDF.
+
+    Args:
+        api_lot: Lot dict from extract_lots_from_api().
+        pdf_lot: Lot dict from BrochureLotExtractor.
+
+    Returns:
+        New merged lot dict with data_source='merged'.
+    """
+    merged_lot = dict(api_lot)
+
+    # Overlay PDF-only fields
+    for field in PDF_ONLY_FIELDS:
+        pdf_val = pdf_lot.get(field)
+        if pdf_val is not None:
+            merged_lot[field] = pdf_val
+
+    # For shared fields, prefer API if non-null; otherwise use PDF
+    for field in ("zoning_plan", "plot_numbers", "area_sqm"):
+        if merged_lot.get(field) is None:
+            pdf_val = pdf_lot.get(field)
+            if pdf_val is not None:
+                merged_lot[field] = pdf_val
+
+    merged_lot["data_source"] = "merged"
+    return merged_lot
+
+
+def _enrich_pdf_with_api_aggregate(
+    pdf_lot: dict,
+    api_lot: dict,
+) -> dict:
+    """Enrich a PDF lot with aggregate fields from the API lot.
+
+    Used when a single API lot represents an aggregate of multiple PDF
+    lots (e.g., 1 API lot with total_units=2868 vs 23 PDF lots with
+    detailed breakdowns). Copies API-only fields that are missing from
+    the PDF lot without overwriting PDF-specific detail.
+
+    Args:
+        pdf_lot: Detailed PDF lot dict (the base).
+        api_lot: Aggregate API lot dict (source of supplementary data).
+
+    Returns:
+        New enriched lot dict with data_source='merged'.
+    """
+    enriched = dict(pdf_lot)
+
+    # Copy API fields that PDF doesn't have (except PDF_ONLY_FIELDS which
+    # should stay as extracted from PDF, and lot_number which stays from PDF).
+    api_only_candidates = (
+        "gush", "helka", "zoning_plan", "plot_numbers",
+        "winner_name", "winning_amount",
+    )
+    for field in api_only_candidates:
+        if enriched.get(field) is None:
+            api_val = api_lot.get(field)
+            if api_val is not None:
+                enriched[field] = api_val
+
+    enriched["data_source"] = "merged"
+    return enriched
+
+
 def merge_api_and_pdf_lots(
     api_lots: list[dict],
     pdf_lots: list[dict],
 ) -> list[dict]:
     """Merge API-extracted lots with PDF-extracted lots.
 
-    For each lot, the API data is the base. PDF-only fields
-    (units_target_price, units_free_market, zoning_designation, etc.)
-    are overlaid on top. Matching is by lot_number.
+    Uses a multi-level fallback strategy because API and PDF lot numbers
+    often use different numbering schemes:
+      - API lot_number comes from MitchamName (internal compound IDs like
+        1121, 1124, or None).
+      - PDF lot_number comes from brochure tables (sequential 1, 2, 3 or
+        parcel numbers like 78343+).
+
+    Merge strategies (tried in order):
+      1. Exact lot_number match -- works when numbering is consistent.
+      2. Positional match -- when both sides have the same count but
+         different numbering, align by position (1st<->1st, 2nd<->2nd).
+      3. Count mismatch with API fewer (e.g., 1 API lot, 23 PDF lots):
+         PDF lots are the granular view; keep them as base and enrich
+         with API aggregate fields.
+      4. Count mismatch with API more (e.g., 8 API, 7 PDF): positional
+         match for the first N lots, keep remaining API lots as-is.
 
     Args:
         api_lots: Lots from extract_lots_from_api() (data_source='api').
         pdf_lots: Lots from BrochureLotExtractor.extract_all().
 
     Returns:
-        List of merged lot dicts with data_source='merged'.
+        List of merged lot dicts with data_source='merged' where
+        matching succeeded, 'api' or 'pdf' otherwise.
     """
     if not api_lots:
         # No API data — use PDF lots as-is with data_source='pdf'
         for lot in pdf_lots:
             lot["data_source"] = "pdf"
+        logger.info("Merge strategy: pdf-only (no API lots)")
         return pdf_lots
 
     if not pdf_lots:
         # No PDF data — API lots already have data_source='api'
+        logger.info("Merge strategy: api-only (no PDF lots)")
         return api_lots
 
-    # Index PDF lots by lot_number for O(1) lookup
+    # ── Strategy 1: Exact lot_number match ─────────────────────────────
     pdf_by_lot_num: dict[Optional[int], dict] = {}
     for pdf_lot in pdf_lots:
         lot_num = pdf_lot.get("lot_number")
         if lot_num is not None:
             pdf_by_lot_num[lot_num] = pdf_lot
 
-    merged: list[dict] = []
-    for api_lot in api_lots:
-        lot_num = api_lot.get("lot_number")
-        merged_lot = dict(api_lot)  # Start with API base
+    exact_match_count = sum(
+        1 for api_lot in api_lots
+        if api_lot.get("lot_number") is not None
+        and api_lot.get("lot_number") in pdf_by_lot_num
+    )
 
-        # Find matching PDF lot
-        pdf_lot = pdf_by_lot_num.get(lot_num)
-        if pdf_lot:
-            # Overlay PDF-only fields
-            for field in PDF_ONLY_FIELDS:
-                pdf_val = pdf_lot.get(field)
-                if pdf_val is not None:
-                    merged_lot[field] = pdf_val
+    if exact_match_count > 0:
+        # At least some exact matches -- use existing logic
+        merged: list[dict] = []
+        for api_lot in api_lots:
+            lot_num = api_lot.get("lot_number")
+            pdf_lot = pdf_by_lot_num.get(lot_num)
+            if pdf_lot:
+                merged.append(_overlay_pdf_onto_api(api_lot, pdf_lot))
+            else:
+                merged.append(dict(api_lot))
 
-            # For shared fields, prefer API if non-null; otherwise use PDF
-            for field in ("zoning_plan", "plot_numbers", "area_sqm"):
-                if merged_lot.get(field) is None:
-                    pdf_val = pdf_lot.get(field)
-                    if pdf_val is not None:
-                        merged_lot[field] = pdf_val
+        # Add PDF lots with no API match
+        api_lot_nums = {lot.get("lot_number") for lot in api_lots}
+        for pdf_lot in pdf_lots:
+            lot_num = pdf_lot.get("lot_number")
+            if lot_num is not None and lot_num not in api_lot_nums:
+                pdf_copy = dict(pdf_lot)
+                pdf_copy["data_source"] = "pdf"
+                merged.append(pdf_copy)
 
-            merged_lot["data_source"] = "merged"
-        # else: keep data_source='api'
+        logger.info(
+            "Merge strategy: exact lot_number match "
+            "(%d/%d API lots matched)",
+            exact_match_count, len(api_lots),
+        )
+        return merged
 
-        merged.append(merged_lot)
+    # ── No exact matches — fall through to positional strategies ───────
+    n_api = len(api_lots)
+    n_pdf = len(pdf_lots)
 
-    # Check for PDF lots not in API (e.g. lot numbers that don't match)
-    api_lot_nums = {lot.get("lot_number") for lot in api_lots}
-    for pdf_lot in pdf_lots:
-        lot_num = pdf_lot.get("lot_number")
-        if lot_num is not None and lot_num not in api_lot_nums:
-            pdf_lot["data_source"] = "pdf"
-            merged.append(pdf_lot)
-            logger.info(
-                "PDF lot %d has no API match — added as pdf-only",
-                lot_num,
-            )
+    # ── Strategy 2: Positional match (same count) ─────────────────────
+    if n_api == n_pdf:
+        merged = []
+        for api_lot, pdf_lot in zip(api_lots, pdf_lots):
+            merged.append(_overlay_pdf_onto_api(api_lot, pdf_lot))
+        logger.info(
+            "Merge strategy: positional match (both sides have %d lots, "
+            "lot_number schemes differ)",
+            n_api,
+        )
+        return merged
 
+    # ── Strategy 3: API has fewer lots than PDF ───────────────────────
+    # PDF lots are the detailed/granular view. Use PDF as base, enrich
+    # with API aggregate fields.
+    if n_api < n_pdf:
+        merged = []
+        for pdf_lot in pdf_lots:
+            # Enrich each PDF lot with the first (or only) API lot's
+            # aggregate data. When there's 1 API lot this broadcasts it;
+            # when there are K API lots we round-robin or just use the
+            # first one (aggregate fields like winner_name / gush are
+            # typically the same across API lots in this scenario).
+            api_lot = api_lots[0]
+            merged.append(_enrich_pdf_with_api_aggregate(pdf_lot, api_lot))
+
+        logger.info(
+            "Merge strategy: pdf-granular enriched with api-aggregate "
+            "(%d API lots → %d PDF lots)",
+            n_api, n_pdf,
+        )
+        return merged
+
+    # ── Strategy 4: API has more lots than PDF ────────────────────────
+    # Positional match for the first N PDF lots, keep remaining API lots
+    # as-is.
+    merged = []
+    for i, api_lot in enumerate(api_lots):
+        if i < n_pdf:
+            merged.append(_overlay_pdf_onto_api(api_lot, pdf_lots[i]))
+        else:
+            merged.append(dict(api_lot))
+    logger.info(
+        "Merge strategy: partial positional match "
+        "(%d API lots, %d PDF lots — first %d matched by position)",
+        n_api, n_pdf, n_pdf,
+    )
     return merged
 
 

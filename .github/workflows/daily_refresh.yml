@@ -41,18 +41,18 @@ jobs:
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
         run: python scripts/refresh_tenders.py
 
-      - name: Extract building rights for watchlisted tenders
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python scripts/extract_building_rights_batch.py --max-per-run 5
-        continue-on-error: true
-
       - name: Extract lot data from brochures
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python scripts/extract_lots_batch.py --limit 50
+        continue-on-error: true
+
+      - name: Extract building rights for active tenders with brochure
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/extract_building_rights_batch.py --max-per-run 20
         continue-on-error: true
 
       - name: Commit and push snapshot
