@@ -12,7 +12,7 @@ import logging
 
 import streamlit as st
 
-from config import MANAGEMENT_ALLOWED_EMAILS
+from config import MANAGEMENT_ALLOWED_EMAILS, TEAM_ALLOWED_EMAILS
 from dashboard_utils import get_user_email, render_email_input
 
 # ── Logging setup ─────────────────────────────────────────────────────────
@@ -747,15 +747,26 @@ _current_email = get_user_email().strip().lower()
 # MULTIPAGE NAVIGATION
 # ============================================================================
 
-# Management page — restricted to allowed emails (or open if list is empty)
-_show_management = not MANAGEMENT_ALLOWED_EMAILS or _current_email in MANAGEMENT_ALLOWED_EMAILS
+# Role-based access: team → all pages, management → management only, else → blocked
+if _current_email in TEAM_ALLOWED_EMAILS:
+    _role = "team"
+elif _current_email in MANAGEMENT_ALLOWED_EMAILS:
+    _role = "management"
+else:
+    _role = None
+
+if _role is None:
+    st.error("אין לך הרשאה לצפות באפליקציה. פנה למנהל המערכת.")
+    st.stop()
 
 _pages: list = []
-if _show_management:
+if _role == "team":
     _pages.append(st.Page("pages/management.py", title="לוח הנהלה", icon="📊", default=True))
-_pages.append(st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋", default=not _show_management))
-_pages.append(st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍"))
-_pages.append(st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈"))
+    _pages.append(st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋"))
+    _pages.append(st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍"))
+    _pages.append(st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈"))
+elif _role == "management":
+    _pages.append(st.Page("pages/management.py", title="לוח הנהלה", icon="📊", default=True))
 
 pg = st.navigation(_pages)
 pg.run()
