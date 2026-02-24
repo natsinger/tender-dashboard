@@ -13,11 +13,11 @@ import streamlit as st
 
 from config import (
     DATA_DIR,
-    NON_ACTIVE_STATUSES,
     RELEVANT_TENDER_TYPES,
     RMI_SITE_URL,
 )
 from dashboard_utils import (
+    filter_active,
     load_building_rights_data,
     load_data,
     load_tender_details,
@@ -27,7 +27,7 @@ from data_client import LandTendersClient, build_document_url
 from analytics_engine import score_all_tenders
 
 # ── Constants ────────────────────────────────────────────────────────────────
-RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
+RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "מגורים/מסחר/מלונאות/נופש", "דיור מוגן (בית אבות)", "אחר"}
 
 # Compute `today` fresh on each render (not at module-import time).
 today = datetime.now()
@@ -40,7 +40,7 @@ df = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
 if "purpose" in df.columns:
     df = df[df["purpose"].isin(RELEVANT_PURPOSES)].copy()
 df = score_all_tenders(df)
-active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
+active_df = filter_active(df)
 
 
 # ============================================================================

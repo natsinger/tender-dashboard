@@ -18,7 +18,6 @@ from config import (
     CLOSING_SOON_DAYS,
     DOCUMENT_DOWNLOAD_API,
     LAND_AUTHORITY_API,
-    NON_ACTIVE_STATUSES,
     RELEVANT_TENDER_TYPES,
     RMI_SITE_URL,
     TEAM_EMAIL,
@@ -28,6 +27,7 @@ from dashboard_utils import (
     MEGIDO_CHART_COLORS,
     PLOTLY_BG,
     PLOTLY_FONT,
+    filter_active,
     find_new_tender_ids_from_snapshots,
     get_user_email,
     load_data,
@@ -37,7 +37,7 @@ from analytics_engine import score_all_tenders
 from user_db import REVIEW_STAGES, UserDB
 
 # Purpose filter: only include these ייעוד values across the entire dashboard
-RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "דיור מוגן (בית אבות)", "אחר"}
+RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "מגורים/מסחר/מלונאות/נופש", "דיור מוגן (בית אבות)", "אחר"}
 
 # The 3 tender types for KPI cards (פומבי=1, מחיר מטרה=5, דיור במחיר מופחת=8)
 CARD_TENDER_TYPES = {1, 5, 8}
@@ -66,7 +66,7 @@ if "purpose" in df.columns:
 # Score all tenders
 df = score_all_tenders(df)
 # Active-only base
-active_df = df[~df["status"].isin(NON_ACTIVE_STATUSES)].copy()
+active_df = filter_active(df)
 
 
 # ============================================================================
@@ -663,7 +663,7 @@ st.markdown(
 
 # Use the unfiltered-by-purpose data for these categories (from df_all filtered by type only)
 _all_typed = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
-_all_active = _all_typed[~_all_typed["status"].isin(NON_ACTIVE_STATUSES)].copy()
+_all_active = filter_active(_all_typed)
 
 bc1, bc2, bc3 = st.columns(3)
 
