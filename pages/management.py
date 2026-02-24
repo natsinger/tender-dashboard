@@ -90,14 +90,6 @@ def _urgency(days: Optional[int]) -> str:
     return "🟢"
 
 
-_REVIEW_EMOJI: dict[str, str] = {
-    "לא נסקר": "⬜",
-    "סקירה ראשונית": "🔵",
-    "בדיקה מעמיקה": "🟣",
-    "הוצג בפורום": "🟠",
-    "אושר בפורום": "🟢",
-}
-
 
 def _build_compact_table(
     source_df: pd.DataFrame,
@@ -208,11 +200,9 @@ if len(watchlist_df) > 0:
     watched_ids = watchlist_df['tender_id'].astype(int).tolist()
     review_map = watch_db.get_review_statuses_for_tenders(watched_ids)
 
-    # Add review status
+    # Add review status (plain text, no emoji — keeps column alignment)
     display_sel['review'] = [
-        _REVIEW_EMOJI.get(
-            review_map.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
-        ) + " " + review_map.get(int(tid), {}).get("status", "לא נסקר")
+        review_map.get(int(tid), {}).get("status", "לא נסקר")
         for tid in watchlist_df['tender_id']
     ]
 
