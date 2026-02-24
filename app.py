@@ -343,8 +343,12 @@ st.markdown("""
     }
     /* Shrink the radio container inside columns */
     [data-testid="stColumn"] .stRadio {
-        margin-top: 0;
-        margin-bottom: 0;
+        margin-top: -8px;
+        margin-bottom: -8px;
+    }
+    /* Keep the radiogroup itself compact */
+    .stRadio > div {
+        gap: 0;
     }
 
     /* ── Sidebar Toggle Buttons ── */
@@ -423,6 +427,28 @@ st.markdown("""
         color: var(--mg-text-heading) !important;
     }
 
+    /* Toggle track — OFF state: gray background with visible border */
+    [data-testid="stToggle"] label div[role="checkbox"],
+    [data-testid="stToggle"] label div[data-baseweb="checkbox"] div {
+        background-color: #d1d5db !important;
+        border: 2px solid #9CA3AF !important;
+        border-radius: 999px !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    /* Toggle track — ON state: blue/primary background */
+    [data-testid="stToggle"] label div[role="checkbox"][aria-checked="true"],
+    [data-testid="stToggle"] label div[aria-checked="true"] div,
+    [data-testid="stToggle"] label[data-checked="true"] div[role="checkbox"] {
+        background-color: var(--mg-primary) !important;
+        border-color: var(--mg-primary-hover) !important;
+    }
+    /* Toggle thumb (the circle) — white with shadow for visibility */
+    [data-testid="stToggle"] label div[role="checkbox"]::before,
+    [data-testid="stToggle"] label div[role="checkbox"]::after {
+        background-color: #FFFFFF !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+    }
+
     /* ── Expander styling ── */
     .streamlit-expanderHeader {
         font-weight: 600;
@@ -459,13 +485,14 @@ st.markdown("""
     }
     .detail-field strong { color: var(--mg-text-heading); }
 
-    /* ── Column containers: prevent clipping ── */
+    /* ── Column containers: prevent clipping, align tops ── */
     [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
         min-width: 0;
         overflow: visible;
     }
     [data-testid="stHorizontalBlock"] {
         gap: 0.75rem;
+        align-items: flex-start;
     }
 
     /* ── Plotly chart containers: no overflow, tight spacing ── */
@@ -493,9 +520,6 @@ st.markdown("""
     .stRadio > div {
         gap: 0.3rem;
     }
-    .stRadio label {
-        font-size: 0.85rem !important;
-    }
 
     /* ── Tabs styling ── */
     .stTabs [data-baseweb="tab"] {
@@ -507,7 +531,7 @@ st.markdown("""
     }
 
     /* ================================================================
-       TABLES — LTR by default (numbers/data read naturally left→right)
+       TABLES — RTL for Hebrew-first column ordering
        Narrow columns minimized.
        ================================================================ */
 
@@ -517,8 +541,8 @@ st.markdown("""
     [data-testid="stDataFrame"] td,
     .stDataFrame,
     .stDataFrame table {
-        direction: ltr !important;
-        text-align: left !important;
+        direction: rtl !important;
+        text-align: right !important;
     }
     /* Compact table cells */
     [data-testid="stDataFrame"] th,
@@ -713,10 +737,10 @@ st.markdown("""
 # MULTIPAGE NAVIGATION
 # ============================================================================
 
-dashboard = st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋", default=True)
+management = st.Page("pages/management.py", title="לוח הנהלה", icon="📊", default=True)
+dashboard = st.Page("pages/dashboard.py", title="דאשבורד חדר עסקאות", icon="📋")
 explorer = st.Page("pages/explorer.py", title="סייר מכרזים", icon="🔍")
 analytics = st.Page("pages/analytics.py", title="ניתוח שוק", icon="📈")
-management = st.Page("pages/management.py", title="לוח הנהלה", icon="📊")
 
-pg = st.navigation([dashboard, explorer, analytics, management])
+pg = st.navigation([management, dashboard, explorer, analytics])
 pg.run()

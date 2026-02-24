@@ -89,10 +89,10 @@ with f4:
     if sel_status:
         explorer_df = explorer_df[explorer_df["status"].isin(sel_status)]
 
-# Fixed display columns — lot_count and max_lots_per_bidder appear after units
+# Fixed display columns — score first (progress bar), then tender_name, units, city, region...
 EXP_COLS = [
-    "total_score", "tender_name", "city", "region", "tender_type", "purpose",
-    "units", "lot_count", "max_lots_per_bidder", "deadline", "status", "published_booklet",
+    "total_score", "tender_name", "units", "city", "region", "tender_type", "purpose",
+    "lot_count", "max_lots_per_bidder", "deadline", "status", "published_booklet",
 ]
 display_cols = [c for c in EXP_COLS if c in explorer_df.columns]
 
@@ -129,11 +129,11 @@ if display_cols:
         column_config={
             "total_score": st.column_config.ProgressColumn("ציון", min_value=0, max_value=100, format="%.0f"),
             "tender_name": st.column_config.TextColumn("שם מכרז", width="large"),
+            "units": st.column_config.NumberColumn('יח"ד', format="%d"),
             "city": st.column_config.TextColumn("עיר", width="medium"),
             "region": st.column_config.TextColumn("מחוז", width="small"),
             "tender_type": st.column_config.TextColumn("סוג", width="medium"),
             "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
-            "units": st.column_config.NumberColumn('יח"ד', format="%d"),
             "lot_count": st.column_config.NumberColumn("מתחמים", format="%d"),
             "max_lots_per_bidder": st.column_config.NumberColumn("מקס' לזוכה", format="%d"),
             "deadline": st.column_config.DateColumn("מועד סגירה", format="YYYY-MM-DD"),
@@ -324,160 +324,11 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
             elif not full_doc:
                 st.info("אין מסמכים זמינים")
 
-            # ── Building Rights ────────────────────────────────────────
-            st.markdown("---")
-            st.markdown("### זכויות בנייה")
-
-            br_data = load_building_rights_data(selected_tender_id)
-            br_status = br_data["extraction_status"]
-
-            if br_status == "none":
-                if st.button("נתח זכויות בנייה", key=f"br_btn_{selected_tender_id}"):
-                    with st.spinner("מוריד ומנתח חוברת מכרז..."):
-                        from brochure_analyzer import (
-                            download_and_analyze_brochure,
-                            trigger_extraction_workflow,
-                        )
-                        from db import TenderDB
-
-                        br_client = LandTendersClient(data_dir=str(DATA_DIR))
-                        br_result = download_and_analyze_brochure(
-                            selected_tender_id, br_client, details,
-                        )
-
-                        if br_result["success"]:
-                            db = TenderDB()
-                            lots_data = {
-                                "plots": br_result["lots"],
-                                "purpose": br_result["purpose"],
-                            }
-
-                            new_status = "queued"
-                            if br_result["plan_number"]:
-                                existing = db.load_building_rights(br_result["plan_number"])
-                                if existing:
-                                    new_status = "complete"
-
-                            db.update_brochure_data(
-                                selected_tender_id,
-                                br_result["plan_number"],
-                                lots_data,
-                                br_result["summary"],
-                                extraction_status=new_status,
-                            )
-
-                            if new_status == "queued" and br_result["plan_number"]:
-                                triggered = trigger_extraction_workflow(selected_tender_id)
-                                if triggered:
-                                    st.success("ניתוח חוברת הושלם. זכויות בנייה יעובדו תוך 5-10 דקות.")
-                                else:
-                                    st.warning("ניתוח חוברת הושלם, אך לא הצלחנו להפעיל את עיבוד זכויות הבנייה.")
-                            elif new_status == "complete":
-                                st.success("ניתוח הושלם — זכויות בנייה כבר קיימות!")
-                            else:
-                                st.info("ניתוח חוברת הושלם.")
-
-                            load_building_rights_data.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"ניתוח נכשל: {'; '.join(br_result['errors'])}")
-                else:
-                    st.caption("לחץ לניתוח חוברת המכרז וחילוץ זכויות בנייה")
-
-            elif br_status in ("brochure_extracted", "queued"):
-                st.info("ממתין לעיבוד זכויות בנייה (יושלם תוך דקות)")
-
-                if br_data["plan_number"]:
-                    st.markdown(f"**תב\"ע:** {br_data['plan_number']}")
-
-                if br_data["lots_data"] and isinstance(br_data["lots_data"], dict):
-                    lots_plots = br_data["lots_data"].get("plots", [])
-                    if lots_plots:
-                        st.markdown("**מגרשים:**")
-                        lots_rows = []
-                        for p in lots_plots:
-                            lots_rows.append({
-                                "גוש": p.get("gush", "-"),
-                                "חלקה": p.get("helka", "-"),
-                                "מגרש": p.get("migrash", "-"),
-                                "שטח": p.get("area", "-"),
-                            })
-                        st.dataframe(pd.DataFrame(lots_rows), use_container_width=True, hide_index=True)
-
-                if br_data["brochure_summary"]:
-                    with st.expander("סיכום חוברת מכרז", expanded=False):
-                        st.text(br_data["brochure_summary"])
-
-                if st.button("בדוק שוב", key=f"br_check_{selected_tender_id}"):
-                    load_building_rights_data.clear()
-                    st.rerun()
-
-            elif br_status == "complete":
-                if br_data["plan_number"]:
-                    st.markdown(f"**תב\"ע:** {br_data['plan_number']}")
-
-                rights = br_data["building_rights"]
-                if rights:
-                    display_rows = []
-                    for row in rights:
-                        display_rows.append({
-                            "יעוד": row.get("designation", "-"),
-                            "שימוש": row.get("use_type", "-"),
-                            "תאי שטח": row.get("area_condition", "-"),
-                            'שטח מגרש (מ"ר)': row.get("plot_size_absolute", "-"),
-                            "שטח בנייה עיקרי": row.get("building_area_above", "-"),
-                            "שטח בנייה סה\"כ": row.get("building_area_total", "-"),
-                            "תכסית %": row.get("coverage_pct", "-"),
-                            'יח"ד': row.get("housing_units", "-"),
-                            "קומות": row.get("floors_above", "-"),
-                            'גובה (מ\')': row.get("building_height", "-"),
-                            "קו בניין קדמי": row.get("setback_front", "-"),
-                            "קו בניין אחורי": row.get("setback_rear", "-"),
-                            "קו בניין צידי": row.get("setback_side", "-"),
-                        })
-
-                    rights_df = pd.DataFrame(display_rows)
-                    st.dataframe(rights_df, use_container_width=True, hide_index=True)
-                    st.caption(f"סה\"כ {len(rights)} שורות מתוך טבלת זכויות בנייה")
-                else:
-                    st.info("לא נמצאו זכויות בנייה עבור התב\"ע")
-
-                if br_data["lots_data"] and isinstance(br_data["lots_data"], dict):
-                    lots_plots = br_data["lots_data"].get("plots", [])
-                    if lots_plots:
-                        with st.expander("מגרשים מחוברת המכרז", expanded=False):
-                            lots_rows = []
-                            for p in lots_plots:
-                                lots_rows.append({
-                                    "גוש": p.get("gush", "-"),
-                                    "חלקה": p.get("helka", "-"),
-                                    "מגרש": p.get("migrash", "-"),
-                                    "שטח": p.get("area", "-"),
-                                })
-                            st.dataframe(pd.DataFrame(lots_rows), use_container_width=True, hide_index=True)
-
-                if br_data["brochure_summary"]:
-                    with st.expander("סיכום חוברת מכרז", expanded=False):
-                        st.text(br_data["brochure_summary"])
-
-            elif br_status == "failed":
-                error_msg = br_data.get("extraction_error") or "שגיאה לא ידועה"
-                st.error(f"חילוץ זכויות בנייה נכשל: {error_msg}")
-
-                if br_data["brochure_summary"]:
-                    with st.expander("סיכום חוברת מכרז", expanded=False):
-                        st.text(br_data["brochure_summary"])
-
-                if st.button("נסה שוב", key=f"br_retry_{selected_tender_id}"):
-                    from db import TenderDB
-                    TenderDB().set_extraction_status(selected_tender_id, "none")
-                    load_building_rights_data.clear()
-                    st.rerun()
-
-            # ── Lot Data (from tender_lots table) ─────────────────────
+            # ── Lot Data (from tender_lots table / API) ─────────────
             st.markdown("---")
             st.markdown("### נתוני מתחמים")
 
+            _has_api_lot_data = False
             try:
                 from db import TenderDB as _LotDB
 
@@ -512,6 +363,7 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
 
                 # ── Lots table ────────────────────────────────────────
                 if _lots:
+                    _has_api_lot_data = True
                     _lots_df = pd.DataFrame(_lots)
 
                     _COL_MAP = {
@@ -657,6 +509,216 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
                     _lot_exc,
                 )
                 st.caption("לא ניתן לטעון נתוני מתחמים")
+
+            # ── Building Rights ────────────────────────────────────────
+            st.markdown("---")
+            st.markdown("### זכויות בנייה")
+
+            br_data = load_building_rights_data(selected_tender_id)
+            br_status = br_data["extraction_status"]
+
+            if br_status == "none":
+                # Show any existing brochure data even before extraction
+                _has_partial_br_data = False
+
+                if br_data["plan_number"]:
+                    st.markdown(f"**תב\"ע:** {br_data['plan_number']}")
+                    _has_partial_br_data = True
+
+                if br_data["lots_data"] and isinstance(br_data["lots_data"], dict):
+                    lots_plots = br_data["lots_data"].get("plots", [])
+                    if lots_plots:
+                        st.markdown("**מגרשים מחוברת:**")
+                        lots_rows = []
+                        for p in lots_plots:
+                            lots_rows.append({
+                                "גוש": p.get("gush", "-"),
+                                "חלקה": p.get("helka", "-"),
+                                "מגרש": p.get("migrash", "-"),
+                                "שטח": p.get("area", "-"),
+                            })
+                        st.dataframe(
+                            pd.DataFrame(lots_rows),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                        _has_partial_br_data = True
+
+                if br_data["brochure_summary"]:
+                    with st.expander("סיכום חוברת מכרז", expanded=False):
+                        st.text(br_data["brochure_summary"])
+                    _has_partial_br_data = True
+
+                # Contextual message + optional deep-analysis button
+                if _has_api_lot_data or _has_partial_br_data:
+                    st.caption(
+                        "נתוני מתחמים בסיסיים זמינים למעלה."
+                        " לניתוח מעמיק מחוברת המכרז (תב\"ע, זכויות בנייה):"
+                    )
+                if st.button(
+                    "ניתוח מעמיק מחוברת המכרז",
+                    key=f"br_btn_{selected_tender_id}",
+                ):
+                    with st.spinner("מוריד ומנתח חוברת מכרז..."):
+                        from brochure_analyzer import (
+                            download_and_analyze_brochure,
+                            trigger_extraction_workflow,
+                        )
+                        from db import TenderDB
+
+                        br_client = LandTendersClient(data_dir=str(DATA_DIR))
+                        br_result = download_and_analyze_brochure(
+                            selected_tender_id, br_client, details,
+                        )
+
+                        if br_result["success"]:
+                            db = TenderDB()
+                            lots_data = {
+                                "plots": br_result["lots"],
+                                "purpose": br_result["purpose"],
+                            }
+
+                            new_status = "queued"
+                            if br_result["plan_number"]:
+                                existing = db.load_building_rights(
+                                    br_result["plan_number"],
+                                )
+                                if existing:
+                                    new_status = "complete"
+
+                            db.update_brochure_data(
+                                selected_tender_id,
+                                br_result["plan_number"],
+                                lots_data,
+                                br_result["summary"],
+                                extraction_status=new_status,
+                            )
+
+                            if new_status == "queued" and br_result["plan_number"]:
+                                triggered = trigger_extraction_workflow(
+                                    selected_tender_id,
+                                )
+                                if triggered:
+                                    st.success(
+                                        "ניתוח חוברת הושלם."
+                                        " זכויות בנייה יעובדו תוך 5-10 דקות."
+                                    )
+                                else:
+                                    st.warning(
+                                        "ניתוח חוברת הושלם, אך לא הצלחנו"
+                                        " להפעיל את עיבוד זכויות הבנייה."
+                                    )
+                            elif new_status == "complete":
+                                st.success(
+                                    "ניתוח הושלם — זכויות בנייה כבר קיימות!"
+                                )
+                            else:
+                                st.info("ניתוח חוברת הושלם.")
+
+                            load_building_rights_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(
+                                f"ניתוח נכשל: {'; '.join(br_result['errors'])}"
+                            )
+
+            elif br_status in ("brochure_extracted", "queued"):
+                st.info("ממתין לעיבוד זכויות בנייה (יושלם תוך דקות)")
+
+                if br_data["plan_number"]:
+                    st.markdown(f"**תב\"ע:** {br_data['plan_number']}")
+
+                if br_data["lots_data"] and isinstance(br_data["lots_data"], dict):
+                    lots_plots = br_data["lots_data"].get("plots", [])
+                    if lots_plots:
+                        st.markdown("**מגרשים:**")
+                        lots_rows = []
+                        for p in lots_plots:
+                            lots_rows.append({
+                                "גוש": p.get("gush", "-"),
+                                "חלקה": p.get("helka", "-"),
+                                "מגרש": p.get("migrash", "-"),
+                                "שטח": p.get("area", "-"),
+                            })
+                        st.dataframe(
+                            pd.DataFrame(lots_rows),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                if br_data["brochure_summary"]:
+                    with st.expander("סיכום חוברת מכרז", expanded=False):
+                        st.text(br_data["brochure_summary"])
+
+                if st.button("בדוק שוב", key=f"br_check_{selected_tender_id}"):
+                    load_building_rights_data.clear()
+                    st.rerun()
+
+            elif br_status == "complete":
+                if br_data["plan_number"]:
+                    st.markdown(f"**תב\"ע:** {br_data['plan_number']}")
+
+                rights = br_data["building_rights"]
+                if rights:
+                    display_rows = []
+                    for row in rights:
+                        display_rows.append({
+                            "יעוד": row.get("designation", "-"),
+                            "שימוש": row.get("use_type", "-"),
+                            "תאי שטח": row.get("area_condition", "-"),
+                            'שטח מגרש (מ"ר)': row.get("plot_size_absolute", "-"),
+                            "שטח בנייה עיקרי": row.get("building_area_above", "-"),
+                            "שטח בנייה סה\"כ": row.get("building_area_total", "-"),
+                            "תכסית %": row.get("coverage_pct", "-"),
+                            'יח"ד': row.get("housing_units", "-"),
+                            "קומות": row.get("floors_above", "-"),
+                            'גובה (מ\')': row.get("building_height", "-"),
+                            "קו בניין קדמי": row.get("setback_front", "-"),
+                            "קו בניין אחורי": row.get("setback_rear", "-"),
+                            "קו בניין צידי": row.get("setback_side", "-"),
+                        })
+
+                    rights_df = pd.DataFrame(display_rows)
+                    st.dataframe(rights_df, use_container_width=True, hide_index=True)
+                    st.caption(f"סה\"כ {len(rights)} שורות מתוך טבלת זכויות בנייה")
+                else:
+                    st.info("לא נמצאו זכויות בנייה עבור התב\"ע")
+
+                if br_data["lots_data"] and isinstance(br_data["lots_data"], dict):
+                    lots_plots = br_data["lots_data"].get("plots", [])
+                    if lots_plots:
+                        with st.expander("מגרשים מחוברת המכרז", expanded=False):
+                            lots_rows = []
+                            for p in lots_plots:
+                                lots_rows.append({
+                                    "גוש": p.get("gush", "-"),
+                                    "חלקה": p.get("helka", "-"),
+                                    "מגרש": p.get("migrash", "-"),
+                                    "שטח": p.get("area", "-"),
+                                })
+                            st.dataframe(
+                                pd.DataFrame(lots_rows),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                if br_data["brochure_summary"]:
+                    with st.expander("סיכום חוברת מכרז", expanded=False):
+                        st.text(br_data["brochure_summary"])
+
+            elif br_status == "failed":
+                error_msg = br_data.get("extraction_error") or "שגיאה לא ידועה"
+                st.error(f"חילוץ זכויות בנייה נכשל: {error_msg}")
+
+                if br_data["brochure_summary"]:
+                    with st.expander("סיכום חוברת מכרז", expanded=False):
+                        st.text(br_data["brochure_summary"])
+
+                if st.button("נסה שוב", key=f"br_retry_{selected_tender_id}"):
+                    from db import TenderDB
+                    TenderDB().set_extraction_status(selected_tender_id, "none")
+                    load_building_rights_data.clear()
+                    st.rerun()
 
             st.markdown("---")
             st.markdown(f"[צפה באתר רמ\"י]({RMI_SITE_URL}/{selected_tender_id})")

@@ -216,10 +216,10 @@ def _render_new_table(source_df: pd.DataFrame, title: str, key_prefix: str) -> N
         unsafe_allow_html=True,
     )
     if len(source_df) > 0:
-        tbl = source_df[["tender_id", "tender_name", "city", "tender_type", "units"]].copy()
+        tbl = source_df[["tender_id", "tender_name", "units", "city", "tender_type"]].copy()
         tbl["קישור"] = tbl["tender_id"].apply(lambda tid: f"{RMI_SITE_URL}/{tid}")
         tbl = tbl.drop(columns=["tender_id"])
-        tbl.columns = ["שם מכרז", "עיר", "סוג", 'יח"ד', "קישור רמ\"י"]
+        tbl.columns = ["שם מכרז", 'יח"ד', "עיר", "סוג", "קישור רמ\"י"]
         tbl = tbl.sort_values('יח"ד', ascending=False)
         st.dataframe(
             tbl,
@@ -228,9 +228,9 @@ def _render_new_table(source_df: pd.DataFrame, title: str, key_prefix: str) -> N
             height=min(35 * len(tbl) + 38, 250),
             column_config={
                 "שם מכרז": st.column_config.TextColumn("שם מכרז", width="medium"),
+                'יח"ד': st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
                 "עיר": st.column_config.TextColumn("עיר", width="small"),
                 "סוג": st.column_config.TextColumn("סוג", width="small"),
-                'יח"ד': st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
                 "קישור רמ\"י": st.column_config.LinkColumn("קישור רמ\"י", width="small", display_text="צפה באתר"),
             },
         )
@@ -271,6 +271,11 @@ with col_kpi:
         st.metric("מכרזים שייסגרו בשבועיים הקרובים", closing_soon_count)
 
     # ── Pie charts — right column, below KPI cards ────────────────────────
+    # Read week selection from session_state (radio widget rendered below pies).
+    pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
+    _sel_value = st.session_state.get("urgency_pie2", "4W")
+    pie2_days = pie2_opts.get(_sel_value, 28)
+
     _pie1, _pie2 = st.columns(2)
 
     with _pie1:
@@ -285,18 +290,12 @@ with col_kpi:
                 color_discrete_sequence=["#2563EB", "#E2E8F0"],
                 hole=0.55,
             )
-            fig1.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+            fig1.update_traces(
+                textinfo="label+value", textposition="inside", textfont_size=11,
+            )
             fig1.update_layout(
-                height=190, margin=dict(t=0, b=25, l=0, r=0),
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="top",
-                    y=-0.05,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(size=10),
-                ),
+                height=180, margin=dict(t=5, b=5, l=5, r=5),
+                showlegend=False,
                 font=PLOTLY_FONT, **PLOTLY_BG,
             )
             st.plotly_chart(fig1, use_container_width=True, key="pie_booklet")
@@ -305,13 +304,6 @@ with col_kpi:
 
     with _pie2:
         st.markdown('<p class="pie-title" style="font-size:13px;">חוברות לפי מחוז</p>', unsafe_allow_html=True)
-        # Week selector — horizontal radio pills (1W / 2W / 4W)
-        pie2_opts = {"1W": 7, "2W": 14, "4W": 28}
-        _sel = st.radio(
-            "טווח", list(pie2_opts.keys()), index=2,
-            horizontal=True, key="urgency_pie2", label_visibility="collapsed",
-        )
-        pie2_days = pie2_opts.get(_sel, 28)
         pie2_df = active_df[active_df["published_booklet"] == True].copy()
         pie2_cut = today + timedelta(days=pie2_days)
         pie2_df = pie2_df[(pie2_df["deadline"].notna()) & (pie2_df["deadline"] >= today) & (pie2_df["deadline"] <= pie2_cut)]
@@ -320,18 +312,12 @@ with col_kpi:
             br = pie2_df.groupby("region").size().reset_index(name="count").sort_values("count", ascending=False)
             if not br.empty:
                 fig2 = px.pie(br, values="count", names="region", hole=0.55, color_discrete_sequence=MEGIDO_CHART_COLORS)
-                fig2.update_traces(textinfo="value", textposition="inside", textfont_size=12)
+                fig2.update_traces(
+                    textinfo="label+value", textposition="inside", textfont_size=11,
+                )
                 fig2.update_layout(
-                    height=190, margin=dict(t=0, b=25, l=0, r=0),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="top",
-                        y=-0.05,
-                        xanchor="center",
-                        x=0.5,
-                        font=dict(size=10),
-                    ),
+                    height=180, margin=dict(t=5, b=5, l=5, r=5),
+                    showlegend=False,
                     font=PLOTLY_FONT, **PLOTLY_BG,
                 )
                 st.plotly_chart(fig2, use_container_width=True, key="pie_brochure_region")
@@ -340,47 +326,34 @@ with col_kpi:
         else:
             st.info("אין נתונים")
 
-    # ── Bar chart: City distribution (full width under pies, same column) ─
-    st.markdown('<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>', unsafe_allow_html=True)
-    if "city" in active_df.columns and len(active_df) > 0:
-        city_counts = active_df["city"].value_counts().head(10)
-        if len(city_counts) > 0:
-            fig_city_bar = px.bar(
-                x=city_counts.values, y=city_counts.index, orientation="h",
-                color_discrete_sequence=["#2563EB"],
-            )
-            fig_city_bar.update_layout(
-                showlegend=False, height=220,
-                margin=dict(t=5, b=20, l=5, r=5),
-                xaxis_title=None, yaxis_title=None,
-                coloraxis_showscale=False,
-                font=PLOTLY_FONT, **PLOTLY_BG,
-            )
-            st.plotly_chart(fig_city_bar, use_container_width=True, key="bar_city")
-        else:
-            st.info("אין נתוני ערים")
-    else:
-        st.info("אין נתונים")
+    # Week toggle — native st.pills, right-aligned under pie2
+    _tgl_spacer, _tgl_col = st.columns([1, 1])
+    with _tgl_col:
+        st.pills(
+            "טווח", list(pie2_opts.keys()), default="4W",
+            key="urgency_pie2", label_visibility="collapsed",
+        )
 
-
-# ============================================================================
-# ROW 2: CLOSING DEADLINES (full width)
-# ============================================================================
-
-col_deadlines = st.container()
-
-with col_deadlines:
+    # ── Closing deadlines — inside col_kpi, below pies ──────────────
     st.markdown(
         '<div class="section-header" style="font-size:0.95rem;margin:0 0 6px 0;">מועדי סגירה</div>',
         unsafe_allow_html=True,
     )
 
-    # Controls row: הצג הכל toggle + brochure ON/OFF toggle
+    # Controls row: deadline range + brochure filter as pills
     _ctrl1, _ctrl2 = st.columns(2)
     with _ctrl1:
-        show_all_deadlines = st.toggle("הצג הכל", value=False, key="deadline_toggle")
+        _deadline_sel = st.pills(
+            "טווח", ["14 ימים", "הכל"], default="14 ימים",
+            key="deadline_pills", label_visibility="collapsed",
+        )
     with _ctrl2:
-        _show_all_brochure = st.toggle("ללא חוברת", value=False, key="brochure_toggle")
+        _brochure_sel = st.pills(
+            "חוברת", ["עם חוברת", "הכל"], default="עם חוברת",
+            key="brochure_pills", label_visibility="collapsed",
+        )
+    show_all_deadlines = _deadline_sel == "הכל"
+    _show_all_brochure = _brochure_sel == "הכל"
 
     upcoming = active_df[
         (active_df["deadline"].notna())
@@ -390,8 +363,8 @@ with col_deadlines:
     if not show_all_deadlines:
         upcoming = upcoming[upcoming["deadline"] <= today + timedelta(days=CLOSING_SOON_DAYS)]
 
-    # Default (toggle OFF = עם חוברת): show only tenders WITH brochure.
-    # Toggle ON (ללא חוברת): show all including without brochure.
+    # Default (עם חוברת): show only tenders WITH brochure.
+    # "הכל": show all including without brochure.
     if not _show_all_brochure and "published_booklet" in upcoming.columns:
         upcoming = upcoming[upcoming["published_booklet"] == True]
 
@@ -410,20 +383,20 @@ with col_deadlines:
                 return "🟡"
             return "🟢"
 
-        up_disp.insert(0, "urg", up_disp["days_left"].apply(_urgency))
+        up_disp["urg"] = up_disp["days_left"].apply(_urgency)
         up_disp["deadline"] = up_disp["deadline"].dt.strftime("%d/%m")
 
-        # Reorder: days_left, urg, deadline first (leftmost = visible on mobile LTR scroll)
-        _ordered = ["days_left", "urg", "deadline", "tender_name", "city", "units"] + _extra_cols
+        # Reorder: tender_name first (rightmost in RTL), then units, city, days/deadline/urg
+        _ordered = ["tender_name", "units", "city", "days_left", "deadline", "urg"] + _extra_cols
         up_disp = up_disp[_ordered]
 
         _deadline_col_config = {
-            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
-            "urg": st.column_config.TextColumn("", width="small"),
-            "deadline": st.column_config.TextColumn("סגירה", width="small"),
             "tender_name": st.column_config.TextColumn("שם", width="medium"),
-            "city": st.column_config.TextColumn("עיר", width="small"),
             "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
+            "city": st.column_config.TextColumn("עיר", width="small"),
+            "days_left": st.column_config.NumberColumn("ימים", format="%d", width="small"),
+            "deadline": st.column_config.TextColumn("סגירה", width="small"),
+            "urg": st.column_config.TextColumn("", width="small"),
         }
         if "lot_count" in up_disp.columns:
             _deadline_col_config["lot_count"] = st.column_config.NumberColumn(
@@ -444,6 +417,35 @@ with col_deadlines:
         st.caption(f"{len(up_disp)} מכרזים")
     else:
         st.info("אין מכרזים קרובים לסגירה")
+
+
+# ============================================================================
+# ROW 2: CITY BAR CHART (full width)
+# ============================================================================
+
+st.markdown(
+    '<p class="pie-title" style="font-size:13px;">מכרזים פעילים לפי עיר (טופ 10)</p>',
+    unsafe_allow_html=True,
+)
+if "city" in active_df.columns and len(active_df) > 0:
+    city_counts = active_df["city"].value_counts().head(10)
+    if len(city_counts) > 0:
+        fig_city_bar = px.bar(
+            x=city_counts.values, y=city_counts.index, orientation="h",
+            color_discrete_sequence=["#2563EB"],
+        )
+        fig_city_bar.update_layout(
+            showlegend=False, height=260,
+            margin=dict(t=5, b=20, l=100, r=5),
+            xaxis_title=None, yaxis_title=None,
+            coloraxis_showscale=False,
+            font=PLOTLY_FONT, **PLOTLY_BG,
+        )
+        st.plotly_chart(fig_city_bar, use_container_width=True, key="bar_city")
+    else:
+        st.info("אין נתוני ערים")
+else:
+    st.info("אין נתונים")
 
 st.markdown("---")
 
@@ -562,7 +564,7 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
     }
 
     if len(_team_df) > 0:
-        _rev_tbl = _team_df[["tender_name", "city", "tender_type", "units"]].copy()
+        _rev_tbl = _team_df[["tender_name", "units", "city", "tender_type"]].copy()
         _rev_ids = _team_df["tender_id"].astype(int).tolist()
         _rev_map = _review_db.get_review_statuses_for_tenders(_rev_ids)
 
@@ -575,14 +577,20 @@ with st.expander("מכרזים מועדפים - חדר עסקאות — סטטו
             for tid in _team_df["tender_id"]
         ]
 
+        _rev_tbl["notes"] = [
+            _rev_map.get(int(tid), {}).get("notes", "") or ""
+            for tid in _team_df["tender_id"]
+        ]
+
         st.dataframe(
             _rev_tbl,
             column_config={
                 "tender_name": st.column_config.TextColumn("מכרז", width="medium"),
+                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
                 "city": st.column_config.TextColumn("עיר", width="small"),
                 "tender_type": st.column_config.TextColumn("סוג", width="small"),
-                "units": st.column_config.NumberColumn('יח"ד', format="%d", width="small"),
                 "review": st.column_config.TextColumn("סטטוס סקירה", width="medium"),
+                "notes": st.column_config.TextColumn("הערות", width="large"),
             },
             hide_index=True,
             use_container_width=True,

@@ -140,15 +140,15 @@ def _build_compact_table(
         lambda x: "✅" if x else "❌"
     )
 
-    return tbl[['tender_name', 'city', 'tender_type', 'units',
+    return tbl[['tender_name', 'units', 'city', 'tender_type',
                 'deadline_fmt', 'booklet']].copy()
 
 
 _COMPACT_COLUMNS = {
     "tender_name": st.column_config.TextColumn("מכרז", width="small"),
+    "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
     "city": st.column_config.TextColumn("עיר", width="medium"),
     "tender_type": st.column_config.TextColumn("סוג", width="medium"),
-    "units": st.column_config.NumberColumn("יח\"ד", format="%d", width="small"),
     "deadline_fmt": st.column_config.TextColumn("מועד סגירה", width="small"),
     "booklet": st.column_config.TextColumn("חוברת", width="small"),
 }
