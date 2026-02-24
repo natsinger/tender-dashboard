@@ -25,8 +25,8 @@ from dashboard_utils import (
 from db import TenderDB
 from user_db import UserDB
 
-# Purpose filter: same as dashboard
-RELEVANT_PURPOSES = {"בנייה רוויה", "בנייה נמוכה/צמודת קרקע", "מגורים/מסחר/מלונאות/נופש", "דיור מוגן (בית אבות)", "אחר"}
+# Purpose filter: codes 1, 2, 12, 13 only
+RELEVANT_PURPOSES = {"בנייה נמוכה/צמודת קרקע", "בנייה רוויה", "מגורים/מסחר/מלונאות/נופש", "דיור מוגן (בית אבות)"}
 
 # The 3 tender types for the active card
 CARD_TENDER_TYPES = {1, 5, 8}
@@ -273,10 +273,18 @@ st.markdown("---")
 # SECTION 2: CLOSING SOON — collapsed expander by default
 # ============================================================================
 
-closing_soon = active_df[
-    (active_df['deadline'].notna()) &
-    (active_df['deadline'] >= today) &
-    (active_df['deadline'] <= today + timedelta(days=CLOSING_SOON_DAYS))
+# Use type-only filter (no purpose filter) so ALL relevant tender types appear
+_all_typed = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
+_all_active = filter_active(_all_typed)
+if 'deadline' in _all_active.columns:
+    _all_active['deadline'] = pd.to_datetime(_all_active['deadline'], errors='coerce')
+
+# Filter closing-soon to relevant purposes (codes 1, 2, 12, 13)
+_cs_source = _all_active[_all_active['purpose'].isin(RELEVANT_PURPOSES)].copy() if 'purpose' in _all_active.columns else _all_active
+closing_soon = _cs_source[
+    (_cs_source['deadline'].notna()) &
+    (_cs_source['deadline'] >= today) &
+    (_cs_source['deadline'] <= today + timedelta(days=CLOSING_SOON_DAYS))
 ].sort_values('deadline').copy()
 
 
@@ -323,11 +331,18 @@ def _show_tender_detail(tender_id: int) -> None:
 # CHANGE 4: Updated title
 with st.expander(f"נסגרים ב14 ימים הקרובים ({len(closing_soon)})", expanded=False):
     if len(closing_soon) > 0:
-        display_cs = _build_compact_table(closing_soon, show_days_count=True)
+        display_cs = _build_compact_table(closing_soon, show_days_count=False)
+        display_cs['purpose'] = closing_soon['purpose'].values if 'purpose' in closing_soon.columns else '—'
+        # Reorder: add purpose between tender_type and units (RTL visual order)
+        display_cs = display_cs[['deadline_fmt', 'units', 'purpose', 'tender_type', 'city', 'tender_name', 'booklet']]
 
+        _cs_columns = {
+            **_COMPACT_COLUMNS,
+            "purpose": st.column_config.TextColumn("ייעוד", width="medium"),
+        }
         st.dataframe(
             display_cs,
-            column_config=_COMPACT_COLUMNS,
+            column_config=_cs_columns,
             hide_index=True,
             use_container_width=True,
         )
@@ -493,9 +508,7 @@ st.markdown("---")
 
 st.markdown("#### סוגים נוספים")
 
-# Use unfiltered-by-purpose data for these categories
-_all_typed = df_all[df_all["tender_type_code"].isin(RELEVANT_TENDER_TYPES)].copy()
-_all_active = filter_active(_all_typed)
+# _all_typed / _all_active already computed above (before closing-soon section)
 
 tab_diur_h, tab_diur_m, tab_yezum = st.tabs(["דיור להשכרה", "דיור מוגן", "מכרז ייזום"])
 
