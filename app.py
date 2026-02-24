@@ -269,6 +269,21 @@ st.markdown("""
         color: var(--mg-text-on-dark-muted) !important;
     }
 
+    /* ── Sidebar Navigation: active page vs inactive ── */
+    /* Active page: white bold text + subtle blue tint background */
+    [data-testid="stSidebarNavLink"][aria-current="page"] {
+        background-color: rgba(96, 165, 250, 0.15) !important;
+    }
+    [data-testid="stSidebarNavLink"][aria-current="page"] span {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+    }
+    /* Inactive pages: dimmed text */
+    [data-testid="stSidebarNavLink"]:not([aria-current="page"]) span {
+        color: var(--mg-text-on-dark-muted) !important;
+        opacity: 0.55;
+    }
+
     /* ── Tables (Clean bordered + mobile scroll) ── */
     [data-testid="stDataFrame"], .stDataFrame {
         border: 1px solid var(--mg-border) !important;
