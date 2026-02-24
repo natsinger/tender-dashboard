@@ -143,11 +143,19 @@ ALERT_RECIPIENTS: list[str] = [
     e.strip() for e in _get("ALERT_RECIPIENTS", "").split(",") if e.strip()
 ] or [TEAM_EMAIL]
 
-# Comma-separated list of emails allowed to view the management page (לוח הנהלה).
-# If empty, the management page is visible to everyone (no restriction).
+# Comma-separated list of emails allowed to view the management page ONLY (לוח הנהלה).
+# These users see only the management page — no dashboard, explorer, or analytics.
 MANAGEMENT_ALLOWED_EMAILS: list[str] = [
     e.strip().lower()
     for e in _get("MANAGEMENT_ALLOWED_EMAILS", "").split(",")
+    if e.strip()
+]
+
+# Comma-separated list of team emails that can access ALL pages (including management).
+# Users not in either list are blocked entirely.
+TEAM_ALLOWED_EMAILS: list[str] = [
+    e.strip().lower()
+    for e in _get("TEAM_ALLOWED_EMAILS", "").split(",")
     if e.strip()
 ]
 
