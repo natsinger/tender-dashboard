@@ -315,7 +315,8 @@ def _show_tender_detail(tender_id: int) -> None:
         if dl:
             dl_dt = pd.to_datetime(dl, errors='coerce')
             if pd.notna(dl_dt):
-                days = (dl_dt - now).days
+                dl_dt = dl_dt.tz_localize(None) if dl_dt.tzinfo else dl_dt
+                days = (dl_dt - pd.Timestamp(now)).days
                 st.markdown(
                     f"**מועד סגירה:** {dl_dt.strftime('%d/%m/%Y')} "
                     f"({_urgency(days)} {days} ימים)"
