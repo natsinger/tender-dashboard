@@ -70,13 +70,6 @@ active_df = filter_active(df)
 # SIDEBAR — brand + watchlist management + review status editing
 # ============================================================================
 
-_REVIEW_EMOJI: dict[str, str] = {
-    "לא נסקר": "⬜",
-    "סקירה ראשונית": "🔵",
-    "בדיקה מעמיקה": "🟣",
-    "הוצג בפורום": "🟠",
-    "אושר בפורום": "🟢",
-}
 
 with st.sidebar:
     logo_path = Path(__file__).parent.parent / "assets" / "logo megido.jpg"
@@ -474,11 +467,7 @@ if len(_team_df) > 0:
     _rev_map_main = _review_db.get_review_statuses_for_tenders(_rev_ids_main)
 
     _rev_tbl["review"] = [
-        _REVIEW_EMOJI.get(
-            _rev_map_main.get(int(tid), {}).get("status", "לא נסקר"), "⬜"
-        )
-        + " "
-        + _rev_map_main.get(int(tid), {}).get("status", "לא נסקר")
+        _rev_map_main.get(int(tid), {}).get("status", "לא נסקר")
         for tid in _team_df["tender_id"]
     ]
 

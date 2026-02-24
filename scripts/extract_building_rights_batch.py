@@ -1,7 +1,8 @@
 """Batch extraction of building rights from Mavat plan PDFs.
 
-Full pipeline for watchlisted tenders:
-    1. Get watchlisted tender IDs from Supabase
+Full pipeline for active tenders with a published brochure:
+    1. Query Supabase for eligible tenders (published_booklet=1, active status,
+       extraction not yet complete)
     2. For each tender (that doesn't already have building rights):
         a. Download brochure PDF from the Land Authority API
         b. Extract plan number (תב"ע) from the brochure
@@ -16,8 +17,11 @@ Requires:
     - Supabase credentials (env vars)
 
 Usage:
-    # Process all watchlisted tenders
+    # Process all eligible tenders (default)
     python scripts/extract_building_rights_batch.py
+
+    # Process only watchlisted tenders (legacy behavior)
+    python scripts/extract_building_rights_batch.py --watchlist-only
 
     # Process specific tender IDs
     python scripts/extract_building_rights_batch.py --tender-ids 12345 67890
@@ -59,7 +63,7 @@ MAVAT_DIR = Path(__file__).resolve().parent.parent / "tmp" / "mavat_plans"
 MAVAT_DELAY = 5
 
 # Maximum tenders to process per run (to avoid CI timeout)
-MAX_PER_RUN = 10
+MAX_PER_RUN = 20
 
 
 def _download_brochure(
@@ -328,6 +332,68 @@ def process_plan_directly(
     return result
 
 
+def get_tenders_needing_building_rights(
+    db: TenderDB,
+    limit: int = MAX_PER_RUN,
+) -> list[dict]:
+    """Query Supabase for tenders that need building rights extraction.
+
+    Finds tenders where published_booklet is True and extraction_status
+    is NULL, 'pending', 'failed', or 'none'. Filters to active statuses
+    (status_code IN 1, 2, 3) in Python.
+
+    Args:
+        db: TenderDB instance.
+        limit: Maximum number of tenders to return.
+
+    Returns:
+        List of tender dicts with tender_id and extraction_status.
+    """
+    if not db._client:
+        logger.error("No Supabase connection — cannot query tenders")
+        return []
+
+    try:
+        # Fetch tenders with published_booklet=1 and filter in Python.
+        # Supabase REST API requires separate queries for NULL vs IN
+        # conditions, so we over-fetch and filter locally.
+        result = (
+            db._client.table("tenders")
+            .select("tender_id, extraction_status, published_booklet, status_code")
+            .eq("published_booklet", 1)
+            .order("tender_id")
+            .limit(limit * 3)  # Over-fetch to account for filtering
+            .execute()
+        )
+        rows = result.data or []
+
+        # Filter to active statuses (1=published, 2=extended, 3=approaching deadline)
+        active_status_codes = {1, 2, 3}
+        eligible = [
+            r for r in rows
+            if r.get("status_code") in active_status_codes
+            and (
+                r.get("extraction_status") is None
+                or r.get("extraction_status") in ("pending", "failed", "none")
+            )
+        ]
+
+        # Apply limit
+        eligible = eligible[:limit]
+
+        logger.info(
+            "Found %d tenders needing building rights extraction "
+            "(from %d with published_booklet, active status)",
+            len(eligible),
+            len(rows),
+        )
+        return eligible
+
+    except Exception as exc:
+        logger.error("Failed to query tenders for building rights extraction: %s", exc)
+        return []
+
+
 def get_watchlist_tender_ids(db: TenderDB) -> list[int]:
     """Get all unique tender IDs across all user watchlists.
 
@@ -358,15 +424,19 @@ def get_watchlist_tender_ids(db: TenderDB) -> list[int]:
 def main() -> None:
     """Main entry point for batch extraction."""
     parser = argparse.ArgumentParser(
-        description="Extract building rights for watchlisted tenders",
+        description="Extract building rights for active tenders with published brochures",
     )
     parser.add_argument(
         "--tender-ids", nargs="+", type=int,
-        help="Specific tender IDs to process (overrides watchlist)",
+        help="Specific tender IDs to process (overrides default query)",
     )
     parser.add_argument(
         "--plan-numbers", nargs="+",
         help="Specific plan numbers to process directly (skip brochure step)",
+    )
+    parser.add_argument(
+        "--watchlist-only", action="store_true",
+        help="Only process watchlisted tenders (legacy behavior)",
     )
     parser.add_argument(
         "--max-per-run", type=int, default=MAX_PER_RUN,
@@ -395,14 +465,19 @@ def main() -> None:
         # Tender-based processing
         if args.tender_ids:
             tender_ids = args.tender_ids
-        else:
+        elif args.watchlist_only:
             tender_ids = get_watchlist_tender_ids(db)
+        else:
+            tenders = get_tenders_needing_building_rights(
+                db, limit=args.max_per_run,
+            )
+            tender_ids = [t["tender_id"] for t in tenders]
 
         if not tender_ids:
             logger.info("No tenders to process")
             return
 
-        # Limit to max_per_run
+        # Limit to max_per_run (for --tender-ids and --watchlist-only paths)
         if len(tender_ids) > args.max_per_run:
             logger.info(
                 "Processing %d/%d tenders (limited by --max-per-run)",
