@@ -1,0 +1,337 @@
+/**
+ * Global styles for MEGIDO Tender Intelligence Dashboard.
+ *
+ * Includes Tailwind CSS v4, shadcn/ui theme, MEGIDO Deep Blue palette,
+ * RTL defaults, and font configuration.
+ *
+ * Token source of truth: src/design-system/tokens/
+ * To rebrand: update the token .ts files, then mirror the hex values here.
+ * The CSS custom properties below are kept in sync with the TypeScript tokens
+ * so that both CSS-based (Tailwind classes) and JS-based (Recharts, inline)
+ * consumers reference the same palette.
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ */
+/* Tailwind v4 theme: maps CSS custom properties to Tailwind classes  */
+/* ------------------------------------------------------------------ */
+@theme inline {
+  /* --- shadcn semantic tokens --- */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* --- shadcn chart tokens --- */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* --- shadcn sidebar tokens --- */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* --- radii --- */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* --- fonts --- */
+  --font-sans: var(--font-inter), var(--font-heebo), system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-heebo: var(--font-heebo), sans-serif;
+
+  /* ================================================================ */
+  /* MEGIDO Deep Blue palette — Tailwind utility classes               */
+  /* Synced with: src/design-system/tokens/colors.ts                  */
+  /* Usage: bg-megido-primary, text-megido-text-heading, etc.         */
+  /* ================================================================ */
+
+  /* --- Core palette --- */
+  --color-megido-primary: #2563EB;
+  --color-megido-primary-hover: #1D4ED8;
+  --color-megido-primary-light: #DBEAFE;
+  --color-megido-secondary: #1E3A5F;
+  --color-megido-accent: #60A5FA;
+  --color-megido-bg-main: #F8FAFC;
+  --color-megido-bg-card: #FFFFFF;
+  --color-megido-sidebar-bg: #0F172A;
+  --color-megido-text-heading: #1E293B;
+  --color-megido-text-body: #334155;
+  --color-megido-text-muted: #64748B;
+  --color-megido-text-on-dark: #E2E8F0;
+  --color-megido-success: #10B981;
+  --color-megido-warning: #F59E0B;
+  --color-megido-danger: #EF4444;
+  --color-megido-border: #E2E8F0;
+
+  /* --- Primary scale (50-950) --- */
+  --color-megido-primary-50: #EFF6FF;
+  --color-megido-primary-100: #DBEAFE;
+  --color-megido-primary-200: #BFDBFE;
+  --color-megido-primary-300: #93C5FD;
+  --color-megido-primary-400: #60A5FA;
+  --color-megido-primary-500: #3B82F6;
+  --color-megido-primary-600: #2563EB;
+  --color-megido-primary-700: #1D4ED8;
+  --color-megido-primary-800: #1E40AF;
+  --color-megido-primary-900: #1E3A8A;
+  --color-megido-primary-950: #172554;
+
+  /* --- Secondary scale (50-950) --- */
+  --color-megido-secondary-50: #F0F4F8;
+  --color-megido-secondary-100: #D9E2EC;
+  --color-megido-secondary-200: #BCCCDC;
+  --color-megido-secondary-300: #9FB3C8;
+  --color-megido-secondary-400: #829AB1;
+  --color-megido-secondary-500: #627D98;
+  --color-megido-secondary-600: #486581;
+  --color-megido-secondary-700: #334E68;
+  --color-megido-secondary-800: #1E3A5F;
+  --color-megido-secondary-900: #163152;
+  --color-megido-secondary-950: #0F2440;
+
+  /* --- Accent scale (50-950) --- */
+  --color-megido-accent-50: #EFF6FF;
+  --color-megido-accent-100: #DBEAFE;
+  --color-megido-accent-200: #BFDBFE;
+  --color-megido-accent-300: #93C5FD;
+  --color-megido-accent-400: #60A5FA;
+  --color-megido-accent-500: #3B82F6;
+  --color-megido-accent-600: #2563EB;
+  --color-megido-accent-700: #1D4ED8;
+  --color-megido-accent-800: #1E40AF;
+  --color-megido-accent-900: #1E3A8A;
+  --color-megido-accent-950: #172554;
+
+  /* --- Neutral scale (50-950) --- */
+  --color-megido-neutral-50: #F8FAFC;
+  --color-megido-neutral-100: #F1F5F9;
+  --color-megido-neutral-200: #E2E8F0;
+  --color-megido-neutral-300: #CBD5E1;
+  --color-megido-neutral-400: #94A3B8;
+  --color-megido-neutral-500: #64748B;
+  --color-megido-neutral-600: #475569;
+  --color-megido-neutral-700: #334155;
+  --color-megido-neutral-800: #1E293B;
+  --color-megido-neutral-900: #0F172A;
+  --color-megido-neutral-950: #020617;
+
+  /* --- Success scale (key stops) --- */
+  --color-megido-success-50: #ECFDF5;
+  --color-megido-success-100: #D1FAE5;
+  --color-megido-success-500: #10B981;
+  --color-megido-success-700: #047857;
+  --color-megido-success-900: #064E3B;
+
+  /* --- Warning scale (key stops) --- */
+  --color-megido-warning-50: #FFFBEB;
+  --color-megido-warning-100: #FEF3C7;
+  --color-megido-warning-500: #F59E0B;
+  --color-megido-warning-700: #B45309;
+  --color-megido-warning-900: #78350F;
+
+  /* --- Danger scale (key stops) --- */
+  --color-megido-danger-50: #FEF2F2;
+  --color-megido-danger-100: #FEE2E2;
+  --color-megido-danger-500: #EF4444;
+  --color-megido-danger-700: #B91C1C;
+  --color-megido-danger-900: #7F1D1D;
+
+  /* ================================================================ */
+  /* Shadows — available as Tailwind shadow utilities                  */
+  /* Synced with: src/design-system/tokens/shadows.ts                 */
+  /* Usage: shadow-megido-card, shadow-megido-card-hover, etc.        */
+  /* ================================================================ */
+  --shadow-megido-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-megido-card: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-megido-card-hover: 0 8px 16px -4px rgba(37, 99, 235, 0.10), 0 4px 8px -4px rgba(37, 99, 235, 0.06);
+  --shadow-megido-dropdown: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-megido-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.10), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-megido-button-hover: 0 4px 12px -2px rgba(37, 99, 235, 0.20);
+  --shadow-megido-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* ------------------------------------------------------------------ */
+/* Light theme (default) — mapped to MEGIDO Deep Blue palette         */
+/* Synced with: src/design-system/tokens/colors.ts corePalette        */
+/* ------------------------------------------------------------------ */
+:root {
+  --radius: 0.625rem;
+
+  /* shadcn tokens mapped to Deep Blue */
+  --background: #F8FAFC;
+  --foreground: #1E293B;
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --popover: #FFFFFF;
+  --popover-foreground: #1E293B;
+  --primary: #2563EB;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1E3A5F;
+  --secondary-foreground: #E2E8F0;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #DBEAFE;
+  --accent-foreground: #1E3A5F;
+  --destructive: #EF4444;
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #2563EB;
+
+  /* chart colors (synced with tokens/chart-colors.ts MEGIDO_CHART_COLORS) */
+  --chart-1: #2563EB;
+  --chart-2: #10B981;
+  --chart-3: #F59E0B;
+  --chart-4: #60A5FA;
+  --chart-5: #EF4444;
+
+  /* sidebar */
+  --sidebar: #0F172A;
+  --sidebar-foreground: #E2E8F0;
+  --sidebar-primary: #2563EB;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1E293B;
+  --sidebar-accent-foreground: #E2E8F0;
+  --sidebar-border: #334155;
+  --sidebar-ring: #2563EB;
+
+  /* MEGIDO palette as custom properties (for direct use in CSS/JS) */
+  --megido-primary: #2563EB;
+  --megido-primary-hover: #1D4ED8;
+  --megido-primary-light: #DBEAFE;
+  --megido-secondary: #1E3A5F;
+  --megido-accent: #60A5FA;
+  --megido-bg-main: #F8FAFC;
+  --megido-bg-card: #FFFFFF;
+  --megido-sidebar-bg: #0F172A;
+  --megido-text-heading: #1E293B;
+  --megido-text-body: #334155;
+  --megido-text-muted: #64748B;
+  --megido-text-on-dark: #E2E8F0;
+  --megido-success: #10B981;
+  --megido-warning: #F59E0B;
+  --megido-danger: #EF4444;
+  --megido-border: #E2E8F0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark theme                                                         */
+/* ------------------------------------------------------------------ */
+.dark {
+  --background: #0F172A;
+  --foreground: #E2E8F0;
+  --card: #1E293B;
+  --card-foreground: #E2E8F0;
+  --popover: #1E293B;
+  --popover-foreground: #E2E8F0;
+  --primary: #60A5FA;
+  --primary-foreground: #0F172A;
+  --secondary: #334155;
+  --secondary-foreground: #E2E8F0;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #1E3A5F;
+  --accent-foreground: #E2E8F0;
+  --destructive: #EF4444;
+  --border: #334155;
+  --input: #334155;
+  --ring: #60A5FA;
+
+  --chart-1: #60A5FA;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #2563EB;
+  --chart-5: #F87171;
+
+  --sidebar: #020617;
+  --sidebar-foreground: #E2E8F0;
+  --sidebar-primary: #60A5FA;
+  --sidebar-primary-foreground: #0F172A;
+  --sidebar-accent: #1E293B;
+  --sidebar-accent-foreground: #E2E8F0;
+  --sidebar-border: #334155;
+  --sidebar-ring: #60A5FA;
+
+  /* Dark-mode MEGIDO overrides */
+  --megido-primary: #60A5FA;
+  --megido-primary-hover: #3B82F6;
+  --megido-primary-light: #1E3A5F;
+  --megido-secondary: #334155;
+  --megido-accent: #2563EB;
+  --megido-bg-main: #0F172A;
+  --megido-bg-card: #1E293B;
+  --megido-sidebar-bg: #020617;
+  --megido-text-heading: #E2E8F0;
+  --megido-text-body: #CBD5E1;
+  --megido-text-muted: #94A3B8;
+  --megido-text-on-dark: #E2E8F0;
+  --megido-success: #34D399;
+  --megido-warning: #FBBF24;
+  --megido-danger: #F87171;
+  --megido-border: #334155;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base layer                                                         */
+/* ------------------------------------------------------------------ */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* RTL default for the entire app */
+  html {
+    direction: rtl;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* RTL-specific overrides                                             */
+/* ------------------------------------------------------------------ */
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
+}
+
+/* Ensure numeric content stays LTR within RTL context */
+.ltr-nums {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
