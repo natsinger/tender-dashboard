@@ -9,12 +9,9 @@
  *   - Row 4: Category cards (rental, assisted living, initiative)
  *   - Row 5: Detailed analytics (collapsible 2x2 chart grid)
  *
- * Sidebar content (watchlist management + review status editing)
- * is rendered via DashboardSidebar and integrated into the layout.
+ * Watchlist management + review editing now lives on the /watchlist page.
  */
 "use client";
-
-import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Separator } from "@/components/ui/separator";
@@ -23,29 +20,15 @@ import { CityBarChart } from "@/components/dashboard/city-bar-chart";
 import { ReviewStatusTable } from "@/components/dashboard/review-status-table";
 import { CategoryCardsRow } from "@/components/dashboard/category-cards-row";
 import { DetailedAnalytics } from "@/components/dashboard/detailed-analytics";
-import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
-
 // ---------------------------------------------------------------------------
-// Cookie helper (matches the layout pattern)
+// (Watchlist management + review editing moved to /watchlist page)
 // ---------------------------------------------------------------------------
-
-function getUserEmailFromCookie(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|;\s*)user_email=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : "";
-}
 
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
-  const [userEmail, setUserEmail] = useState("");
-
-  useEffect(() => {
-    setUserEmail(getUserEmailFromCookie());
-  }, []);
-
   return (
     <div className="space-y-6">
       {/* Row 0: Compact header */}
@@ -76,13 +59,6 @@ export default function DashboardPage() {
       {/* Row 5: Detailed analytics (collapsible) */}
       <DetailedAnalytics />
 
-      {/* Sidebar content — rendered outside the main flow,
-          picked up by the layout's sidebar slot if available.
-          For now we render it inline in a visually hidden container
-          that can be portaled or lifted to the layout. */}
-      <div className="hidden">
-        <DashboardSidebar email={userEmail} />
-      </div>
     </div>
   );
 }

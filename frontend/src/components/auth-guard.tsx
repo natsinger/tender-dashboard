@@ -20,7 +20,7 @@ import { useAuthStore, type UserRole } from "@/stores/auth-store";
 // ---------------------------------------------------------------------------
 
 /** Pages that only "team" role can access. */
-const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics"];
+const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics", "/watchlist"];
 
 /** Check whether the given role is allowed on the current path. */
 function isRoleAllowed(role: UserRole, pathname: string): boolean {

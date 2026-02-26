@@ -14,6 +14,7 @@ import {
   BarChart3,
   Compass,
   TrendingUp,
+  Star,
   Building2,
 } from "lucide-react";
 import type { UserRole } from "@/stores/auth-store";
@@ -33,6 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/management", label: "לוח הנהלה", icon: LayoutDashboard, requiredRole: "all" },
   { href: "/dashboard", label: "דאשבורד", icon: BarChart3, requiredRole: "team" },
+  { href: "/watchlist", label: "רשימת מעקב", icon: Star, requiredRole: "team" },
   { href: "/explorer", label: "סייר מכרזים", icon: Compass, requiredRole: "team" },
   { href: "/analytics", label: "ניתוח שוק", icon: TrendingUp, requiredRole: "team" },
 ];

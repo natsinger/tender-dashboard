@@ -1,25 +1,16 @@
 /**
  * WatchlistManager component.
  *
- * Manages a user's personal or team watchlist. Provides a select dropdown
- * to pick a tender (name + city format), an "add to watchlist" button,
- * and a list of current watchlist items with delete buttons.
- *
- * Mirrors the sidebar watchlist management from pages/dashboard.py.
+ * Manages a user's personal or team watchlist. Provides a searchable text
+ * input to filter tenders by name, city, or ID — then an "add" button.
+ * Below, a list of current watchlist items with delete buttons.
  */
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { Trash2 } from "lucide-react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { Trash2, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useAddToWatchlist, useRemoveFromWatchlist } from "@/hooks";
 import type { Tender, WatchlistItemWithTender } from "@/types/database";
@@ -44,6 +35,20 @@ interface WatchlistManagerProps {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Build a searchable label for a tender. */
+function tenderLabel(t: Tender): string {
+  const name = (t.tender_name ?? "").slice(0, 40);
+  const city = (t.city ?? "").slice(0, 15);
+  return city ? `${name} \u2014 ${city}` : name;
+}
+
+/** Max results shown in dropdown. */
+const MAX_RESULTS = 30;
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -55,33 +60,72 @@ export function WatchlistManager({
   isLoading = false,
   className,
 }: WatchlistManagerProps) {
-  const [selectedTenderId, setSelectedTenderId] = useState<string>("");
+  const [searchText, setSearchText] = useState("");
+  const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const addMutation = useAddToWatchlist();
   const removeMutation = useRemoveFromWatchlist();
 
-  // Build label map for the select dropdown
-  const tenderLabels = useMemo(() => {
-    const labels: Record<string, string> = {};
-    for (const t of tenders) {
-      const name = (t.tender_name ?? "").slice(0, 40);
-      const city = (t.city ?? "").slice(0, 15);
-      labels[String(t.tender_id)] = city
-        ? `${name} \u2014 ${city}`
-        : name;
+  // IDs already on the watchlist (to exclude from search results)
+  const watchlistIds = useMemo(
+    () => new Set(watchlistItems.map((item) => item.tender_id)),
+    [watchlistItems],
+  );
+
+  // Filter tenders by search text (name, city, or tender_id)
+  const filteredTenders = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q) return [];
+
+    return tenders
+      .filter((t) => {
+        // Exclude already-watchlisted
+        if (watchlistIds.has(t.tender_id)) return false;
+
+        const name = (t.tender_name ?? "").toLowerCase();
+        const city = (t.city ?? "").toLowerCase();
+        const id = String(t.tender_id);
+
+        return name.includes(q) || city.includes(q) || id.includes(q);
+      })
+      .slice(0, MAX_RESULTS);
+  }, [searchText, tenders, watchlistIds]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
     }
-    return labels;
-  }, [tenders]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelectTender = useCallback((tender: Tender) => {
+    setSelectedTender(tender);
+    setSearchText(tenderLabel(tender));
+    setDropdownOpen(false);
+  }, []);
 
   const handleAdd = useCallback(() => {
-    if (!selectedTenderId) return;
+    if (!selectedTender) return;
     addMutation.mutate(
-      { email, tenderId: parseInt(selectedTenderId, 10) },
+      { email, tenderId: selectedTender.tender_id },
       {
-        onSuccess: () => setSelectedTenderId(""),
+        onSuccess: () => {
+          setSelectedTender(null);
+          setSearchText("");
+        },
       },
     );
-  }, [selectedTenderId, email, addMutation]);
+  }, [selectedTender, email, addMutation]);
 
   const handleRemove = useCallback(
     (tenderId: number) => {
@@ -90,39 +134,108 @@ export function WatchlistManager({
     [email, removeMutation],
   );
 
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchText(e.target.value);
+      setSelectedTender(null);
+      setDropdownOpen(true);
+    },
+    [],
+  );
+
+  const handleClear = useCallback(() => {
+    setSearchText("");
+    setSelectedTender(null);
+    setDropdownOpen(false);
+    inputRef.current?.focus();
+  }, []);
+
   const buttonLabel = isTeam
     ? "\u05D4\u05D5\u05E1\u05E3 \u05DC\u05DE\u05E2\u05E7\u05D1 \u05E6\u05D5\u05D5\u05EA"
     : "\u05D4\u05D5\u05E1\u05E3 \u05DC\u05DE\u05E2\u05E7\u05D1";
 
   return (
     <div dir="rtl" className={cn("space-y-3", className)}>
-      {/* Add tender select + button */}
+      {/* Searchable tender selector + add button */}
       <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <Select
-            value={selectedTenderId}
-            onValueChange={setSelectedTenderId}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue
-                placeholder={
-                  "\u05D4\u05E7\u05DC\u05D3 \u05E9\u05DD \u05DE\u05DB\u05E8\u05D6 \u05D0\u05D5 \u05E2\u05D9\u05E8..."
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {tenders.map((t) => (
-                <SelectItem key={t.tender_id} value={String(t.tender_id)}>
-                  {tenderLabels[String(t.tender_id)] ?? String(t.tender_id)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="relative flex-1" ref={containerRef}>
+          {/* Search input */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchText}
+              onChange={handleInputChange}
+              onFocus={() => {
+                if (searchText.trim()) setDropdownOpen(true);
+              }}
+              placeholder="הקלד שם של עיר או מספר מכרז"
+              autoComplete="off"
+              className="h-9 w-full rounded-md border border-megido-border bg-white px-9 text-sm text-slate-800 placeholder:text-slate-400 focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
+            />
+            {searchText && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Dropdown results */}
+          {dropdownOpen && searchText.trim() && (
+            <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-megido-border bg-white shadow-lg">
+              {filteredTenders.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-slate-400">
+                  {"\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D5 \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA"}
+                </p>
+              ) : (
+                <ul>
+                  {filteredTenders.map((t) => (
+                    <li key={t.tender_id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectTender(t)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-right text-sm transition-colors hover:bg-slate-50"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-slate-800">
+                            {(t.tender_name ?? "").slice(0, 40)}
+                          </span>
+                          <span className="flex items-center gap-2 text-xs text-slate-500">
+                            {t.city && (
+                              <span className="text-blue-500">{t.city}</span>
+                            )}
+                            <span className="text-slate-400">
+                              #{t.tender_id}
+                            </span>
+                            {t.units != null && t.units > 0 && (
+                              <span>
+                                {t.units} {'\u05D9\u05D7"\u05D3'}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                  {filteredTenders.length === MAX_RESULTS && (
+                    <p className="px-3 py-1.5 text-xs text-slate-400">
+                      {"\u05DE\u05E6\u05D9\u05D2 30 \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05E8\u05D0\u05E9\u05D5\u05E0\u05D5\u05EA, \u05D4\u05E7\u05DC\u05D3 \u05E2\u05D5\u05D3 \u05DC\u05E6\u05DE\u05E6\u05DD..."}
+                    </p>
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         <Button
           onClick={handleAdd}
-          disabled={!selectedTenderId || addMutation.isPending}
+          disabled={!selectedTender || addMutation.isPending}
           className="shrink-0"
         >
           {addMutation.isPending
@@ -151,7 +264,9 @@ export function WatchlistManager({
         <ul className="space-y-1">
           {watchlistItems.map((item) => {
             const tender = item.tender;
-            const displayName = (tender?.tender_name ?? String(item.tender_id)).slice(0, 25);
+            const displayName = (
+              tender?.tender_name ?? String(item.tender_id)
+            ).slice(0, 25);
             const displayCity = (tender?.city ?? "").slice(0, 12);
             const units = tender?.units;
             const hasUnits = units != null && units > 0;

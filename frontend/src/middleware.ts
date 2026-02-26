@@ -42,7 +42,7 @@ function resolveRole(email: string): Role {
 }
 
 /** Routes that only "team" role can access. */
-const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics"];
+const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics", "/watchlist"];
 
 /** Routes that do NOT require authentication. */
 const PUBLIC_PATHS = ["/login"];
