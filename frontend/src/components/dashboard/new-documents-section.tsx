@@ -12,7 +12,7 @@
 
 import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ExternalLink } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { DataTable } from "@/components/data-table";
 import { MetricCard } from "@/components/metric-card";
@@ -20,10 +20,9 @@ import { useNewDocuments, useActiveTenders } from "@/hooks";
 import {
   CLOSING_SOON_DAYS,
   RELEVANT_TENDER_TYPES,
-  RMI_SITE_URL,
 } from "@/lib/constants";
-import { getClosingSoonTenders } from "@/lib/utils/tenders";
-import type { TenderWithComputed } from "@/types/database";
+import { buildDocumentUrl, getClosingSoonTenders } from "@/lib/utils/tenders";
+import type { TenderDocumentWithInfo, TenderWithComputed } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Tender type codes for the "active (excluding initiative)" KPI card
@@ -42,7 +41,8 @@ interface DocTableRow {
   units: number | null;
   city: string;
   tender_type: string;
-  link: string;
+  doc_name: string;
+  download_url: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,17 +76,18 @@ const docColumns: ColumnDef<DocTableRow, unknown>[] = [
     cell: ({ getValue }) => getValue<string>() || "\u2014",
   },
   {
-    id: "link",
-    header: "\u05E7\u05D9\u05E9\u05D5\u05E8",
+    id: "download",
+    header: "\u05DE\u05E1\u05DE\u05DA \u05D7\u05D3\u05E9",
     cell: ({ row }) => (
       <a
-        href={row.original.link}
+        href={row.original.download_url}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+        title={row.original.doc_name}
       >
-        <ExternalLink className="h-3.5 w-3.5" />
-        {"\u05E6\u05E4\u05D4 \u05D1\u05D0\u05EA\u05E8"}
+        <Download className="h-3.5 w-3.5" />
+        {"\u05D4\u05D5\u05E8\u05D3 \u05DE\u05E1\u05DE\u05DA"}
       </a>
     ),
     enableSorting: false,
@@ -97,20 +98,43 @@ const docColumns: ColumnDef<DocTableRow, unknown>[] = [
 // Helper: build table rows from active tenders filtered by tender IDs
 // ---------------------------------------------------------------------------
 
+/**
+ * Build table rows by matching active tenders with new documents.
+ * For each tender, picks the most recently updated document and builds
+ * a direct download URL instead of linking to the RMI site.
+ */
 function buildDocRows(
   activeTenders: TenderWithComputed[],
   tenderIds: Set<number>,
+  docs: TenderDocumentWithInfo[],
 ): DocTableRow[] {
+  // Group docs by tender_id, keep the most recent per tender
+  const latestDocByTender = new Map<number, TenderDocumentWithInfo>();
+  for (const doc of docs) {
+    if (!tenderIds.has(doc.tender_id)) continue;
+    const existing = latestDocByTender.get(doc.tender_id);
+    if (
+      !existing ||
+      (doc.update_date ?? "") > (existing.update_date ?? "")
+    ) {
+      latestDocByTender.set(doc.tender_id, doc);
+    }
+  }
+
   return activeTenders
     .filter((t) => tenderIds.has(t.tender_id))
-    .map((t) => ({
-      tender_id: t.tender_id,
-      tender_name: t.tender_name ?? "",
-      units: t.units,
-      city: t.city ?? "",
-      tender_type: t.tender_type ?? "",
-      link: `${RMI_SITE_URL}/${t.tender_id}`,
-    }))
+    .map((t) => {
+      const doc = latestDocByTender.get(t.tender_id);
+      return {
+        tender_id: t.tender_id,
+        tender_name: t.tender_name ?? "",
+        units: t.units,
+        city: t.city ?? "",
+        tender_type: t.tender_type ?? "",
+        doc_name: doc?.doc_name ?? "",
+        download_url: doc ? buildDocumentUrl(doc) : "",
+      };
+    })
     .sort((a, b) => (b.units ?? 0) - (a.units ?? 0));
 }
 
@@ -150,15 +174,26 @@ export function NewDocumentsSection() {
     return { newDocTenderIds: docIds, newBrochureTenderIds: brochureIds };
   }, [newDocs]);
 
+  // Filter brochure-only docs for the brochure table
+  const brochureDocs = useMemo(
+    () =>
+      (newDocs ?? []).filter((doc) => {
+        const name = (doc.doc_name ?? "").toLowerCase();
+        const desc = (doc.description ?? "").toLowerCase();
+        return name.includes("\u05D7\u05D5\u05D1\u05E8\u05EA") || desc.includes("\u05D7\u05D5\u05D1\u05E8\u05EA");
+      }),
+    [newDocs],
+  );
+
   // Build table rows (only from active tenders that intersect with new docs)
   const docTableRows = useMemo(
-    () => buildDocRows(relevantActive, newDocTenderIds),
-    [relevantActive, newDocTenderIds],
+    () => buildDocRows(relevantActive, newDocTenderIds, newDocs ?? []),
+    [relevantActive, newDocTenderIds, newDocs],
   );
 
   const brochureTableRows = useMemo(
-    () => buildDocRows(relevantActive, newBrochureTenderIds),
-    [relevantActive, newBrochureTenderIds],
+    () => buildDocRows(relevantActive, newBrochureTenderIds, brochureDocs),
+    [relevantActive, newBrochureTenderIds, brochureDocs],
   );
 
   // KPI metrics

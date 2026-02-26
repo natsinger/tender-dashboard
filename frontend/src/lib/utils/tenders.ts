@@ -8,12 +8,14 @@
 
 import {
   CLOSING_SOON_DAYS,
+  DOCUMENT_DOWNLOAD_API,
   NON_ACTIVE_STATUSES,
   SCORE_WEIGHTS,
 } from "@/lib/constants";
 import type {
   ScoredTender,
   Tender,
+  TenderDocument,
   TenderWithComputed,
 } from "@/types/database";
 
@@ -231,4 +233,27 @@ export function getClosingSoonTenders(
     if (t.days_to_deadline == null) return false;
     return t.days_to_deadline >= 0 && t.days_to_deadline <= days;
   });
+}
+
+// ---------------------------------------------------------------------------
+// buildDocumentUrl
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a direct download URL for a tender document.
+ *
+ * Mirrors the Python `build_document_url()` from data_client.py. The RMI
+ * GetFileContent endpoint accepts query params to serve the file directly.
+ */
+export function buildDocumentUrl(doc: TenderDocument): string {
+  const params = new URLSearchParams({
+    michrazId: String(doc.tender_id),
+    rowId: String(doc.row_id),
+    size: String(doc.size ?? 0),
+    typePirsum: String(doc.pirsum_type ?? 0),
+    fileName: doc.doc_name ?? "document.pdf",
+    teur: doc.description ?? "",
+    fileType: doc.file_type ?? "application/pdf",
+  });
+  return `${DOCUMENT_DOWNLOAD_API}?${params.toString()}`;
 }

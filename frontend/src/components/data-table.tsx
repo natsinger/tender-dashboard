@@ -155,8 +155,8 @@ export function DataTable<TData>({
 
   return (
     <div dir="rtl" className={cn("w-full", className)}>
-      <div className="rounded-md border">
-        <Table>
+      <div className="rounded-md border overflow-hidden">
+        <Table className="table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -224,7 +224,10 @@ export function DataTable<TData>({
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="text-right">
+                    <TableCell
+                      key={cell.id}
+                      className="text-right overflow-hidden text-ellipsis"
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),

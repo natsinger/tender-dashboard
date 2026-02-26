@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, X } from "lucide-react";
 import { useFilterStore } from "@/stores/filter-store";
@@ -59,18 +59,28 @@ function MultiSelect({
   onChange,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
+        setSearch("");
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Auto-focus search input when dropdown opens
+  useEffect(() => {
+    if (open && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [open]);
 
   const toggleOption = useCallback(
     (opt: string) => {
@@ -86,6 +96,16 @@ function MultiSelect({
   const clearAll = useCallback(() => {
     onChange([]);
   }, [onChange]);
+
+  const filteredOptions = useMemo(
+    () =>
+      search.trim() === ""
+        ? options
+        : options.filter((opt) =>
+            opt.toLowerCase().includes(search.trim().toLowerCase()),
+          ),
+    [options, search],
+  );
 
   const displayText =
     selected.length === 0
@@ -127,27 +147,41 @@ function MultiSelect({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
-          {options.length === 0 ? (
-            <p className="p-3 text-center text-sm text-slate-400">
-              {"\u05D0\u05D9\u05DF \u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05EA"}
-            </p>
-          ) : (
-            options.map((opt) => (
-              <label
-                key={opt}
-                className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(opt)}
-                  onChange={() => toggleOption(opt)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="truncate">{opt}</span>
-              </label>
-            ))
-          )}
+        <div className="absolute right-0 top-full z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+          {/* Search input */}
+          <div className="border-b border-slate-100 p-2">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`\u05D7\u05E4\u05E9...`}
+              className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400/40"
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <p className="p-3 text-center text-sm text-slate-400">
+                {"\u05D0\u05D9\u05DF \u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05EA"}
+              </p>
+            ) : (
+              filteredOptions.map((opt) => (
+                <label
+                  key={opt}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => toggleOption(opt)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>

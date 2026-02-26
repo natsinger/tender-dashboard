@@ -115,8 +115,8 @@ export function ScoringSection({
         <TabsContent value="top20">
           {topTenders.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                <table className="w-full text-sm">
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <table className="w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
                       <th className="px-3 py-2 font-semibold">שם מכרז</th>
@@ -136,11 +136,11 @@ export function ScoringSection({
                         key={t.tender_id}
                         className="border-b border-slate-100 hover:bg-slate-50/50"
                       >
-                        <td className="max-w-[200px] truncate px-3 py-2">
+                        <td className="truncate px-3 py-2">
                           {t.tender_name ?? "\u2014"}
                         </td>
-                        <td className="px-3 py-2">{t.city ?? "\u2014"}</td>
-                        <td className="px-3 py-2">{t.region ?? "\u2014"}</td>
+                        <td className="truncate px-3 py-2">{t.city ?? "\u2014"}</td>
+                        <td className="truncate px-3 py-2">{t.region ?? "\u2014"}</td>
                         <td className="px-3 py-2 text-center">
                           {t.units ?? 0}
                         </td>

@@ -115,6 +115,10 @@ export const SUPABASE_PAGE_SIZE = 1000;
 /** RMI tender site base URL. */
 export const RMI_SITE_URL = "https://apps.land.gov.il/MichrazimSite/#/michraz";
 
+/** RMI document download API endpoint. */
+export const DOCUMENT_DOWNLOAD_API =
+  "https://apps.land.gov.il/MichrazimSite/api/MichrazDetailsApi/GetFileContent";
+
 // ---------------------------------------------------------------------------
 // Environment-derived values
 // ---------------------------------------------------------------------------

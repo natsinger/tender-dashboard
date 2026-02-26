@@ -159,17 +159,17 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
           const b = rowB.getValue<number>(columnId);
           return (a ?? 0) - (b ?? 0);
         },
-        size: 120,
+        meta: { widthPercent: "9%" },
       },
       {
         accessorKey: "tender_name",
         header: "\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6", // שם מכרז
         cell: ({ getValue }) => (
-          <span className="line-clamp-1 max-w-xs">
+          <span className="line-clamp-1">
             {getValue<string>() ?? "\u2014"}
           </span>
         ),
-        size: 260,
+        meta: { widthPercent: "20%" },
       },
       {
         accessorKey: "units",
@@ -184,31 +184,43 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
             rowB.getValue<number>(columnId),
             false,
           ),
-        size: 70,
+        meta: { widthPercent: "5%" },
       },
       {
         accessorKey: "city",
         header: "\u05E2\u05D9\u05E8", // עיר
-        cell: ({ getValue }) => getValue<string>() ?? "\u2014",
-        size: 100,
+        cell: ({ getValue }) => (
+          <span className="truncate block">
+            {getValue<string>() ?? "\u2014"}
+          </span>
+        ),
+        meta: { widthPercent: "8%" },
       },
       {
         accessorKey: "region",
         header: "\u05DE\u05D7\u05D5\u05D6", // מחוז
         cell: ({ getValue }) => getValue<string>() ?? "\u2014",
-        size: 80,
+        meta: { widthPercent: "6%" },
       },
       {
         accessorKey: "tender_type",
         header: "\u05E1\u05D5\u05D2", // סוג
-        cell: ({ getValue }) => getValue<string>() ?? "\u2014",
-        size: 120,
+        cell: ({ getValue }) => (
+          <span className="truncate block">
+            {getValue<string>() ?? "\u2014"}
+          </span>
+        ),
+        meta: { widthPercent: "9%" },
       },
       {
         accessorKey: "purpose",
         header: "\u05D9\u05D9\u05E2\u05D5\u05D3", // ייעוד
-        cell: ({ getValue }) => getValue<string>() ?? "\u2014",
-        size: 120,
+        cell: ({ getValue }) => (
+          <span className="truncate block">
+            {getValue<string>() ?? "\u2014"}
+          </span>
+        ),
+        meta: { widthPercent: "9%" },
       },
       {
         accessorKey: "lot_count",
@@ -223,7 +235,7 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
             rowB.getValue<number>(columnId),
             false,
           ),
-        size: 70,
+        meta: { widthPercent: "6%" },
       },
       {
         accessorKey: "max_lots_per_bidder",
@@ -238,7 +250,7 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
             rowB.getValue<number>(columnId),
             false,
           ),
-        size: 80,
+        meta: { widthPercent: "7%" },
       },
       {
         accessorKey: "deadline",
@@ -249,13 +261,13 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
           const b = rowB.getValue<string>(columnId);
           return nullsLastSort(a ?? null, b ?? null, false);
         },
-        size: 110,
+        meta: { widthPercent: "9%" },
       },
       {
         accessorKey: "status",
         header: "\u05E1\u05D8\u05D8\u05D5\u05E1", // סטטוס
         cell: ({ getValue }) => getValue<string>() ?? "\u2014",
-        size: 80,
+        meta: { widthPercent: "7%" },
       },
       {
         accessorKey: "published_booklet",
@@ -273,7 +285,7 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
           const b = rowB.getValue<number>(columnId) ?? 0;
           return a - b;
         },
-        size: 60,
+        meta: { widthPercent: "5%" },
       },
     ],
     [],
@@ -338,20 +350,26 @@ export function ExplorerTable({
         {"\u05DC\u05D7\u05E5 \u05E2\u05DC \u05E9\u05D5\u05E8\u05D4 \u05DC\u05E6\u05E4\u05D9\u05D9\u05D4 \u05D1\u05E4\u05E8\u05D8\u05D9 \u05D4\u05DE\u05DB\u05E8\u05D6"}
       </p>
 
-      <div className="rounded-md border">
-        <Table>
+      <div className="rounded-md border overflow-hidden">
+        <Table className="table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
+                  const widthPercent = (
+                    header.column.columnDef.meta as
+                      | { widthPercent?: string }
+                      | undefined
+                  )?.widthPercent;
 
                   return (
                     <TableHead
                       key={header.id}
+                      style={widthPercent ? { width: widthPercent } : undefined}
                       className={cn(
-                        "text-right whitespace-nowrap",
+                        "text-right whitespace-nowrap overflow-hidden",
                         canSort && "cursor-pointer select-none",
                       )}
                       onClick={
@@ -409,7 +427,10 @@ export function ExplorerTable({
                     onClick={() => handleRowClick(tender)}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="text-right">
+                      <TableCell
+                        key={cell.id}
+                        className="text-right overflow-hidden text-ellipsis"
+                      >
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext(),
