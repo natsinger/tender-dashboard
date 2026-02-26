@@ -41,7 +41,7 @@ interface DocTableRow {
   units: number | null;
   city: string;
   tender_type: string;
-  doc_name: string;
+  doc_description: string;
   download_url: string;
 }
 
@@ -78,18 +78,21 @@ const docColumns: ColumnDef<DocTableRow, unknown>[] = [
   {
     id: "download",
     header: "\u05DE\u05E1\u05DE\u05DA \u05D7\u05D3\u05E9",
-    cell: ({ row }) => (
-      <a
-        href={row.original.download_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
-        title={row.original.doc_name}
-      >
-        <Download className="h-3.5 w-3.5" />
-        {"\u05D4\u05D5\u05E8\u05D3 \u05DE\u05E1\u05DE\u05DA"}
-      </a>
-    ),
+    cell: ({ row }) => {
+      const { download_url, doc_description } = row.original;
+      if (!download_url) return "\u2014";
+      return (
+        <a
+          href={download_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+        >
+          <Download className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{doc_description || "\u05DE\u05E1\u05DE\u05DA"}</span>
+        </a>
+      );
+    },
     enableSorting: false,
   },
 ];
@@ -131,7 +134,7 @@ function buildDocRows(
         units: t.units,
         city: t.city ?? "",
         tender_type: t.tender_type ?? "",
-        doc_name: doc?.doc_name ?? "",
+        doc_description: doc?.description ?? "",
         download_url: doc ? buildDocumentUrl(doc) : "",
       };
     })
