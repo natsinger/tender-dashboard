@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const RMI_DETAIL_API =
-  "https://apps.land.gov.il/MichrazimSite/api/Michrazim/GetMichrazDetails";
+  "https://apps.land.gov.il/MichrazimSite/api/MichrazDetailsApi/Get";
 
 export async function GET(request: NextRequest) {
   const tenderId = request.nextUrl.searchParams.get("id");
