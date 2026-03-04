@@ -1,7 +1,7 @@
 /**
  * Top bar component for the dashboard layout.
  * Shows a mobile menu trigger (hamburger), the current user email, and logout.
- * Uses the Zustand auth store for logout (clears cookie + state).
+ * Logout calls supabase.auth.signOut() via the Zustand auth store.
  */
 "use client";
 
@@ -18,8 +18,8 @@ interface TopbarProps {
 export function Topbar({ userEmail, onMenuClick }: TopbarProps) {
   const logout = useAuthStore((s) => s.logout);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     window.location.href = "/login";
   }
 
@@ -31,7 +31,7 @@ export function Topbar({ userEmail, onMenuClick }: TopbarProps) {
         size="icon"
         className="md:hidden"
         onClick={onMenuClick}
-        aria-label="פתח תפריט"
+        aria-label={"\u05E4\u05EA\u05D7 \u05EA\u05E4\u05E8\u05D9\u05D8"}
       >
         <Menu className="h-5 w-5" />
       </Button>
@@ -50,7 +50,7 @@ export function Topbar({ userEmail, onMenuClick }: TopbarProps) {
           variant="ghost"
           size="icon"
           onClick={handleLogout}
-          aria-label="יציאה"
+          aria-label={"\u05D9\u05E6\u05D9\u05D0\u05D4"}
           className="text-megido-text-muted hover:text-megido-danger"
         >
           <LogOut className="h-4 w-4" />

@@ -1,13 +1,13 @@
 /**
  * Zustand store for authentication state.
  *
- * Manages the current user's email and role. Role is determined by
- * checking the email against environment-provided allow lists
- * (NEXT_PUBLIC_TEAM_EMAILS and NEXT_PUBLIC_MANAGEMENT_EMAILS).
+ * Syncs with the Supabase Auth session. Role is resolved server-side
+ * (in middleware and /api/auth/role) to keep the email allowlists
+ * off the browser. The store no longer manages cookies or resolves
+ * roles from env vars.
  */
-
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { supabase } from "@/lib/supabase/client";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,92 +19,71 @@ interface AuthState {
   email: string | null;
   role: UserRole;
   isAuthenticated: boolean;
-  login: (email: string) => void;
-  logout: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Role resolution helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Parse a comma-separated env var into a Set of lowercased emails.
- */
-function parseEmailList(envVar: string | undefined): Set<string> {
-  if (!envVar) return new Set();
-  return new Set(
-    envVar
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
-
-/**
- * Determine the user's role from their email.
- *
- * - If in TEAM_EMAILS -> "team" (full access to all pages)
- * - If in MANAGEMENT_EMAILS -> "management" (management page only)
- * - Otherwise -> null (blocked)
- */
-export function resolveRole(email: string): UserRole {
-  const normalEmail = email.toLowerCase().trim();
-
-  const teamEmails = parseEmailList(
-    process.env.NEXT_PUBLIC_TEAM_EMAILS,
-  );
-  if (teamEmails.has(normalEmail)) return "team";
-
-  const managementEmails = parseEmailList(
-    process.env.NEXT_PUBLIC_MANAGEMENT_EMAILS,
-  );
-  if (managementEmails.has(normalEmail)) return "management";
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Cookie helpers
-// ---------------------------------------------------------------------------
-
-/** Remove the user_email cookie by expiring it. */
-function clearAuthCookie(): void {
-  if (typeof document === "undefined") return;
-  document.cookie =
-    "user_email=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+  isLoading: boolean;
+  initialize: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      email: null,
-      role: null,
-      isAuthenticated: false,
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  email: null,
+  role: null,
+  isAuthenticated: false,
+  isLoading: true,
 
-      login: (email: string) => {
-        const role = resolveRole(email);
+  /**
+   * Initialize auth state from the current Supabase session.
+   * Called once on app load (in AuthGuard).
+   */
+  initialize: async () => {
+    // Prevent duplicate initialization
+    if (!get().isLoading) return;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user?.email) {
+        // Fetch role from server-side API
+        const res = await fetch("/api/auth/role");
+        const { role } = (await res.json()) as { role: UserRole };
+
         set({
-          email: email.toLowerCase().trim(),
-          role,
-          isAuthenticated: role !== null,
+          email: session.user.email,
+          role: role ?? null,
+          isAuthenticated: true,
+          isLoading: false,
         });
-      },
-
-      logout: () => {
-        clearAuthCookie();
+      } else {
         set({
           email: null,
           role: null,
           isAuthenticated: false,
+          isLoading: false,
         });
-      },
-    }),
-    {
-      name: "auth-store",
-    },
-  ),
-);
+      }
+    } catch {
+      set({
+        email: null,
+        role: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    }
+  },
+
+  /** Sign out via Supabase (clears session cookies) and reset state. */
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({
+      email: null,
+      role: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  },
+}));
