@@ -8,7 +8,7 @@
  * 4. Redirects unauthorized users to /login
  * 5. Enforces role-based route restrictions
  */
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createMiddlewareClient } from "@/lib/supabase/middleware";
 
 // ---------------------------------------------------------------------------
@@ -53,60 +53,64 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
-  // Create Supabase client with cookie bridging (also refreshes tokens)
-  const { supabase, response } = createMiddlewareClient(request);
+  try {
+    // Create Supabase client with cookie bridging (also refreshes tokens)
+    const { supabase, response } = createMiddlewareClient(request);
 
-  // Validate session via JWT verification
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    // Validate session via JWT verification
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-  // ── Public path handling ──
-  if (isPublicPath) {
-    if (user?.email) {
-      const role = resolveRole(user.email);
-      if (role) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/management";
-        url.search = "";
-        return Response.redirect(url);
+    console.log("[Middleware]", pathname, "| user:", user?.email ?? "none", "| error:", error?.message ?? "none");
+
+    // ── Public path handling ──
+    if (isPublicPath) {
+      if (user?.email) {
+        const role = resolveRole(user.email);
+        if (role) {
+          return NextResponse.redirect(new URL("/management", request.url));
+        }
       }
+      return response;
     }
+
+    // ── Protected path: no session -> redirect to login ──
+    if (!user?.email) {
+      console.log("[Middleware] No session, redirecting to /login");
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // ── Protected path: validate role ──
+    const role = resolveRole(user.email);
+    console.log("[Middleware] Role for", user.email, ":", role);
+
+    if (!role) {
+      await supabase.auth.signOut();
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("error", "unauthorized");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Management role trying to access team-only pages -> redirect
+    if (
+      role === "management" &&
+      TEAM_ONLY_PATHS.some((p) => pathname.startsWith(p))
+    ) {
+      return NextResponse.redirect(new URL("/management", request.url));
+    }
+
+    // Return the response object (carries refreshed session cookies)
     return response;
+  } catch (err) {
+    // If anything fails, redirect to login for safety
+    console.error("[Middleware] Error:", err);
+    if (isPublicPath) {
+      return NextResponse.next();
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
   }
-
-  // ── Protected path: no session -> redirect to login ──
-  if (!user?.email) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
-    return Response.redirect(url);
-  }
-
-  // ── Protected path: validate role ──
-  const role = resolveRole(user.email);
-
-  if (!role) {
-    await supabase.auth.signOut();
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("error", "unauthorized");
-    return Response.redirect(url);
-  }
-
-  // Management role trying to access team-only pages -> redirect
-  if (
-    role === "management" &&
-    TEAM_ONLY_PATHS.some((p) => pathname.startsWith(p))
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/management";
-    url.search = "";
-    return Response.redirect(url);
-  }
-
-  // Return the response object (carries refreshed session cookies)
-  return response;
 }
 
 export const config = {
