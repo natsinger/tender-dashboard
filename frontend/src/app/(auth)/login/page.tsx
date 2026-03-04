@@ -85,9 +85,15 @@ function LoginForm() {
       });
 
       if (otpError) {
-        setError("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1 \u05DE\u05D0\u05D5\u05D7\u05E8 \u05D9\u05D5\u05EA\u05E8.");
-        console.error("[Login] OTP error:", otpError.message);
-        return;
+        // Rate limit or other non-critical errors — log but still show
+        // "check your email" since Supabase may have sent the email anyway
+        console.warn("[Login] OTP warning:", otpError.message);
+
+        // Only block on critical errors, not rate limits or signup flows
+        if (otpError.message?.includes("rate limit")) {
+          setError("\u05E0\u05E9\u05DC\u05D7\u05D5 \u05D9\u05D5\u05EA\u05E8 \u05DE\u05D3\u05D9 \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC\u05D9\u05DD. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05DB\u05DE\u05D4 \u05D3\u05E7\u05D5\u05EA.");
+          return;
+        }
       }
 
       setEmailSent(true);
