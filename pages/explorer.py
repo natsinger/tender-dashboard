@@ -256,10 +256,74 @@ with st.expander("צפייה בפרטי מכרז", expanded=_expander_open):
                     unsafe_allow_html=True,
                 )
 
+            # ── Land & Pricing Data (from Tik[] API array) ───────────────
+            plots = details.get("Tik", [])
+            if plots:
+                st.markdown("---")
+                st.markdown("### נתוני קרקע ומחירים")
+
+                for plot_idx, plot in enumerate(plots, 1):
+                    mitcham_name = plot.get("MitchamName", str(plot_idx))
+                    if len(plots) > 1:
+                        st.markdown(f"**מתחם {html.escape(str(mitcham_name))}**")
+
+                    # ── Key financial metrics row ──
+                    _fm1, _fm2, _fm3 = st.columns(3)
+                    with _fm1:
+                        _shetach = plot.get("Shetach", 0)
+                        st.metric('שטח (מ"ר)', f"{_shetach:,.0f}" if _shetach else "N/A")
+                    with _fm2:
+                        _mechir_saf = plot.get("MechirSaf", 0)
+                        st.metric("מחיר סף (₪)", f"{_mechir_saf:,.0f}" if _mechir_saf else "N/A")
+                    with _fm3:
+                        _mechir_shuma = plot.get("mechirShuma", 0)
+                        st.metric("שומה (₪)", f"{_mechir_shuma:,.0f}" if _mechir_shuma else "N/A")
+
+                    _fm4, _fm5, _fm6 = st.columns(3)
+                    with _fm4:
+                        _hotzaot = plot.get("HotzaotPituach", 0)
+                        st.metric("עלויות פיתוח (₪)", f"{_hotzaot:,.0f}" if _hotzaot else "N/A")
+                    with _fm5:
+                        _arvut = plot.get("SchumArvut", 0)
+                        st.metric("ערבות (₪)", f"{_arvut:,.0f}" if _arvut else "N/A")
+                    with _fm6:
+                        _kibolet = plot.get("Kibolet", 0)
+                        st.metric('יח"ד במתחם', f"{_kibolet:,}" if _kibolet else "N/A")
+
+                    # ── Gush/Helka ──
+                    gush_helka_list = plot.get("GushHelka", [])
+                    tochnit_list = plot.get("TochnitMigrash", [])
+
+                    _property_parts = []
+                    for gh in gush_helka_list:
+                        _g = gh.get("Gush", "")
+                        _h = gh.get("Helka", "")
+                        if _g or _h:
+                            _property_parts.append(f"גוש {_g} חלקה {_h}")
+
+                    for tm in tochnit_list:
+                        _plan = (tm.get("Tochnit") or "").strip()
+                        _plot_name = (tm.get("MigrashName") or "").strip()
+                        if _plan:
+                            _part = f'תב"ע {_plan}'
+                            if _plot_name:
+                                _part += f" מגרש {_plot_name}"
+                            _property_parts.append(_part)
+
+                    if _property_parts:
+                        st.markdown(
+                            '<div style="font-size:0.9rem;color:#475569;padding:4px 0;">'
+                            + html.escape(" | ".join(_property_parts))
+                            + "</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    if plot_idx < len(plots):
+                        st.markdown("")
+
             # ── Bids ─────────────────────────────────────────────────────
             st.markdown("---")
             st.markdown("### הצעות ומציעים")
-            plots = details.get("Tik", [])
             if plots:
                 for plot_idx, plot in enumerate(plots, 1):
                     st.markdown(f"#### מגרש {plot_idx}: {plot.get('TikID', 'N/A')}")
