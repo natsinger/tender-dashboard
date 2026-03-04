@@ -49,8 +49,20 @@ const PUBLIC_PATHS = ["/login", "/auth/callback"];
 // Proxy (renamed from middleware for Next.js 16)
 // ---------------------------------------------------------------------------
 
-export async function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Intercept auth code from Supabase email redirects ──
+  // Signup confirmation emails redirect to the Site URL (/) instead of
+  // /auth/callback. If we see a ?code= param on any non-callback route,
+  // forward it to the callback handler.
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (authCode && !pathname.startsWith("/auth/callback")) {
+    const callbackUrl = new URL("/auth/callback", request.url);
+    callbackUrl.searchParams.set("code", authCode);
+    return NextResponse.redirect(callbackUrl);
+  }
+
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   try {
