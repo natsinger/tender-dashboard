@@ -17,4 +17,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Disable auto-detection so we handle the code exchange explicitly
+    // in /auth/callback. This avoids race conditions and lets us capture
+    // the actual error when the exchange fails.
+    detectSessionInUrl: false,
+  },
+});

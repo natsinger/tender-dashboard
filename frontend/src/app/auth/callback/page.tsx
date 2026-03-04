@@ -1,18 +1,13 @@
 /**
  * Auth callback page for Supabase Magic Link.
  *
- * IMPORTANT: createBrowserClient from @supabase/ssr auto-detects ?code=
- * in the URL and exchanges it during initialization (detectSessionInUrl).
- * We must NOT call exchangeCodeForSession() ourselves — the code is
- * single-use and would fail on the second call. Instead, we listen for
- * the session to appear via onAuthStateChange.
- *
- * For ?token_hash= flow (custom email templates), we call verifyOtp()
- * explicitly since that's not auto-detected.
+ * detectSessionInUrl is disabled on the browser client, so we handle
+ * the code exchange explicitly here. This avoids race conditions and
+ * lets us capture + display the actual error for debugging.
  */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -21,71 +16,75 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 function CallbackHandler() {
   const searchParams = useSearchParams();
   const processed = useRef(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (processed.current) return;
     processed.current = true;
 
-    const code = searchParams.get("code");
-    const tokenHash = searchParams.get("token_hash");
-    const type = searchParams.get("type") as EmailOtpType | null;
+    async function handleCallback() {
+      const code = searchParams.get("code");
+      const tokenHash = searchParams.get("token_hash");
+      const type = searchParams.get("type") as EmailOtpType | null;
 
-    // No auth parameters at all
-    if (!code && !tokenHash) {
-      window.location.href = "/login?error=missing_code";
-      return;
-    }
-
-    // --- token_hash flow (custom email templates) ---
-    // Not auto-detected, so we verify explicitly.
-    if (tokenHash && type) {
-      supabase.auth
-        .verifyOtp({ token_hash: tokenHash, type })
-        .then(({ error }) => {
-          if (error) {
-            console.error("[Auth Callback] verifyOtp failed:", error.message);
-            window.location.href = "/login?error=auth_failed";
-          } else {
-            window.location.href = "/management";
-          }
-        });
-      return;
-    }
-
-    // --- ?code= PKCE flow ---
-    // createBrowserClient auto-detects ?code= and exchanges it during
-    // initialization. We just wait for the session to appear.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session) {
-          cleanup();
-          window.location.href = "/management";
-        }
-      },
-    );
-
-    // Check if session was already established before we subscribed
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        cleanup();
-        window.location.href = "/management";
+      if (!code && !tokenHash) {
+        setErrorMsg("No code or token_hash in URL");
+        return;
       }
-    });
 
-    // Timeout: if session isn't established within 10s, something failed
-    const timeout = setTimeout(() => {
-      cleanup();
-      console.error("[Auth Callback] Timed out waiting for session");
-      window.location.href = "/login?error=auth_failed";
-    }, 10_000);
+      try {
+        let error;
 
-    function cleanup() {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
+        if (tokenHash && type) {
+          const result = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type,
+          });
+          error = result.error;
+        } else if (code) {
+          const result = await supabase.auth.exchangeCodeForSession(code);
+          error = result.error;
+        }
+
+        if (error) {
+          console.error("[Auth Callback] Error:", error.message, error);
+          setErrorMsg(`${error.message} (${error.status ?? "no status"})`);
+          return;
+        }
+
+        // Session established — redirect
+        window.location.href = "/management";
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[Auth Callback] Unexpected:", msg);
+        setErrorMsg(msg);
+      }
     }
 
-    return cleanup;
+    handleCallback();
   }, [searchParams]);
+
+  // Show error with details for debugging
+  if (errorMsg) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-megido-bg-main p-4">
+        <div className="w-full max-w-md rounded-lg border border-red-200 bg-white p-6 text-center" dir="rtl">
+          <p className="text-lg font-semibold text-red-600 mb-2">
+            {"אימות נכשל"}
+          </p>
+          <p className="text-sm text-gray-600 mb-4" dir="ltr">
+            {errorMsg}
+          </p>
+          <a
+            href="/login"
+            className="inline-block rounded-lg bg-megido-primary px-6 py-2 text-sm font-medium text-white hover:bg-megido-primary-hover"
+          >
+            {"חזרה לדף הכניסה"}
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-megido-bg-main">
