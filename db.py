@@ -73,10 +73,23 @@ def _clean_val(val: object) -> object:
         import numpy as np
         if isinstance(val, np.bool_):
             return int(val)
+        if isinstance(val, np.integer):
+            return int(val)
+        if isinstance(val, np.floating):
+            if np.isnan(val) or np.isinf(val):
+                return None
+            if val == int(val):
+                return int(val)
+            return float(val)
     except ImportError:
         pass
-    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-        return None
+    if isinstance(val, float):
+        if math.isnan(val) or math.isinf(val):
+            return None
+        # Pandas stores ints as float when column has NaNs (e.g. 35 → 35.0).
+        # Supabase integer columns reject "35.0", so convert back to int.
+        if val == int(val):
+            return int(val)
     if isinstance(val, pd.Timestamp):
         if pd.isna(val):
             return None
