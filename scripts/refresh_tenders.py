@@ -34,6 +34,15 @@ def main() -> None:
     project_root = Path(__file__).resolve().parent.parent
     client = LandTendersClient(data_dir=str(project_root))
 
+    # Diagnostic: check if Supabase env vars are reaching the script
+    sb_url = os.environ.get("SUPABASE_URL", "")
+    sb_key = os.environ.get("SUPABASE_KEY", "")
+    logger.info(
+        "Env check: SUPABASE_URL=%s (len=%d), SUPABASE_KEY=%s (len=%d)",
+        "SET" if sb_url else "EMPTY", len(sb_url),
+        "SET" if sb_key else "EMPTY", len(sb_key),
+    )
+
     logger.info("Starting daily tender refresh...")
 
     # 1. Fetch from API
