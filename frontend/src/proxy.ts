@@ -46,10 +46,10 @@ const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics", "/watchlist"];
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
 // ---------------------------------------------------------------------------
-// Middleware
+// Proxy (renamed from middleware for Next.js 16)
 // ---------------------------------------------------------------------------
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
