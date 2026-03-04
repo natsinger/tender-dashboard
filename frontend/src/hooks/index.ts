@@ -10,6 +10,9 @@ export { useActiveTenders, useTender, useTenders } from "./use-tenders";
 // Documents
 export { useNewDocuments, useTenderDocuments } from "./use-documents";
 
+// RMI API tender details (Tik[] data)
+export { useTenderDetails } from "./use-tender-details";
+
 // Lots & building rights
 export {
   useBuildingRights,

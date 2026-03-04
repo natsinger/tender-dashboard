@@ -16,12 +16,29 @@ MEGIDO Brand Redesign — **complete**.
 Mobile-First Responsive Redesign (Deep Blue) — **complete**.
 Lot Extraction Pipeline — **complete** (lot_extractor + extract_lots_batch + 169 tests, real-PDF fixes applied, pending SQL schema deployment).
 API-First Lot Integration — **complete** (API Tik[] as source of truth, PDF overlay for PDF-only fields, 7 new columns).
+Phase 3 (React/Next.js Migration) — **in progress** (frontend deployed on Vercel, feature parity ongoing).
 
-**All data now lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used by the app and has been added to `.gitignore`.
+**All data lives in Supabase PostgreSQL.** SQLite (`data/tenders.db`) is no longer used and has been added to `.gitignore`.
 
-The app is now **multipage** with four views:
+### Deployment
+
+| Platform | Purpose | Branch | URL |
+|----------|---------|--------|-----|
+| **Vercel** | Next.js production frontend | `master` | (configured in Vercel dashboard) |
+| Streamlit Cloud | Legacy Streamlit dashboard | `master` | (still functional) |
+| GitHub Actions | Daily data refresh cron (06:00 UTC) | `master` | N/A |
+
+### Frontend (Next.js — `frontend/`)
+
+Next.js 16 + React 19 + TypeScript + Tailwind v4 + shadcn/ui + Recharts + Supabase Auth + Zustand + TanStack.
+
+Pages: Dashboard, Management, Explorer, Analytics, Watchlist, Login.
+
+### Backend (Streamlit — root)
+
+The Streamlit app still runs and has four views:
 - **Dashboard** (`pages/dashboard.py`) — Full view for daily users: filters, KPIs, charts (no pies), tender details, closing deadlines, watchlist management in sidebar (personal + team + review editing), analytics, debug
-- **Explorer** (`pages/explorer.py`) — Tender explorer: filterable data table, detail viewer with lot data display, building rights section
+- **Explorer** (`pages/explorer.py`) — Tender explorer: filterable data table, detail viewer with lot/land/pricing data, building rights section
 - **Analytics** (`pages/analytics.py`) — Market intelligence: trends, competitive analysis, price analytics, scoring with radar charts
 - **Management** (`pages/management.py`) — Team operational dashboard (read-only):
   1. **Selected Tenders** — shared team watchlist with lot data columns (שוק חופשי, מחיר מטרה, סה"כ, % מחיר מטרה), brochure toggle, RTL column order
@@ -174,7 +191,7 @@ Gov tender projects/
 ├── complete_city_codes.py          # CBS settlement code → city name mapping (1,281 entries)
 ├── complete_city_regions.py        # CBS settlement code → region mapping (1,488 entries)
 ├── CLAUDE.md                       # Project rules and guidelines
-├── PRD.md                          # Product Requirements Document v3.0
+├── PRD.md                          # Product Requirements Document v4.0
 ├── STATUS.md                       # This file — living project state
 ├── DATA_FLOW_EXPLANATION.md        # Data pipeline documentation
 ├── .gitignore                      # Git ignore rules
@@ -204,6 +221,19 @@ Gov tender projects/
 │       ├── watchlist_notes_schema.sql # SQL: notes column on user_watchlist
 │       └── lot_count_schema.sql       # SQL: lot_count + max_lots_per_bidder columns on tenders
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
+├── frontend/                       # Next.js production frontend (deployed on Vercel)
+│   ├── src/
+│   │   ├── app/                   # Next.js App Router pages (dashboard, management, explorer, analytics, watchlist, login)
+│   │   ├── components/            # React components (shadcn/ui + custom)
+│   │   ├── design-system/         # Design tokens (colors, typography, spacing, shadows, borders)
+│   │   ├── hooks/                 # Data hooks (use-tenders, use-lots, use-watchlist, use-analytics, etc.)
+│   │   ├── stores/                # Zustand stores (filter-store, auth-store)
+│   │   ├── lib/                   # Utilities, Supabase client, constants, analytics engine
+│   │   ├── types/                 # TypeScript types (database.ts)
+│   │   └── providers/             # React Query provider
+│   ├── vercel.json                # Vercel deployment config
+│   ├── package.json               # Next.js 16 + React 19 + Tailwind v4 + Recharts + Supabase
+│   └── tsconfig.json              # TypeScript config
 ├── data/
 │   ├── tenders.db                  # SQLite database (gitignored, kept for migration reference)
 │   └── details_cache/              # Cached tender detail JSON files

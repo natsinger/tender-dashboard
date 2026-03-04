@@ -1,8 +1,8 @@
 # PRD — Israel Land Tender Intelligence Dashboard
 
-**Version**: 3.0
+**Version**: 4.0
 **Author**: Nathanael (Product Owner)
-**Last Updated**: February 17, 2026
+**Last Updated**: March 4, 2026
 **Status**: Active
 
 ---
@@ -43,7 +43,7 @@ Team members who track tenders daily. They need the full dashboard: filters, det
 ### Management User (Executive)
 CEO / CFO / investment committee. Needs a **30-second overview**: KPIs with week-over-week deltas, brochure coverage, regional distribution, and a closing-soon table. No detail viewer, watchlist, or data explorer.
 
-Both user types access the same Streamlit app via navigation tabs.
+Both user types access the same app via sidebar navigation. The production frontend is a Next.js app deployed on Vercel, with Supabase auth for access control.
 
 ---
 
@@ -118,8 +118,8 @@ The following features are **already built and working** in the current Streamli
 
 | ID | Story | Priority |
 |----|-------|----------|
-| US-12 | As a product owner, I want the dashboard **rebuilt in React** for better performance, custom UI, and easier deployment with access controls. | Future |
-| US-13 | As a user, I want the dashboard accessible via a **shared URL with authentication**. | Future |
+| US-12 | As a product owner, I want the dashboard **rebuilt in React** for better performance, custom UI, and easier deployment with access controls. | ✅ Complete (Next.js 16 + Vercel) |
+| US-13 | As a user, I want the dashboard accessible via a **shared URL with authentication**. | ✅ Complete (Supabase Auth + Vercel) |
 
 ---
 
@@ -243,35 +243,46 @@ This replaces the current broken "Upcoming Deadlines" section.
 
 ## 8. Technical Requirements
 
-### 8.1 Stack (Current — Phase 1)
+### 8.1 Stack (Production — Next.js Frontend)
 
 | Layer | Technology | Status |
 |-------|-----------|--------|
-| Frontend | Streamlit | Existing |
-| Data Fetching | Python (requests/httpx) | Existing |
-| Charts | Plotly (via Streamlit) | Existing |
-| Data Processing | Pandas | Existing |
-| Deployment | Local | Current |
+| Frontend | Next.js 16 + React 19 + TypeScript | **Production** (deployed on Vercel) |
+| UI Components | shadcn/ui + Radix UI + Tailwind CSS v4 | Production |
+| Charts | Recharts | Production |
+| State Management | Zustand + TanStack React Query | Production |
+| Data Tables | TanStack React Table | Production |
+| Auth | Supabase Auth (PKCE flow) | Production |
+| Database | Supabase PostgreSQL | Production |
+| Deployment | Vercel | Production |
 
-### 8.2 Stack (Future — Phase 3: React Migration)
+### 8.2 Stack (Data Pipeline — Python Backend)
 
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| Frontend | React + Recharts/Plotly.js | Custom UI, better performance, shareable URL |
-| Backend API | FastAPI (Python) | Serve data to React frontend |
-| Auth | TBD (basic auth → OAuth) | Restrict dashboard access |
-| Deployment | TBD (cloud hosting) | Shareable URL |
+| Layer | Technology | Status |
+|-------|-----------|--------|
+| Data Fetching | Python (requests) + data_client.py | Production |
+| Data Processing | Pandas | Production |
+| PDF Extraction | pdfplumber, PyMuPDF | Production |
+| Brochure Analysis | lot_extractor.py, brochure_analyzer.py | Production |
+| Building Rights | building_rights_extractor.py + Mavat (Playwright) | Production |
+| Scheduled Jobs | GitHub Actions (daily cron) | Production |
 
-### 8.3 Non-Functional Requirements
+### 8.3 Stack (Legacy — Streamlit Dashboard)
+
+| Layer | Technology | Status |
+|-------|-----------|--------|
+| Frontend | Streamlit | Legacy (still functional, deployed on Streamlit Cloud) |
+| Charts | Plotly (via Streamlit) | Legacy |
+
+### 8.4 Non-Functional Requirements
 
 | Requirement | Target |
 |-------------|--------|
-| Page load (Streamlit) | < 5 seconds with cached data |
-| Data freshness | Updated at least once every 24 hours |
+| Page load (Next.js) | < 2 seconds with Supabase queries |
+| Data freshness | Updated daily via GitHub Actions cron (06:00 UTC) |
 | Language | Hebrew UI, RTL layout throughout |
 | Visual quality | Readable at presentation/projector distance |
-| Deployment (now) | Local |
-| Deployment (later) | Shareable URL with access restrictions |
+| Deployment | Vercel (production), shareable URL with Supabase auth |
 
 ---
 
@@ -343,16 +354,17 @@ Data to extract (to be refined with sample documents from Nathanael):
 | 2.5 | Integrate extracted data into Tender Detail Viewer |
 | 2.6 | Validate across diverse brochure formats |
 
-### Phase 3 — React Migration (Future)
-**Estimated duration**: 4–6 weeks
+### Phase 3 — React Migration → **In Progress**
 
-| Step | Task |
-|------|------|
-| 3.1 | Design React component architecture based on finalized Streamlit layout |
-| 3.2 | Build FastAPI backend to serve tender data |
-| 3.3 | Implement React frontend with all Phase 1+2 features |
-| 3.4 | Add authentication layer |
-| 3.5 | Deploy to cloud with shareable URL |
+| Step | Task | Status |
+|------|------|--------|
+| 3.1 | Design React component architecture (Next.js App Router, shadcn/ui, design system tokens) | ✅ Complete |
+| 3.2 | Database layer via Supabase (direct queries, no FastAPI needed) | ✅ Complete |
+| 3.3 | Implement React frontend — Dashboard, Management, Explorer, Analytics, Watchlist pages | ✅ Complete |
+| 3.4 | Add authentication layer (Supabase Auth with PKCE, login page, auth guards) | ✅ Complete |
+| 3.5 | Deploy to Vercel with shareable URL | ✅ Complete |
+| 3.6 | Feature parity: land & pricing data in Explorer detail viewer | ✅ Complete |
+| 3.7 | Feature parity: remaining Streamlit features not yet ported | In Progress |
 
 ---
 
@@ -410,4 +422,4 @@ Data to extract (to be refined with sample documents from Nathanael):
 
 ---
 
-_End of PRD v2.0_
+_End of PRD v4.0_

@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeadlineBadge } from "@/components/deadline-badge";
-import { useTenderLots, useTenderBuildingRights } from "@/hooks";
+import { useTenderLots, useTenderBuildingRights, useTenderDetails } from "@/hooks";
+import type { TikEntry } from "@/hooks/use-tender-details";
 import { RMI_SITE_URL } from "@/lib/constants";
 import type { ScoredTender, TenderWithComputed } from "@/types/database";
 
@@ -129,6 +130,8 @@ export function DetailViewer({
   const { data: lots, isLoading: lotsLoading } = useTenderLots(activeTenderId);
   const { data: buildingRights, isLoading: rightsLoading } =
     useTenderBuildingRights(activeTenderId);
+  const { data: rmiDetails, isLoading: detailsLoading } =
+    useTenderDetails(activeTenderId);
 
   // Sort tenders for dropdown by deadline descending
   const sortedTenders = useMemo(
@@ -311,6 +314,114 @@ export function DetailViewer({
                   value={`${activeTender.gush} / ${activeTender.helka ?? "\u2014"}`}
                 />
               )}
+
+              {/* Land & Pricing Data (from RMI API Tik[]) */}
+              <div className="border-t pt-3">
+                <h4 className="mb-2 text-sm font-semibold text-slate-800">
+                  {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05E7\u05E8\u05E7\u05E2 \u05D5\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}
+                </h4>
+
+                {detailsLoading ? (
+                  <div className="h-16 animate-pulse rounded bg-slate-200" />
+                ) : rmiDetails?.Tik && rmiDetails.Tik.length > 0 ? (
+                  <div className="space-y-3">
+                    {rmiDetails.Tik.map((tik: TikEntry, idx: number) => (
+                      <div key={tik.TikID ?? idx}>
+                        {rmiDetails.Tik.length > 1 && (
+                          <p className="mb-1 text-xs font-semibold text-slate-600">
+                            {"\u05DE\u05EA\u05D7\u05DD"} {tik.MitchamName ?? idx + 1}
+                          </p>
+                        )}
+
+                        {/* Metrics grid */}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {'\u05E9\u05D8\u05D7 (\u05DE"\u05E8)'}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.Shetach
+                                ? tik.Shetach.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {"\u05DE\u05D7\u05D9\u05E8 \u05E1\u05E3 (\u20AA)"}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.MechirSaf
+                                ? tik.MechirSaf.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {"\u05E9\u05D5\u05DE\u05D4 (\u20AA)"}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.mechirShuma
+                                ? tik.mechirShuma.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {"\u05E2\u05DC\u05D5\u05D9\u05D5\u05EA \u05E4\u05D9\u05EA\u05D5\u05D7 (\u20AA)"}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.HotzaotPituach
+                                ? tik.HotzaotPituach.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {"\u05E2\u05E8\u05D1\u05D5\u05EA (\u20AA)"}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.SchumArvut
+                                ? tik.SchumArvut.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
+                            <p className="text-xs text-slate-500">
+                              {'\u05D9\u05D7"\u05D3 \u05D1\u05DE\u05EA\u05D7\u05DD'}
+                            </p>
+                            <p className="font-bold text-slate-800">
+                              {tik.Kibolet
+                                ? tik.Kibolet.toLocaleString("he-IL")
+                                : "\u2014"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Gush/Helka + Plan */}
+                        {(tik.GushHelka?.length > 0 ||
+                          tik.TochnitMigrash?.length > 0) && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {tik.GushHelka?.map(
+                              (gh) => `\u05D2\u05D5\u05E9 ${gh.Gush} \u05D7\u05DC\u05E7\u05D4 ${gh.Helka}`,
+                            ).join(" | ")}
+                            {tik.GushHelka?.length > 0 &&
+                              tik.TochnitMigrash?.length > 0 &&
+                              " | "}
+                            {tik.TochnitMigrash?.map(
+                              (tm) =>
+                                `\u05EA\u05D1"\u05E2 ${tm.Tochnit?.trim()}${tm.MigrashName?.trim() ? ` \u05DE\u05D2\u05E8\u05E9 ${tm.MigrashName.trim()}` : ""}`,
+                            ).join(" | ")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">
+                    {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05E7\u05E8\u05E7\u05E2 \u05D5\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}
+                  </p>
+                )}
+              </div>
 
               {/* Building rights section */}
               <div className="border-t pt-3">
