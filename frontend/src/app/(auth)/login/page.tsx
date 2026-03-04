@@ -1,14 +1,17 @@
 /**
- * Login page -- email-based authentication with role validation.
- * Stores the user email in a cookie (30-day expiry) and Zustand auth store.
- * Redirects to /management on successful login.
- * Shows error if the email is not in any allowed list.
+ * Login page -- Supabase Magic Link authentication.
+ *
+ * Flow:
+ * 1. User enters email -> signInWithOtp sends a magic link
+ * 2. Page shows "check your email" confirmation
+ * 3. User clicks link in email -> /auth/callback exchanges code for session
+ * 4. Middleware validates session and role, redirects to /management
  */
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,25 +21,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2 } from "lucide-react";
-import { useAuthStore, resolveRole } from "@/stores/auth-store";
+import { Building2, Mail } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 
 // ---------------------------------------------------------------------------
-// Inner form component (needs useSearchParams which requires Suspense)
+// Error messages (Hebrew)
+// ---------------------------------------------------------------------------
+
+const ERROR_MESSAGES: Record<string, string> = {
+  unauthorized: "\u05D0\u05D9\u05DF \u05DC\u05DA \u05D4\u05E8\u05E9\u05D0\u05D4 \u05DC\u05E6\u05E4\u05D5\u05EA \u05D1\u05D0\u05E4\u05DC\u05D9\u05E7\u05E6\u05D9\u05D4. \u05E4\u05E0\u05D4 \u05DC\u05DE\u05E0\u05D4\u05DC \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA.",
+  auth_failed: "\u05D0\u05D9\u05DE\u05D5\u05EA \u05E0\u05DB\u05E9\u05DC. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.",
+  missing_code: "\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05D9\u05DF. \u05E0\u05E1\u05D4 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05E9\u05D5\u05D1.",
+  no_email: "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D4 \u05DB\u05EA\u05D5\u05D1\u05EA \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.",
+};
+
+// ---------------------------------------------------------------------------
+// Inner form component (useSearchParams requires Suspense boundary)
 // ---------------------------------------------------------------------------
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+  const [emailSent, setEmailSent] = useState(false);
   const searchParams = useSearchParams();
-  const login = useAuthStore((s) => s.login);
 
-  // Show error from middleware redirect (e.g., unauthorized email in cookie)
+  // Show error from callback redirect
   useEffect(() => {
-    if (searchParams.get("error") === "unauthorized") {
-      setError("אין לך הרשאה לצפות באפליקציה. פנה למנהל המערכת.");
+    const errorParam = searchParams.get("error");
+    if (errorParam && ERROR_MESSAGES[errorParam]) {
+      setError(ERROR_MESSAGES[errorParam]);
     }
   }, [searchParams]);
 
@@ -47,46 +61,77 @@ function LoginForm() {
     const trimmedEmail = email.trim().toLowerCase();
 
     if (!trimmedEmail) {
-      setError("נא להזין כתובת אימייל");
+      setError("\u05E0\u05D0 \u05DC\u05D4\u05D6\u05D9\u05DF \u05DB\u05EA\u05D5\u05D1\u05EA \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC");
       return;
     }
 
-    // Basic email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
-      setError("כתובת אימייל לא תקינה");
-      return;
-    }
-
-    // Role validation -- reject emails not in any allowed list
-    const role = resolveRole(trimmedEmail);
-    if (!role) {
-      setError("אין לך הרשאה לצפות באפליקציה. פנה למנהל המערכת.");
+      setError("\u05DB\u05EA\u05D5\u05D1\u05EA \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05DC\u05D0 \u05EA\u05E7\u05D9\u05E0\u05D4");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Store email in a cookie (expires in 30 days)
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
-      document.cookie = `user_email=${encodeURIComponent(
-        trimmedEmail,
-      )}; path=/; expires=${expiryDate.toUTCString()}; SameSite=Lax`;
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
 
-      // Set Zustand auth state
-      login(trimmedEmail);
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: `${siteUrl}/auth/callback`,
+        },
+      });
 
-      router.push("/management");
-      router.refresh();
+      if (otpError) {
+        setError("\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1 \u05DE\u05D0\u05D5\u05D7\u05E8 \u05D9\u05D5\u05EA\u05E8.");
+        console.error("[Login] OTP error:", otpError.message);
+        return;
+      }
+
+      setEmailSent(true);
     } catch {
-      setError("אירעה שגיאה. נסה שוב.");
+      setError("\u05D0\u05D9\u05E8\u05E2\u05D4 \u05E9\u05D2\u05D9\u05D0\u05D4. \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1.");
     } finally {
       setIsLoading(false);
     }
   }
 
+  // ---- "Check your email" state ----
+  if (emailSent) {
+    return (
+      <div className="space-y-4 text-center" dir="rtl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <Mail className="h-8 w-8 text-green-600" />
+        </div>
+        <h3 className="text-lg font-semibold text-megido-text-heading">
+          {"\u05D1\u05D3\u05D5\u05E7 \u05D0\u05EA \u05EA\u05D9\u05D1\u05EA \u05D4\u05D3\u05D5\u05D0\u05E8 \u05E9\u05DC\u05DA"}
+        </h3>
+        <p className="text-sm text-megido-text-muted">
+          {"\u05E9\u05DC\u05D7\u05E0\u05D5 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC-"}
+          <span className="font-medium text-megido-text-body" dir="ltr">
+            {email}
+          </span>
+        </p>
+        <p className="text-xs text-megido-text-muted">
+          {"\u05DC\u05D7\u05E5 \u05E2\u05DC \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D1\u05D0\u05D9\u05DE\u05D9\u05D9\u05DC \u05DB\u05D3\u05D9 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA"}
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => {
+            setEmailSent(false);
+            setEmail("");
+          }}
+        >
+          {"\u05E9\u05DC\u05D7 \u05E9\u05D5\u05D1"}
+        </Button>
+      </div>
+    );
+  }
+
+  // ---- Email input form ----
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -94,12 +139,12 @@ function LoginForm() {
           htmlFor="email"
           className="text-sm font-medium text-megido-text-body"
         >
-          הכנס אימייל
+          {"\u05D4\u05DB\u05E0\u05E1 \u05D0\u05D9\u05DE\u05D9\u05D9\u05DC"}
         </label>
         <Input
           id="email"
           type="email"
-          placeholder="name@company.com"
+          placeholder="name@megido.co.il"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           dir="ltr"
@@ -120,7 +165,9 @@ function LoginForm() {
         className="w-full bg-megido-primary text-white hover:bg-megido-primary-hover"
         disabled={isLoading}
       >
-        {isLoading ? "מתחבר..." : "כניסה"}
+        {isLoading
+          ? "\u05E9\u05D5\u05DC\u05D7 \u05E7\u05D9\u05E9\u05D5\u05E8..."
+          : "\u05E9\u05DC\u05D7 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05DB\u05E0\u05D9\u05E1\u05D4"}
       </Button>
     </form>
   );
@@ -139,10 +186,10 @@ export default function LoginPage() {
             <Building2 className="h-8 w-8 text-megido-primary" />
           </div>
           <CardTitle className="text-2xl font-bold text-megido-text-heading">
-            כניסה למערכת
+            {"\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA"}
           </CardTitle>
           <CardDescription className="text-megido-text-muted">
-            מערכת מודיעין למכרזי קרקע -- MEGIDO
+            {"\u05DE\u05E2\u05E8\u05DB\u05EA \u05DE\u05D5\u05D3\u05D9\u05E2\u05D9\u05DF \u05DC\u05DE\u05DB\u05E8\u05D6\u05D9 \u05E7\u05E8\u05E7\u05E2 -- MEGIDO"}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -7,7 +7,7 @@
  */
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { SidebarNav, SidebarLogo } from "@/components/layout/sidebar-nav";
 import { Topbar } from "@/components/layout/topbar";
 import { AuthGuard } from "@/components/auth-guard";
@@ -20,21 +20,10 @@ interface DashboardLayoutProps {
   children: ReactNode;
 }
 
-/** Read the user_email cookie value (client-side only). */
-function getUserEmailFromCookie(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|;\s*)user_email=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : "";
-}
-
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
+  const email = useAuthStore((s) => s.email);
   const role = useAuthStore((s) => s.role);
-
-  useEffect(() => {
-    setUserEmail(getUserEmailFromCookie());
-  }, []);
 
   return (
     <AuthGuard>
@@ -65,7 +54,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* ---- Main content ---- */}
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar
-            userEmail={userEmail}
+            userEmail={email ?? ""}
             onMenuClick={() => setMobileOpen(true)}
           />
           <main className="flex-1 overflow-y-auto bg-megido-bg-main p-4 md:p-6">

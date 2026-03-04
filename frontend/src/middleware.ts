@@ -1,20 +1,20 @@
 /**
- * Next.js middleware for cookie-based authentication with role-based access.
+ * Next.js middleware for Supabase Auth session validation and role-based access.
  *
- * Role logic (mirrors the Python app.py):
- * - team   -> email in NEXT_PUBLIC_TEAM_EMAILS       -> all 4 pages
- * - management -> email in NEXT_PUBLIC_MANAGEMENT_EMAILS -> /management only
- * - unknown    -> redirect to /login with error param
- *
- * Cookie: "user_email" (set by the login page, 30-day expiry).
+ * On every request to a protected route:
+ * 1. Creates a Supabase middleware client (reads/refreshes session cookies)
+ * 2. Validates the session via supabase.auth.getUser()
+ * 3. Resolves the user's role from server-side email allowlists
+ * 4. Redirects unauthorized users to /login
+ * 5. Enforces role-based route restrictions
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { createMiddlewareClient } from "@/lib/supabase/middleware";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (server-side only — reads TEAM_EMAILS, not NEXT_PUBLIC_*)
 // ---------------------------------------------------------------------------
 
-/** Parse a comma-separated env var into a Set of lowercased, trimmed emails. */
 function parseEmailList(envVar: string | undefined): Set<string> {
   if (!envVar) return new Set();
   return new Set(
@@ -30,12 +30,10 @@ type Role = "team" | "management" | null;
 function resolveRole(email: string): Role {
   const normalised = email.toLowerCase().trim();
 
-  const teamEmails = parseEmailList(process.env.NEXT_PUBLIC_TEAM_EMAILS);
+  const teamEmails = parseEmailList(process.env.TEAM_EMAILS);
   if (teamEmails.has(normalised)) return "team";
 
-  const managementEmails = parseEmailList(
-    process.env.NEXT_PUBLIC_MANAGEMENT_EMAILS,
-  );
+  const managementEmails = parseEmailList(process.env.MANAGEMENT_EMAILS);
   if (managementEmails.has(normalised)) return "management";
 
   return null;
@@ -45,66 +43,76 @@ function resolveRole(email: string): Role {
 const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics", "/watchlist"];
 
 /** Routes that do NOT require authentication. */
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const userEmail = request.cookies.get("user_email")?.value;
-
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
-  // ── Authenticated user visiting /login -> redirect to /management ──
-  if (isPublicPath && userEmail) {
-    const role = resolveRole(decodeURIComponent(userEmail));
-    if (role) {
-      return NextResponse.redirect(new URL("/management", request.url));
-    }
-    // If the cookie has an unknown email, clear it and let them stay on /login
-    const response = NextResponse.next();
-    response.cookies.delete("user_email");
-    return response;
-  }
+  try {
+    // Create Supabase client with cookie bridging (also refreshes tokens)
+    const { supabase, response } = createMiddlewareClient(request);
 
-  // ── Unauthenticated user on a protected path -> redirect to /login ──
-  if (!isPublicPath && !userEmail) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+    // Validate session via JWT verification
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-  // ── Authenticated user on a protected path -> check role ──
-  if (!isPublicPath && userEmail) {
-    const role = resolveRole(decodeURIComponent(userEmail));
+    console.log("[Middleware]", pathname, "| user:", user?.email ?? "none", "| error:", error?.message ?? "none");
 
-    // Unknown email -> clear cookie and redirect to /login with error
-    if (!role) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("error", "unauthorized");
-      const response = NextResponse.redirect(loginUrl);
-      response.cookies.delete("user_email");
+    // ── Public path handling ──
+    if (isPublicPath) {
+      if (user?.email) {
+        const role = resolveRole(user.email);
+        if (role) {
+          return NextResponse.redirect(new URL("/management", request.url));
+        }
+      }
       return response;
     }
 
-    // Management role trying to access team-only pages -> redirect to /management
+    // ── Protected path: no session -> redirect to login ──
+    if (!user?.email) {
+      console.log("[Middleware] No session, redirecting to /login");
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    // ── Protected path: validate role ──
+    const role = resolveRole(user.email);
+    console.log("[Middleware] Role for", user.email, ":", role);
+
+    if (!role) {
+      await supabase.auth.signOut();
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("error", "unauthorized");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Management role trying to access team-only pages -> redirect
     if (
       role === "management" &&
       TEAM_ONLY_PATHS.some((p) => pathname.startsWith(p))
     ) {
       return NextResponse.redirect(new URL("/management", request.url));
     }
-  }
 
-  return NextResponse.next();
+    // Return the response object (carries refreshed session cookies)
+    return response;
+  } catch (err) {
+    // If anything fails, redirect to login for safety
+    console.error("[Middleware] Error:", err);
+    if (isPublicPath) {
+      return NextResponse.next();
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 }
 
 export const config = {
-  /*
-   * Match all routes except:
-   * - _next (static files, images, etc.)
-   * - api routes
-   * - favicon.ico and other static assets
-   */
   matcher: ["/((?!_next|api|favicon\\.ico|.*\\..*).*)"],
 };

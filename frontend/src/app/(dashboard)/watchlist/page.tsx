@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -24,17 +24,8 @@ import {
   useTeamWatchlist,
 } from "@/hooks";
 import { RELEVANT_TENDER_TYPES, TEAM_EMAIL } from "@/lib/constants";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Tender, WatchlistItemWithTender } from "@/types/database";
-
-// ---------------------------------------------------------------------------
-// Cookie helper (matches the dashboard page pattern)
-// ---------------------------------------------------------------------------
-
-function getUserEmailFromCookie(): string {
-  if (typeof document === "undefined") return "";
-  const match = document.cookie.match(/(?:^|;\s*)user_email=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : "";
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,13 +62,9 @@ function getReviewBadgeVariant(
 // ---------------------------------------------------------------------------
 
 export default function WatchlistPage() {
-  const [userEmail, setUserEmail] = useState("");
+  const userEmail = useAuthStore((s) => s.email) ?? "";
   const [watchlistOpen, setWatchlistOpen] = useState(true);
   const [favoritesOpen, setFavoritesOpen] = useState(true);
-
-  useEffect(() => {
-    setUserEmail(getUserEmailFromCookie());
-  }, []);
 
   // ---- Data hooks ----
 
