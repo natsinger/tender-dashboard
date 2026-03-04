@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 interface DeadlineBadgeProps {
   /** Number of calendar days remaining until the deadline. */
   daysRemaining: number | null | undefined;
+  /** Show only the colored dot (no text). Useful for tight table columns. */
+  compact?: boolean;
   /** Additional CSS classes. */
   className?: string;
 }
@@ -70,9 +72,23 @@ function getBadgeStyle(days: number | null | undefined): BadgeStyle {
 
 export function DeadlineBadge({
   daysRemaining,
+  compact = false,
   className,
 }: DeadlineBadgeProps) {
   const style = getBadgeStyle(daysRemaining);
+
+  if (compact) {
+    const title =
+      daysRemaining != null && !Number.isNaN(daysRemaining)
+        ? `${daysRemaining} \u05D9\u05DE\u05D9\u05DD`
+        : "";
+    return (
+      <span
+        className={cn("inline-block h-2.5 w-2.5 shrink-0 rounded-full", style.bg, style.border, "border", className)}
+        title={title}
+      />
+    );
+  }
 
   const label =
     daysRemaining != null && !Number.isNaN(daysRemaining)

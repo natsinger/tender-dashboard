@@ -97,12 +97,12 @@ const compactColumns: ColumnDef<CompactRow, unknown>[] = [
     id: "deadline_fmt",
     header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
     cell: ({ row }) => (
-      <div className="flex items-center gap-1">
-        <span className="text-sm">{formatDeadline(row.original.deadline)}</span>
+      <div className="flex items-center gap-1.5 whitespace-nowrap">
         <DeadlineBadge
           daysRemaining={row.original.days_to_deadline}
-          className="text-[10px]"
+          compact
         />
+        <span className="text-sm">{formatDeadline(row.original.deadline)}</span>
       </div>
     ),
   },

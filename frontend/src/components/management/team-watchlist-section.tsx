@@ -112,14 +112,14 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     cell: ({ row }) => {
       const t = row.original.tender;
       return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <DeadlineBadge
+            daysRemaining={row.original.days_to_deadline}
+            compact
+          />
           <span className="text-sm">
             {formatDeadline(t?.deadline ?? null)}
           </span>
-          <DeadlineBadge
-            daysRemaining={row.original.days_to_deadline}
-            className="text-[10px]"
-          />
         </div>
       );
     },
