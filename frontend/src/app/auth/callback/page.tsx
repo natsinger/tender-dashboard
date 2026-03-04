@@ -1,13 +1,14 @@
 /**
  * Auth callback page for Supabase Magic Link.
  *
- * Handles two flows:
- * 1. PKCE code exchange — Supabase redirects with ?code=AUTH_CODE
- * 2. Direct token verification — email template links with ?token_hash=HASH&type=TYPE
+ * IMPORTANT: createBrowserClient from @supabase/ssr auto-detects ?code=
+ * in the URL and exchanges it during initialization (detectSessionInUrl).
+ * We must NOT call exchangeCodeForSession() ourselves — the code is
+ * single-use and would fail on the second call. Instead, we listen for
+ * the session to appear via onAuthStateChange.
  *
- * Uses the BROWSER Supabase client so the PKCE code_verifier cookie is
- * accessible. After establishing the session, navigates to /management
- * (full page load triggers the proxy for role validation).
+ * For ?token_hash= flow (custom email templates), we call verifyOtp()
+ * explicitly since that's not auto-detected.
  */
 "use client";
 
@@ -22,51 +23,68 @@ function CallbackHandler() {
   const processed = useRef(false);
 
   useEffect(() => {
-    // Prevent double-processing in React strict mode
     if (processed.current) return;
     processed.current = true;
 
-    async function handleCallback() {
-      const code = searchParams.get("code");
-      const tokenHash = searchParams.get("token_hash");
-      const type = searchParams.get("type") as EmailOtpType | null;
+    const code = searchParams.get("code");
+    const tokenHash = searchParams.get("token_hash");
+    const type = searchParams.get("type") as EmailOtpType | null;
 
-      try {
-        if (tokenHash && type) {
-          // Direct token verification (custom email template)
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type,
-          });
+    // No auth parameters at all
+    if (!code && !tokenHash) {
+      window.location.href = "/login?error=missing_code";
+      return;
+    }
 
+    // --- token_hash flow (custom email templates) ---
+    // Not auto-detected, so we verify explicitly.
+    if (tokenHash && type) {
+      supabase.auth
+        .verifyOtp({ token_hash: tokenHash, type })
+        .then(({ error }) => {
           if (error) {
             console.error("[Auth Callback] verifyOtp failed:", error.message);
             window.location.href = "/login?error=auth_failed";
-            return;
+          } else {
+            window.location.href = "/management";
           }
-        } else if (code) {
-          // PKCE code exchange (default Supabase email flow)
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-          if (error) {
-            console.error("[Auth Callback] exchangeCodeForSession failed:", error.message);
-            window.location.href = "/login?error=auth_failed";
-            return;
-          }
-        } else {
-          window.location.href = "/login?error=missing_code";
-          return;
-        }
-
-        // Session established — full page nav triggers proxy role validation
-        window.location.href = "/management";
-      } catch (err) {
-        console.error("[Auth Callback] Unexpected error:", err);
-        window.location.href = "/login?error=auth_failed";
-      }
+        });
+      return;
     }
 
-    handleCallback();
+    // --- ?code= PKCE flow ---
+    // createBrowserClient auto-detects ?code= and exchanges it during
+    // initialization. We just wait for the session to appear.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          cleanup();
+          window.location.href = "/management";
+        }
+      },
+    );
+
+    // Check if session was already established before we subscribed
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        cleanup();
+        window.location.href = "/management";
+      }
+    });
+
+    // Timeout: if session isn't established within 10s, something failed
+    const timeout = setTimeout(() => {
+      cleanup();
+      console.error("[Auth Callback] Timed out waiting for session");
+      window.location.href = "/login?error=auth_failed";
+    }, 10_000);
+
+    function cleanup() {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    }
+
+    return cleanup;
   }, [searchParams]);
 
   return (
