@@ -23,7 +23,16 @@ from typing import Optional
 # Add project root to path (for standalone execution)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import DASHBOARD_URL, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER
+from config import (
+    ALERT_RECIPIENTS,
+    DASHBOARD_URL,
+    SMTP_FROM,
+    SMTP_HOST,
+    SMTP_PASSWORD,
+    SMTP_PORT,
+    SMTP_USER,
+    TEAM_EMAIL,
+)
 from data_client import build_document_url
 from db import TenderDB
 from user_db import UserDB
@@ -226,7 +235,8 @@ class AlertEngine:
                 ta.tender_id, ta.tender_name, len(ta.new_docs),
             )
             for doc in ta.new_docs:
-                logger.info("    - %s (%s)", doc["doc_name"], doc["first_seen"])
+                doc_label = doc.get("description") or doc.get("doc_name", "מסמך")
+                logger.info("    - %s (%s)", doc_label, doc["first_seen"])
 
     # ── Email composition ────────────────────────────────────────────────
 
@@ -246,8 +256,12 @@ class AlertEngine:
         subject = f"🏗️ עדכון מכרזים — {bundle.total_docs} מסמכים חדשים"
         html_body = self._compose_html(bundle)
 
+        # Team watchlist alerts go to all ALERT_RECIPIENTS
+        recipients: str | list[str] = (
+            ALERT_RECIPIENTS if bundle.user_email == TEAM_EMAIL else bundle.user_email
+        )
         return send_smtp_email(
-            to=bundle.user_email,
+            to=recipients,
             subject=subject,
             html_body=html_body,
         )
@@ -280,16 +294,17 @@ class AlertEngine:
                     "FileType": doc.get("file_type", "application/pdf"),
                 }
                 doc_url = build_document_url(doc_url_data)
-                doc_name = doc.get("doc_name", "מסמך")
-                doc_desc = doc.get("description", "")
+                doc_desc = doc.get("description", "") or doc.get("doc_name", "מסמך")
                 doc_date = doc.get("first_seen", "")
 
                 doc_items.append(
-                    f'<li style="margin-bottom:6px;">'
-                    f'<a href="{doc_url}" style="color:#4318FF;text-decoration:none;">'
-                    f'{doc_name}</a>'
-                    f'<span style="color:#A3AED0;font-size:13px;"> — '
-                    f'{doc_desc} ({doc_date})</span></li>'
+                    f'<li style="margin-bottom:8px;">'
+                    f'<span style="font-weight:500;color:#2B3674;">{doc_desc}</span>'
+                    f'<span style="color:#A3AED0;font-size:13px;"> ({doc_date})</span>'
+                    f'<br>'
+                    f'<a href="{doc_url}" style="color:#4318FF;text-decoration:none;'
+                    f'font-size:13px;">⬇ הורד מסמך</a>'
+                    f'</li>'
                 )
 
             deadline_str = ta.deadline or "לא צוין"
@@ -352,7 +367,7 @@ class AlertEngine:
 # ── SMTP sending ─────────────────────────────────────────────────────────────
 
 def send_smtp_email(
-    to: str,
+    to: str | list[str],
     subject: str,
     html_body: str,
     smtp_host: str = SMTP_HOST,
@@ -364,7 +379,7 @@ def send_smtp_email(
     """Send an HTML email via SMTP with TLS.
 
     Args:
-        to: Recipient email address.
+        to: Recipient email address or list of addresses.
         subject: Email subject line.
         html_body: HTML content for the email body.
         smtp_host: SMTP server hostname.
@@ -376,10 +391,11 @@ def send_smtp_email(
     Returns:
         True if sent successfully, False otherwise.
     """
+    recipients = to if isinstance(to, list) else [to]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = from_addr or smtp_user
-    msg["To"] = to
+    msg["To"] = ", ".join(recipients)
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
@@ -388,11 +404,11 @@ def send_smtp_email(
             server.starttls()
             server.ehlo()
             server.login(smtp_user, smtp_password)
-            server.sendmail(msg["From"], [to], msg.as_string())
-        logger.info("Email sent to %s", to)
+            server.sendmail(msg["From"], recipients, msg.as_string())
+        logger.info("Email sent to %s", ", ".join(recipients))
         return True
     except Exception as exc:
-        logger.error("Failed to send email to %s: %s", to, exc)
+        logger.error("Failed to send email to %s: %s", ", ".join(recipients), exc)
         return False
 
 
