@@ -32,5 +32,11 @@ export function createMiddlewareClient(request: NextRequest) {
     }
   );
 
-  return { supabase, response };
+  return {
+    supabase,
+    /** Always returns the latest response (after any token refresh by setAll). */
+    get response() {
+      return response;
+    },
+  };
 }

@@ -54,26 +54,35 @@ export default async function proxy(request: NextRequest) {
 
   // ── Intercept auth code from Supabase email redirects ──
   // Signup confirmation emails redirect to the Site URL (/) instead of
-  // /auth/callback. If we see a ?code= param on any non-callback route,
-  // forward it to the callback handler.
+  // /auth/callback. If we see a ?code= param with a Supabase `type` param
+  // on any non-callback route, forward it to the callback handler.
   const authCode = request.nextUrl.searchParams.get("code");
-  if (authCode && !pathname.startsWith("/auth/callback")) {
+  const authType = request.nextUrl.searchParams.get("type");
+  if (authCode && authType && !pathname.startsWith("/auth/callback")) {
     const callbackUrl = new URL("/auth/callback", request.url);
     callbackUrl.searchParams.set("code", authCode);
+    callbackUrl.searchParams.set("type", authType);
     return NextResponse.redirect(callbackUrl);
   }
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   try {
-    // Create Supabase client with cookie bridging (also refreshes tokens)
-    const { supabase, response } = createMiddlewareClient(request);
+    // Create Supabase client with cookie bridging (also refreshes tokens).
+    // NOTE: Do NOT destructure `response` here -- it would capture a stale
+    // value. The getter on the returned object always returns the latest
+    // response after any token refresh performed by getUser().
+    const client = createMiddlewareClient(request);
+    const { supabase } = client;
 
     // Validate session via JWT verification
     const {
       data: { user },
       error,
     } = await supabase.auth.getUser();
+
+    // Read response AFTER getUser() so we get the version with refreshed cookies
+    const response = client.response;
 
     if (process.env.NODE_ENV === "development") {
       console.log("[Middleware]", pathname, "| user:", user?.email ?? "none", "| error:", error?.message ?? "none");
@@ -84,7 +93,12 @@ export default async function proxy(request: NextRequest) {
       if (user?.email) {
         const role = resolveRole(user.email);
         if (role) {
-          return NextResponse.redirect(new URL("/management", request.url));
+          const redirect = NextResponse.redirect(new URL("/management", request.url));
+          // Copy refreshed session cookies to the redirect response
+          for (const cookie of response.cookies.getAll()) {
+            redirect.cookies.set(cookie.name, cookie.value);
+          }
+          return redirect;
         }
       }
       return response;
@@ -105,7 +119,9 @@ export default async function proxy(request: NextRequest) {
     }
 
     if (!role) {
-      await supabase.auth.signOut();
+      // Don't call signOut() here -- it clears cookies on the internal
+      // middleware response, not on the redirect we actually send.
+      // The login page will handle the unauthorized state.
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("error", "unauthorized");
       return NextResponse.redirect(loginUrl);
