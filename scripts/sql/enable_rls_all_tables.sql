@@ -22,8 +22,8 @@ ALTER TABLE IF EXISTS alert_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS building_rights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS tender_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS taba_analytics ENABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS lot_count ENABLE ROW LEVEL SECURITY;
 -- tender_lots already has RLS enabled
+-- Note: lot_count is a column on tenders, not a separate table
 
 -- ============================================================================
 -- 2. REVOKE WRITE ACCESS FROM ANON ON DATA TABLES
@@ -36,7 +36,6 @@ REVOKE INSERT, UPDATE, DELETE ON alert_history FROM anon;
 REVOKE INSERT, UPDATE ON building_rights FROM anon;
 REVOKE INSERT, UPDATE ON tender_prices FROM anon;
 REVOKE INSERT, UPDATE ON taba_analytics FROM anon;
-REVOKE INSERT, UPDATE ON lot_count FROM anon;
 -- Also clean up tender_lots: RLS blocks writes, but remove the GRANT too
 REVOKE INSERT, UPDATE ON tender_lots FROM anon;
 
@@ -97,17 +96,6 @@ CREATE POLICY "Authenticated users can read taba_analytics"
 
 CREATE POLICY "Service role has full access to taba_analytics"
   ON taba_analytics FOR ALL
-  TO service_role
-  USING (true);
-
--- lot_count
-CREATE POLICY "Authenticated users can read lot_count"
-  ON lot_count FOR SELECT
-  TO authenticated
-  USING (true);
-
-CREATE POLICY "Service role has full access to lot_count"
-  ON lot_count FOR ALL
   TO service_role
   USING (true);
 
@@ -197,7 +185,6 @@ GRANT SELECT ON tender_documents TO authenticated;
 GRANT SELECT ON building_rights TO authenticated;
 GRANT SELECT ON tender_prices TO authenticated;
 GRANT SELECT ON taba_analytics TO authenticated;
-GRANT SELECT ON lot_count TO authenticated;
 GRANT SELECT ON tender_lots TO authenticated;
 GRANT SELECT ON alert_history TO authenticated;
 
