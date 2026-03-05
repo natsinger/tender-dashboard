@@ -153,6 +153,12 @@ def _overlay_pdf_onto_api(
     """
     merged_lot = dict(api_lot)
 
+    # PDF lot_number (sequential from brochure) becomes the canonical lot_number.
+    # API's mitcham_name and gush_helka_raw are always preserved.
+    pdf_lot_number = pdf_lot.get("lot_number")
+    if pdf_lot_number is not None:
+        merged_lot["lot_number"] = pdf_lot_number
+
     # Overlay PDF-only fields
     for field in PDF_ONLY_FIELDS:
         pdf_val = pdf_lot.get(field)
@@ -165,6 +171,10 @@ def _overlay_pdf_onto_api(
             pdf_val = pdf_lot.get(field)
             if pdf_val is not None:
                 merged_lot[field] = pdf_val
+
+    # Always preserve API's mitcham_name and gush_helka_raw on the merged record
+    # (they come from the api_lot base via dict(api_lot) above, but ensure they
+    # are not overwritten by PDF values which wouldn't have them).
 
     merged_lot["data_source"] = "merged"
     return merged_lot
@@ -201,6 +211,13 @@ def _enrich_pdf_with_api_aggregate(
             api_val = api_lot.get(field)
             if api_val is not None:
                 enriched[field] = api_val
+
+    # Preserve API's mitcham_name and gush_helka_raw on the merged record.
+    # These are API-sourced identifiers that PDF lots don't have.
+    for field in ("mitcham_name", "gush_helka_raw"):
+        api_val = api_lot.get(field)
+        if api_val is not None:
+            enriched[field] = api_val
 
     enriched["data_source"] = "merged"
     return enriched

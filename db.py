@@ -21,6 +21,7 @@ Usage:
     df = db.load_current_tenders()
 """
 
+import json
 import logging
 import math
 import traceback
@@ -1090,9 +1091,15 @@ class TenderDB:
         db_rows: list[dict] = []
 
         for lot in lots:
+            # Serialize gush_helka_raw list to JSON string for JSONB column
+            gush_helka_raw = lot.get("gush_helka_raw")
+            if gush_helka_raw is not None:
+                gush_helka_raw = json.dumps(gush_helka_raw, ensure_ascii=False)
+
             db_row = _clean_dict({
                 "tender_id": tender_id,
                 "lot_number": lot.get("lot_number"),
+                "mitcham_name": lot.get("mitcham_name"),
                 "plot_numbers": lot.get("plot_numbers"),
                 "area_sqm": lot.get("area_sqm"),
                 "units_target_price": lot.get("units_target_price"),
@@ -1108,6 +1115,7 @@ class TenderDB:
                 "zoning_designation": lot.get("zoning_designation"),
                 "gush": lot.get("gush"),
                 "helka": lot.get("helka"),
+                "gush_helka_raw": gush_helka_raw,
                 "winner_name": lot.get("winner_name"),
                 "winning_amount": lot.get("winning_amount"),
                 "data_source": lot.get("data_source"),
@@ -1115,18 +1123,31 @@ class TenderDB:
             })
             db_rows.append(db_row)
 
+        # Delete-then-insert pattern: partial unique indexes on tender_lots
+        # use different columns per data_source (mitcham_name for api/merged,
+        # lot_number for pdf), making a single on_conflict clause impossible.
+        # Since we always re-extract all lots per tender, delete first is safe.
         inserted = 0
+        try:
+            self._client.table("tender_lots").delete().eq(
+                "tender_id", tender_id,
+            ).execute()
+        except Exception as exc:
+            logger.error(
+                "delete lots failed for tender %d: %s", tender_id, exc,
+            )
+            return 0
+
         for i in range(0, len(db_rows), _BATCH_SIZE):
             batch = db_rows[i : i + _BATCH_SIZE]
             try:
-                self._client.table("tender_lots").upsert(
+                self._client.table("tender_lots").insert(
                     batch,
-                    on_conflict="tender_id,lot_number",
                 ).execute()
                 inserted += len(batch)
             except Exception as exc:
                 logger.error(
-                    "upsert_lots failed for tender %d: %s", tender_id, exc,
+                    "insert lots failed for tender %d: %s", tender_id, exc,
                 )
 
         if inserted:

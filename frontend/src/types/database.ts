@@ -185,6 +185,10 @@ export interface TenderLot {
   winner_name: string | null;
   winning_amount: number | null;
   data_source: string | null;
+  /** RMI mitcham identifier (from API lots). */
+  mitcham_name: string | null;
+  /** Raw gush/helka array from API (JSON). */
+  gush_helka_raw: Record<string, unknown>[] | null;
   /** ISO datetime string. */
   updated_at: string | null;
 }

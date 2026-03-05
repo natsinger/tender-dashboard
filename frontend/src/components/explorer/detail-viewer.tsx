@@ -329,7 +329,7 @@ export function DetailViewer({
                       <div key={tik.TikID ?? idx}>
                         {rmiDetails.Tik.length > 1 && (
                           <p className="mb-1 text-xs font-semibold text-slate-600">
-                            {"\u05DE\u05EA\u05D7\u05DD"} {tik.MitchamName ?? idx + 1}
+                            {'\u05DE\u05D6\u05D4\u05D4 \u05E8\u05DE"\u05D9'} {tik.MitchamName ?? idx + 1}
                           </p>
                         )}
 
@@ -546,6 +546,11 @@ export function DetailViewer({
                             <th className="px-2 py-1 text-right">
                               {"\u05DE\u05EA\u05D7\u05DD"}
                             </th>
+                            {lots.some((l) => l.mitcham_name) && (
+                              <th className="px-2 py-1 text-right">
+                                {'\u05DE\u05D6\u05D4\u05D4 \u05E8\u05DE"\u05D9'}
+                              </th>
+                            )}
                             <th className="px-2 py-1 text-right">
                               {"\u05D2\u05D5\u05E9"}
                             </th>
@@ -581,6 +586,11 @@ export function DetailViewer({
                               <td className="px-2 py-1">
                                 {lot.lot_number ?? "\u2014"}
                               </td>
+                              {lots.some((l) => l.mitcham_name) && (
+                                <td className="px-2 py-1">
+                                  {lot.mitcham_name ?? "\u2014"}
+                                </td>
+                              )}
                               <td className="px-2 py-1">
                                 {lot.gush ?? "\u2014"}
                               </td>
