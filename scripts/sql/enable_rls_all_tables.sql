@@ -4,7 +4,7 @@
  * Addresses critical findings:
  *   C1: Missing RLS on 9 of 10 Supabase tables
  *   C2: Anon key has INSERT/UPDATE on data tables
- *   H4: Cross-user watchlist/review access
+ *   H4: Team-wide watchlist/review access (shared dashboard with audit trail)
  *
  * Run this in the Supabase SQL Editor (Dashboard → SQL Editor → New Query).
  * Review each section before executing.
