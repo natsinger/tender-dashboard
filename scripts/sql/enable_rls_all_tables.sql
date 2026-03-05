@@ -119,67 +119,69 @@ CREATE POLICY "Authenticated users can read tender_lots"
   USING (true);
 
 -- ============================================================================
--- 4. USER-SCOPED POLICIES — Watchlist & Reviews
---    Users can only see and modify their own data.
+-- 4. TEAM POLICIES — Watchlist, Reviews & Alert History
+--    This is a team dashboard. All authenticated users (team + management)
+--    can read all rows. Team members have full CRUD. Changes are tracked
+--    via the updated_by / user_email columns (audit trail).
 -- ============================================================================
 
--- user_watchlist: user can only access their own rows
-CREATE POLICY "Users can read own watchlist"
+-- user_watchlist: all authenticated users can read; all can write (team dashboard)
+CREATE POLICY "Authenticated users can read all watchlist entries"
   ON user_watchlist FOR SELECT
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
-CREATE POLICY "Users can insert own watchlist"
+CREATE POLICY "Authenticated users can insert watchlist entries"
   ON user_watchlist FOR INSERT
   TO authenticated
-  WITH CHECK (user_email = auth.jwt() ->> 'email');
+  WITH CHECK (true);
 
-CREATE POLICY "Users can update own watchlist"
+CREATE POLICY "Authenticated users can update watchlist entries"
   ON user_watchlist FOR UPDATE
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
-CREATE POLICY "Users can delete own watchlist"
+CREATE POLICY "Authenticated users can delete watchlist entries"
   ON user_watchlist FOR DELETE
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
 CREATE POLICY "Service role has full access to user_watchlist"
   ON user_watchlist FOR ALL
   TO service_role
   USING (true);
 
--- tender_reviews: user can only access their own rows
-CREATE POLICY "Users can read own reviews"
+-- tender_reviews: all authenticated users can read; all can write (team dashboard)
+CREATE POLICY "Authenticated users can read all reviews"
   ON tender_reviews FOR SELECT
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
-CREATE POLICY "Users can insert own reviews"
+CREATE POLICY "Authenticated users can insert reviews"
   ON tender_reviews FOR INSERT
   TO authenticated
-  WITH CHECK (user_email = auth.jwt() ->> 'email');
+  WITH CHECK (true);
 
-CREATE POLICY "Users can update own reviews"
+CREATE POLICY "Authenticated users can update reviews"
   ON tender_reviews FOR UPDATE
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
-CREATE POLICY "Users can delete own reviews"
+CREATE POLICY "Authenticated users can delete reviews"
   ON tender_reviews FOR DELETE
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
 CREATE POLICY "Service role has full access to tender_reviews"
   ON tender_reviews FOR ALL
   TO service_role
   USING (true);
 
--- alert_history: user can only read their own alert history
-CREATE POLICY "Users can read own alert_history"
+-- alert_history: all authenticated users can read (visibility for team coordination)
+CREATE POLICY "Authenticated users can read all alert_history"
   ON alert_history FOR SELECT
   TO authenticated
-  USING (user_email = auth.jwt() ->> 'email');
+  USING (true);
 
 CREATE POLICY "Service role has full access to alert_history"
   ON alert_history FOR ALL
