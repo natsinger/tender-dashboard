@@ -77,6 +77,15 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     ),
   },
   {
+    accessorKey: "review_notes",
+    header: "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA",
+    cell: ({ getValue }) => (
+      <span className="text-xs text-slate-500">
+        {getValue<string>() || "\u2014"}
+      </span>
+    ),
+  },
+  {
     id: "booklet",
     header: "\u05D7\u05D5\u05D1\u05E8\u05EA",
     cell: ({ row }) =>
