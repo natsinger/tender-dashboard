@@ -594,9 +594,6 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
     for field in ("area_sqm", "min_price"):
         if field not in df.columns:
             df[field] = 0
-    for field in ("gush", "helka"):
-        if field not in df.columns:
-            df[field] = None
 
     # Compute tender_duration_days (publish_date to deadline)
     if "publish_date" in df.columns and "deadline" in df.columns:
@@ -707,18 +704,27 @@ def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
         "SchumZchiya": "winning_amount",
     }
 
-    for tik in tik_list:
+    for idx, tik in enumerate(tik_list):
         lot: Dict[str, Any] = {"data_source": "api"}
 
-        # Lot number — parse MitchamName as int if possible
+        # Lot number — parse MitchamName as int if possible.
+        # Always preserve the raw MitchamName string in mitcham_name.
+        # Use 1-based Tik array index as positional fallback for lot_number
+        # when MitchamName is non-numeric.
         mitcham_name = tik.get("MitchamName")
         if mitcham_name is not None:
             mitcham_str = str(mitcham_name).strip()
+            lot["mitcham_name"] = mitcham_str  # Always preserve raw value
             try:
                 lot["lot_number"] = int(mitcham_str)
             except ValueError:
-                lot["lot_number"] = None
-                logger.debug("Non-numeric MitchamName: %r", mitcham_str)
+                lot["lot_number"] = idx + 1  # Positional fallback (1-based)
+                logger.debug(
+                    "Non-numeric MitchamName: %r — using positional lot_number=%d",
+                    mitcham_str, idx + 1,
+                )
+        else:
+            lot["lot_number"] = idx + 1  # Positional fallback when MitchamName is None
 
         for api_field, lot_field in _NUMERIC_MAP.items():
             val = tik.get(api_field)
@@ -750,6 +756,10 @@ def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
         # Gush + Helka from GushHelka[]
         gush_helka_list = tik.get("GushHelka", [])
         if gush_helka_list:
+            # Preserve raw structured array for future JSONB storage
+            lot["gush_helka_raw"] = gush_helka_list
+
+            # Continue building comma-joined gush/helka for backward compat
             gushim = []
             helkot = []
             for gh in gush_helka_list:
