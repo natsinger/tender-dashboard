@@ -20,6 +20,8 @@ interface AuthState {
   role: UserRole;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Whether initialize() has completed successfully with an authenticated user. */
+  initialized: boolean;
   initialize: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -33,14 +35,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   role: null,
   isAuthenticated: false,
   isLoading: true,
+  initialized: false,
 
   /**
    * Initialize auth state from the current Supabase session.
    * Called once on app load (in AuthGuard).
+   *
+   * Allows retry: if the user is not authenticated, `initialized` stays
+   * false so a subsequent call (e.g., after magic-link callback) can
+   * re-attempt.
    */
   initialize: async () => {
-    // Prevent duplicate initialization
-    if (!get().isLoading) return;
+    // Prevent duplicate initialization only when already authenticated
+    if (get().initialized) return;
+
+    set({ isLoading: true });
 
     try {
       const {
@@ -50,6 +59,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       if (user?.email) {
         // Fetch role from server-side API
         const res = await fetch("/api/auth/role");
+
+        if (!res.ok) {
+          // Non-200 response -- treat as unauthenticated
+          set({
+            email: null,
+            role: null,
+            isAuthenticated: false,
+            isLoading: false,
+            initialized: false,
+          });
+          return;
+        }
+
         const { role } = (await res.json()) as { role: UserRole };
 
         set({
@@ -57,6 +79,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           role: role ?? null,
           isAuthenticated: true,
           isLoading: false,
+          initialized: true,
         });
       } else {
         set({
@@ -64,6 +87,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           role: null,
           isAuthenticated: false,
           isLoading: false,
+          initialized: false,
         });
       }
     } catch {
@@ -72,6 +96,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         role: null,
         isAuthenticated: false,
         isLoading: false,
+        initialized: false,
       });
     }
   },
@@ -84,6 +109,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       role: null,
       isAuthenticated: false,
       isLoading: false,
+      initialized: false,
     });
   },
 }));

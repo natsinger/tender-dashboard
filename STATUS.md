@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-03-05 (session 21 — Security audit & hardening)
+**Last updated:** 2026-03-05 (session 22 — Auth fix: dual login + SMTP template fix)
 
 ---
 
@@ -70,6 +70,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-03-05 | **Auth fix: dual login + SMTP template fix** — Root cause: broken HTML tag in Supabase magic link email template (`<h2כניסה` missing `>`) caused Go template engine to crash with 500 on every OTP request. Code fixes: (1) **middleware.ts** — getter pattern for response (fixes stale closure after token refresh). (2) **proxy.ts** — lazy response access after `getUser()`, removed signOut from redirect branch, narrower auth code interception (requires both `?code=` AND `?type=`), cookie copying to redirect responses. (3) **login/page.tsx** — refactored to tabs UI with two auth methods: magic link ("קישור קסם") + password login ("סיסמה") with signup flow (8-char min + confirm), dev-mode error debugging shows actual Supabase error, all OTP errors now block success flow. (4) **auth-store.ts** — separate `initialized` flag (prevents one-shot failure), `res.ok` guard on `/api/auth/role` response. Build passes, all verification checks pass, magic links confirmed working after template fix. | `frontend/src/lib/supabase/middleware.ts`, `frontend/src/proxy.ts`, `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/stores/auth-store.ts` |
 | 2026-03-05 | **Security audit & hardening** — Comprehensive security audit (50 findings: 4 critical, 12 high, 22 medium, 12 low). Fixes applied on `security_fixes` branch: (1) **RLS migration SQL** — enables Row Level Security on all 9 unprotected Supabase tables, revokes anon writes, adds team-wide policies for watchlist/reviews/alerts, read-only on data tables (MUST run manually in SQL Editor). (2) **CSP header** — Content-Security-Policy added to next.config.ts (script/style/img/connect/frame-ancestors). (3) **GH Actions command injection** — `${{ github.event.inputs.tender_id }}` moved to env var intermediary in extract_building_rights.yml. (4) **SMTP_HOST secret** — hardcoded value moved to `${{ secrets.SMTP_HOST }}` in daily_refresh.yml (MUST add GitHub secret). (5) **HTML email sanitization** — all dynamic values in alerts.py wrapped with `html.escape()`. (6) **CSV formula injection** — cells starting with `=+\-@\t` prefixed with `'` in csv-export.tsx. (7) **Auth hardening** — `getSession()` → `getUser()` in auth-store.ts, OTP type validation against allowlist, generic Hebrew error messages in callback. (8) **Console log gating** — all console.log/warn/error wrapped in `NODE_ENV === "development"` across 10 files. (9) **npm audit fix** — 0 vulnerabilities (hono + @hono/node-server patched). TypeScript compiles cleanly. | `alerts.py`, `frontend/next.config.ts`, `.github/workflows/extract_building_rights.yml`, `.github/workflows/daily_refresh.yml`, `frontend/src/stores/auth-store.ts`, `frontend/src/app/auth/callback/page.tsx`, `frontend/src/components/explorer/csv-export.tsx`, `frontend/src/proxy.ts`, `frontend/src/lib/supabase/client.ts`, `frontend/src/lib/supabase/server.ts`, `frontend/src/components/error-boundary.tsx`, `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/hooks/use-bulk-lots.ts`, `frontend/src/hooks/use-reviews.ts`, `frontend/src/hooks/use-documents.ts`, `scripts/sql/enable_rls_all_tables.sql` (NEW) |
 | 2026-03-04 | **Explorer: show land & pricing data from API** — Added "נתוני קרקע ומחירים" section to Explorer detail viewer, displaying per-lot data directly from the API Tik[] array: area (שטח), reserve price (מחיר סף), appraisal (שומה), development costs (עלויות פיתוח), guarantee (ערבות), units per lot (יח"ד), gush/helka, and taba/plan number. Data was already fetched but never displayed. Works for single and multi-lot tenders. | `pages/explorer.py` |
 | 2026-02-24 | **Automate extraction pipeline + fix merge bug** — (1) Building rights batch (`extract_building_rights_batch.py`): new `get_tenders_needing_building_rights()` queries ALL active tenders with brochure (not just watchlisted); default behavior changed; `MAX_PER_RUN` 10→20; `--watchlist-only` flag for legacy mode. (2) Daily refresh workflow: building rights moved after lot extraction (faster pipeline), limit 5→20, step renamed. (3) **Critical merge fix** in `merge_api_and_pdf_lots()`: lot_number mismatch between API (MitchamName-based) and PDF (sequential/parcel-based) caused zero merges — added 4-level fallback (exact match → positional → PDF-as-base → partial positional). Verified on tenders 405/2024 (8 lots, 7 merged with target/free data) and 311/2025 (23 lots, all merged, sum=2868). 305 tests pass. | `scripts/extract_building_rights_batch.py`, `scripts/extract_lots_batch.py`, `.github/workflows/daily_refresh.yml` |
@@ -123,25 +124,27 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 2. **Date range filter removed** — The urgency toggle replaces the old date range picker. May want to add it back as an "advanced" option.
 3. **Pie chart click-to-filter** — Plotly click events don't wire easily to Streamlit filters. Deferred.
 4. **Streamlit Cloud auth** — Viewer auth not enforced. Using sidebar email input as fallback (works but self-reported).
-5. **SMTP not configured** — Need working SMTP2GO credentials in GitHub secrets (`SMTP2GO_USER`, `SMTP2GO_PASSWORD`). Alert system now logs clear errors when unconfigured (fixed in session 15).
+5. ~~**SMTP not configured**~~ — **RESOLVED** (session 22). SMTP2GO credentials are correct; root cause was broken HTML tag in Supabase magic link email template. Fixed in Supabase Dashboard.
 6. **Supabase setup pending** — Need to run SQL schema creation + GRANT SQL + migrate data before app will load from Supabase.
 7. **Streamlit use_container_width deprecation** — Still supported in Streamlit 1.54.0 but may be deprecated in future versions. Migrate to `width` parameter when needed.
 8. **Old brochure format DB columns** — `max_licensable_area` and `development_costs` fields are now extracted but need corresponding columns added to the `tender_lots` table in Supabase (run ALTER TABLE).
 9. **SMTP_HOST GitHub secret needed** — After merging `security_fixes`, add `SMTP_HOST` secret with value `mail.smtp2go.com` to GitHub repo secrets (was previously hardcoded in workflow YAML).
 10. **RLS migration pending** — Run `scripts/sql/enable_rls_all_tables.sql` in Supabase SQL Editor to enable Row Level Security on all tables. Without this, the anon key (visible in browser) allows unrestricted read/write. Policies use team-wide access (all authenticated users see all rows) — role-based restrictions (team vs management) are enforced in frontend via `TEAM_EMAILS` / `MANAGEMENT_EMAILS` env vars.
+11. **Production auth env vars needed** — Must set in Vercel env vars: `NEXT_PUBLIC_SITE_URL` (production URL), `TEAM_EMAILS`, `MANAGEMENT_EMAILS`, `NEXT_PUBLIC_TEAM_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY`. Must also set Supabase Dashboard Site URL + Redirect URLs to production URL.
 
 ---
 
 ## Next Steps
 
-1. **Run lot extraction SQL schema** — Execute `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table with 21 columns including API-sourced fields: total_units, development_costs, gush, helka, winner_name, winning_amount, data_source).
-2. **Run lot extraction batch** — Execute `python scripts/extract_lots_batch.py --limit 20` to process first batch of tenders with brochures.
-3. **Add lot extraction to daily cron** — Add `extract_lots_batch.py` step to `.github/workflows/daily_refresh.yml` after document sync.
-4. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
-5. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
-6. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
-7. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
-8. **Expand test coverage** — Add tests for data_client, db, alerts, and dashboard_utils modules.
+1. **Deploy auth to production** — Set Vercel env vars (`NEXT_PUBLIC_SITE_URL`, `TEAM_EMAILS`, `MANAGEMENT_EMAILS`, `NEXT_PUBLIC_TEAM_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY`). Update Supabase Dashboard: Site URL → production URL, add production `/auth/callback` to Redirect URLs.
+2. **Run lot extraction SQL schema** — Execute `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table with 21 columns including API-sourced fields: total_units, development_costs, gush, helka, winner_name, winning_amount, data_source).
+3. **Run lot extraction batch** — Execute `python scripts/extract_lots_batch.py --limit 20` to process first batch of tenders with brochures.
+4. **Add lot extraction to daily cron** — Add `extract_lots_batch.py` step to `.github/workflows/daily_refresh.yml` after document sync.
+5. **Run building rights SQL schema** — Execute `scripts/sql/building_rights_schema.sql` in Supabase SQL Editor (adds `plan_number`, `building_rights` table, brochure columns).
+6. **Create GitHub PAT** — Create a PAT with `actions:write` scope, add as `GH_PAT` to Streamlit Cloud secrets.
+7. **Test building rights flow** — Click "נתח זכויות בנייה" in a tender detail view, verify brochure summary appears and GH Actions triggers.
+8. **WhatsApp API** — Integrate WhatsApp Business API for review status notifications.
+9. **Expand test coverage** — Add tests for data_client, db, alerts, and dashboard_utils modules.
 
 ---
 
