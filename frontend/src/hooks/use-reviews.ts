@@ -35,7 +35,9 @@ export function useReviewStatuses(tenderIds: number[]) {
           .in("tender_id", batch);
 
         if (error) {
-          console.warn("Failed to fetch review statuses:", error.message);
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Failed to fetch review statuses:", error.message);
+          }
           continue;
         }
 

@@ -55,7 +55,9 @@ export function useBulkLots(tenderIds: number[]) {
             .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
 
           if (error) {
-            console.warn("Failed to fetch bulk lots:", error.message);
+            if (process.env.NODE_ENV === "development") {
+              console.warn("Failed to fetch bulk lots:", error.message);
+            }
             break;
           }
 

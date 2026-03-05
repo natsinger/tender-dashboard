@@ -40,7 +40,7 @@ export async function createAuthClient() {
  * Use for admin data operations only. Never expose to the browser.
  */
 export function createAdminClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
+  if ((!supabaseUrl || !serviceRoleKey) && process.env.NODE_ENV === "development") {
     console.warn(
       "[Supabase Server] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY."
     );

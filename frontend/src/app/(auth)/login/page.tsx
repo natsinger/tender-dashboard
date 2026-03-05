@@ -87,7 +87,9 @@ function LoginForm() {
       if (otpError) {
         // Rate limit or other non-critical errors — log but still show
         // "check your email" since Supabase may have sent the email anyway
-        console.warn("[Login] OTP warning:", otpError.message);
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[Login] OTP warning:", otpError.message);
+        }
 
         // Only block on critical errors, not rate limits or signup flows
         if (otpError.message?.includes("rate limit")) {
