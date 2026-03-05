@@ -1301,17 +1301,25 @@ class BrochureLotExtractor:
         best_mapping: dict[str, int] = {}
         best_num_cols: int = 0
         found_on_page: int = -1
+        # Allow continuation tables up to this many pages after the main table.
+        max_continuation_gap: int = 2
 
         for page_idx, page in enumerate(pages):
             tables = page.extract_tables()
             if not tables:
-                # --- Multi-page continuation ---
-                # If we already found the main table and this page has no
-                # tables at all, stop looking for continuations.
+                logger.debug(
+                    "Page %d: no tables extracted by pdfplumber", page_idx + 1
+                )
                 continue
 
             for table in tables:
-                if not table or len(table) < 2:
+                if not table:
+                    continue
+                # A standalone header+data table needs >= 2 rows, but a
+                # single-row continuation (last lot spilling to next page)
+                # is valid.  We skip single-row tables only BEFORE the main
+                # table is found.
+                if len(table) < 2 and found_on_page < 0:
                     continue
 
                 # Detect (possibly multi-line) header and build mapping
@@ -1322,22 +1330,40 @@ class BrochureLotExtractor:
                 if score < MIN_SECTION1_COLUMNS:
                     # Not enough columns matched — might be a continuation
                     # table on a later page (same column count, no header).
-                    if (
+                    page_gap = page_idx - found_on_page
+                    col_count = len(table[0]) if table else 0
+                    col_diff = abs(col_count - best_num_cols)
+                    is_continuation = (
                         best_score >= MIN_SECTION1_COLUMNS
-                        and page_idx == found_on_page + 1
+                        and 0 < page_gap <= max_continuation_gap
                         and table
-                        and len(table[0]) == best_num_cols
-                    ):
+                        and col_diff <= 1
+                    )
+                    if is_continuation:
                         logger.info(
-                            "Page %d: appending %d continuation rows",
+                            "Page %d: appending %d continuation rows "
+                            "(gap=%d, cols=%d vs %d)",
                             page_idx + 1,
                             len(table),
+                            page_gap,
+                            col_count,
+                            best_num_cols,
                         )
                         for row in table:
                             lot = _parse_row(row, best_mapping)
                             if lot is not None:
                                 best_lots.append(lot)
                         found_on_page = page_idx
+                    elif best_score >= MIN_SECTION1_COLUMNS:
+                        logger.debug(
+                            "Page %d: skipped table (score=%d, gap=%d, "
+                            "cols=%d vs %d) — not a continuation",
+                            page_idx + 1,
+                            score,
+                            page_gap,
+                            col_count,
+                            best_num_cols,
+                        )
                     continue
 
                 # This table qualifies. Parse data rows.

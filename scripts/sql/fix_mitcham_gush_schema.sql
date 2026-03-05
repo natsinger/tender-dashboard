@@ -38,7 +38,47 @@ WHERE  data_source IN ('api', 'merged')
   AND  lot_number IS NOT NULL
   AND  mitcham_name IS NULL;
 
--- ── Step 3: Replace the UNIQUE constraint ───────────────────────────────
+-- ── Step 3: Deduplicate existing rows ────────────────────────────────────
+-- The old UNIQUE(tender_id, lot_number) allowed multiple rows with NULL
+-- lot_number per tender (PostgreSQL treats NULLs as distinct). Before we
+-- create the new partial unique indexes, we must remove these duplicates.
+-- Strategy: for each (tender_id, COALESCE(mitcham_name, '')) group in
+-- api/merged rows, keep only the row with the highest id (most recent).
+DELETE FROM tender_lots
+WHERE id NOT IN (
+    SELECT MAX(id)
+    FROM tender_lots
+    WHERE data_source IN ('api', 'merged')
+    GROUP BY tender_id, COALESCE(mitcham_name, '')
+)
+AND data_source IN ('api', 'merged')
+AND EXISTS (
+    SELECT 1 FROM tender_lots t2
+    WHERE t2.tender_id = tender_lots.tender_id
+      AND COALESCE(t2.mitcham_name, '') = COALESCE(tender_lots.mitcham_name, '')
+      AND t2.data_source IN ('api', 'merged')
+      AND t2.id > tender_lots.id
+);
+
+-- Also deduplicate PDF rows with duplicate (tender_id, lot_number)
+DELETE FROM tender_lots
+WHERE id NOT IN (
+    SELECT MAX(id)
+    FROM tender_lots
+    WHERE data_source = 'pdf' AND lot_number IS NOT NULL
+    GROUP BY tender_id, lot_number
+)
+AND data_source = 'pdf'
+AND lot_number IS NOT NULL
+AND EXISTS (
+    SELECT 1 FROM tender_lots t2
+    WHERE t2.tender_id = tender_lots.tender_id
+      AND t2.lot_number = tender_lots.lot_number
+      AND t2.data_source = 'pdf'
+      AND t2.id > tender_lots.id
+);
+
+-- ── Step 4: Replace the UNIQUE constraint ───────────────────────────────
 -- The current UNIQUE(tender_id, lot_number) has two problems:
 --   a) NULL lot_numbers are all considered distinct by PostgreSQL, so
 --      duplicate API lots with unparseable MitchamName bypass the constraint.
@@ -78,7 +118,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_tender_lots_pdf
 -- prevent accidental duplicates per tender by using the row's id.
 -- (No additional index needed — the id PK already guarantees uniqueness.)
 
--- ── Step 4: Add indexes for new query patterns ──────────────────────────
+-- ── Step 5: Add indexes for new query patterns ──────────────────────────
 CREATE INDEX IF NOT EXISTS idx_tender_lots_mitcham_name
     ON tender_lots (tender_id, mitcham_name)
     WHERE mitcham_name IS NOT NULL;
@@ -86,7 +126,7 @@ CREATE INDEX IF NOT EXISTS idx_tender_lots_mitcham_name
 CREATE INDEX IF NOT EXISTS idx_tender_lots_data_source
     ON tender_lots (data_source);
 
--- ── Step 5: Add gush_helka_raw column for future structured storage ─────
+-- ── Step 6: Add gush_helka_raw column for future structured storage ─────
 -- Currently gush and helka are comma-joined TEXT. For future use, we add
 -- a JSONB column that can store the full GushHelka[] array from the API.
 ALTER TABLE tender_lots

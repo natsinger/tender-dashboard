@@ -315,7 +315,8 @@ export function DetailViewer({
                 />
               )}
 
-              {/* Land & Pricing Data (from RMI API Tik[]) */}
+              {/* Land & Pricing Data — only shown when no Supabase lots exist (fallback) */}
+              {(!lots || lots.length === 0) && (
               <div className="border-t pt-3">
                 <h4 className="mb-2 text-sm font-semibold text-slate-800">
                   {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05E7\u05E8\u05E7\u05E2 \u05D5\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}
@@ -409,7 +410,7 @@ export function DetailViewer({
                               " | "}
                             {tik.TochnitMigrash?.map(
                               (tm) =>
-                                `\u05EA\u05D1"\u05E2 ${tm.Tochnit?.trim()}${tm.MigrashName?.trim() ? ` \u05DE\u05D2\u05E8\u05E9 ${tm.MigrashName.trim()}` : ""}`,
+                                `\u05EA\u05D1"\u05E2 ${tm.Tochnit?.trim()}${tm.MigrashName?.trim() ? ` \u05DE\u05D2\u05E8\u05E9 ${tm.MigrashName.trim()}` : ""}` ,
                             ).join(" | ")}
                           </p>
                         )}
@@ -422,6 +423,7 @@ export function DetailViewer({
                   </p>
                 )}
               </div>
+              )}
 
               {/* Building rights section */}
               <div className="border-t pt-3">
@@ -514,7 +516,7 @@ export function DetailViewer({
                 )}
               </div>
 
-              {/* Lots data section */}
+              {/* Lots data section — unified table (Supabase lots enriched with live API data) */}
               <div className="border-t pt-3">
                 <h4 className="mb-2 text-sm font-semibold text-slate-800">
                   {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD"}
@@ -539,7 +541,7 @@ export function DetailViewer({
                   <div className="h-12 animate-pulse rounded bg-slate-200" />
                 ) : lots && lots.length > 0 ? (
                   <>
-                    <div className="max-h-64 overflow-y-auto rounded-md border">
+                    <div className="max-h-80 overflow-y-auto rounded-md border">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b bg-slate-50">
@@ -573,6 +575,9 @@ export function DetailViewer({
                               {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD"}
                             </th>
                             <th className="px-2 py-1 text-right">
+                              {"\u05E9\u05D5\u05DE\u05D4"}
+                            </th>
+                            <th className="px-2 py-1 text-right">
                               {"\u05E2\u05E8\u05D1\u05D5\u05EA"}
                             </th>
                             <th className="px-2 py-1 text-right">
@@ -581,7 +586,14 @@ export function DetailViewer({
                           </tr>
                         </thead>
                         <tbody>
-                          {lots.map((lot, i) => (
+                          {lots.map((lot, i) => {
+                            /* Match this lot to a live API Tik entry for enrichment fields */
+                            const tikMatch = rmiDetails?.Tik?.find(
+                              (tik: TikEntry) =>
+                                lot.mitcham_name != null &&
+                                String(tik.MitchamName) === lot.mitcham_name
+                            ) ?? rmiDetails?.Tik?.[i] ?? null;
+                            return (
                             <tr key={i} className="border-b last:border-0">
                               <td className="px-2 py-1">
                                 {lot.lot_number ?? "\u2014"}
@@ -592,17 +604,18 @@ export function DetailViewer({
                                 </td>
                               )}
                               <td className="px-2 py-1">
-                                {lot.gush ?? "\u2014"}
+                                {lot.gush ?? tikMatch?.GushHelka?.map((gh) => gh.Gush).join(", ") ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
-                                {lot.helka ?? "\u2014"}
+                                {lot.helka ?? tikMatch?.GushHelka?.map((gh) => gh.Helka).join(", ") ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
                                 {lot.area_sqm?.toLocaleString("he-IL") ??
+                                  tikMatch?.Shetach?.toLocaleString("he-IL") ??
                                   "\u2014"}
                               </td>
                               <td className="px-2 py-1">
-                                {lot.total_units ?? "\u2014"}
+                                {lot.total_units ?? tikMatch?.Kibolet ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
                                 {lot.units_free_market ?? "\u2014"}
@@ -611,16 +624,20 @@ export function DetailViewer({
                                 {lot.units_target_price ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
-                                {formatCurrency(lot.min_price)}
+                                {formatCurrency(lot.min_price ?? tikMatch?.MechirSaf)}
                               </td>
                               <td className="px-2 py-1">
-                                {formatCurrency(lot.guarantee_amount)}
+                                {formatCurrency(lot.sqm_value_appraisal ?? tikMatch?.mechirShuma)}
                               </td>
                               <td className="px-2 py-1">
-                                {lot.winner_name ?? "\u2014"}
+                                {formatCurrency(lot.guarantee_amount ?? tikMatch?.SchumArvut)}
+                              </td>
+                              <td className="px-2 py-1">
+                                {lot.winner_name ?? tikMatch?.ShemZoche ?? "\u2014"}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

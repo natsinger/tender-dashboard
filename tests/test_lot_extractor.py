@@ -871,9 +871,9 @@ class TestExtractSection1LotsMultiPage:
         assert lots[1]["lot_number"] == 70999
         assert lots[2]["lot_number"] == 71000
 
-    def test_non_adjacent_page_not_continued(self) -> None:
-        """A table on page 3 (non-adjacent to page 1) should NOT be
-        treated as a continuation."""
+    def test_continuation_with_one_page_gap(self) -> None:
+        """A table on page 3 (one empty page gap from page 1) SHOULD be
+        treated as a continuation (gap <= 2)."""
         table_page1 = [
             ["מתחם", "מגרש", "שטח", "ערבות"],
             ["70998", "28", "5,328", "1,482,000"],
@@ -883,7 +883,7 @@ class TestExtractSection1LotsMultiPage:
         # Page 2: no tables
         page2 = _make_mock_page()
 
-        # Page 3: would-be continuation
+        # Page 3: continuation within allowed gap
         table_page3 = [
             ["70999", "30", "10,369", "2,900,000"],
         ]
@@ -892,7 +892,34 @@ class TestExtractSection1LotsMultiPage:
         extractor = BrochureLotExtractor()
         lots = extractor._extract_section1_lots([page1, page2, page3])
 
-        # Only page 1's lot should be extracted
+        # Both lots should be extracted (gap of 2 pages is within limit)
+        assert len(lots) == 2
+        assert lots[0]["lot_number"] == 70998
+        assert lots[1]["lot_number"] == 70999
+
+    def test_non_adjacent_page_not_continued(self) -> None:
+        """A table on page 4 (gap of 3 from page 1) should NOT be
+        treated as a continuation."""
+        table_page1 = [
+            ["מתחם", "מגרש", "שטח", "ערבות"],
+            ["70998", "28", "5,328", "1,482,000"],
+        ]
+        page1 = _make_mock_page([table_page1])
+
+        # Pages 2-3: no tables
+        page2 = _make_mock_page()
+        page3 = _make_mock_page()
+
+        # Page 4: too far for continuation
+        table_page4 = [
+            ["70999", "30", "10,369", "2,900,000"],
+        ]
+        page4 = _make_mock_page([table_page4])
+
+        extractor = BrochureLotExtractor()
+        lots = extractor._extract_section1_lots([page1, page2, page3, page4])
+
+        # Only page 1's lot should be extracted (gap of 3 exceeds limit)
         assert len(lots) == 1
         assert lots[0]["lot_number"] == 70998
 
