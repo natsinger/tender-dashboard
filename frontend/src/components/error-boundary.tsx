@@ -44,9 +44,9 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // Log to console for debugging. In production this could be
-    // forwarded to an error reporting service (e.g. Sentry).
-    console.error("[ErrorBoundary] Uncaught error:", error, errorInfo);
+    if (process.env.NODE_ENV === "development") {
+      console.error("[ErrorBoundary] Uncaught error:", error, errorInfo);
+    }
   }
 
   private handleRefresh = (): void => {

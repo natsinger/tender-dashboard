@@ -57,7 +57,11 @@ const CSV_COLUMNS: { key: keyof ScoredTender; label: string }[] = [
 /** Escape a CSV cell value (wrap in quotes if it contains comma, quote, or newline). */
 function escapeCsvCell(value: unknown): string {
   if (value == null) return "";
-  const str = String(value);
+  let str = String(value);
+  // Prevent CSV formula injection — prefix dangerous characters
+  if (/^[=+\-@\t]/.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes(",") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;
   }

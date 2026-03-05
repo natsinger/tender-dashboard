@@ -75,7 +75,9 @@ export default async function proxy(request: NextRequest) {
       error,
     } = await supabase.auth.getUser();
 
-    console.log("[Middleware]", pathname, "| user:", user?.email ?? "none", "| error:", error?.message ?? "none");
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Middleware]", pathname, "| user:", user?.email ?? "none", "| error:", error?.message ?? "none");
+    }
 
     // ── Public path handling ──
     if (isPublicPath) {
@@ -90,13 +92,17 @@ export default async function proxy(request: NextRequest) {
 
     // ── Protected path: no session -> redirect to login ──
     if (!user?.email) {
-      console.log("[Middleware] No session, redirecting to /login");
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Middleware] No session, redirecting to /login");
+      }
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
     // ── Protected path: validate role ──
     const role = resolveRole(user.email);
-    console.log("[Middleware] Role for", user.email, ":", role);
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Middleware] Role for", user.email, ":", role);
+    }
 
     if (!role) {
       await supabase.auth.signOut();
@@ -117,7 +123,9 @@ export default async function proxy(request: NextRequest) {
     return response;
   } catch (err) {
     // If anything fails, redirect to login for safety
-    console.error("[Middleware] Error:", err);
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Middleware] Error:", err);
+    }
     if (isPublicPath) {
       return NextResponse.next();
     }

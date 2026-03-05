@@ -44,16 +44,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     try {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      if (session?.user?.email) {
+      if (user?.email) {
         // Fetch role from server-side API
         const res = await fetch("/api/auth/role");
         const { role } = (await res.json()) as { role: UserRole };
 
         set({
-          email: session.user.email,
+          email: user.email,
           role: role ?? null,
           isAuthenticated: true,
           isLoading: false,

@@ -1,8 +1,8 @@
 # PRD — Israel Land Tender Intelligence Dashboard
 
-**Version**: 4.0
+**Version**: 4.1
 **Author**: Nathanael (Product Owner)
-**Last Updated**: March 4, 2026
+**Last Updated**: March 5, 2026
 **Status**: Active
 
 ---
@@ -365,6 +365,7 @@ Data to extract (to be refined with sample documents from Nathanael):
 | 3.5 | Deploy to Vercel with shareable URL | ✅ Complete |
 | 3.6 | Feature parity: land & pricing data in Explorer detail viewer | ✅ Complete |
 | 3.7 | Feature parity: remaining Streamlit features not yet ported | In Progress |
+| 3.8 | Security hardening: RLS on all tables, CSP header, auth hardening, HTML/CSV sanitization, console gating, GH Actions injection fix | ✅ Complete (on `security_fixes` branch, pending merge + SQL execution) |
 
 ---
 
@@ -391,7 +392,7 @@ Data to extract (to be refined with sample documents from Nathanael):
 | **Streamlit performance at scale** | Medium | Medium | Cache aggressively with `st.cache_data`. Limit default data window. |
 | **Pie chart interactivity limits** | Medium | High | Plotly supports click events but wiring to Streamlit filters requires `st.session_state` workarounds. Accept as Streamlit limitation, resolve in React. |
 | **PDF format inconsistency (Phase 2)** | High | High | Build incrementally. Flag low-confidence extractions. |
-| **Deployment security (Phase 3)** | Medium | Medium | Plan auth before deploying. Basic auth minimum. |
+| **Deployment security (Phase 3)** | Medium | Low | ✅ Mitigated — Supabase Auth (PKCE), RLS on all tables, CSP header, console gating, HTML/CSV sanitization. Pending: merge `security_fixes` branch + run RLS SQL. |
 
 ---
 
@@ -422,4 +423,4 @@ Data to extract (to be refined with sample documents from Nathanael):
 
 ---
 
-_End of PRD v4.0_
+_End of PRD v4.1_

@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-03-04 (session 20 — Explorer: show land & pricing data from API)
+**Last updated:** 2026-03-05 (session 21 — Security audit & hardening)
 
 ---
 
@@ -57,6 +57,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 3b. Run `scripts/sql/tender_lots_schema.sql` in Supabase SQL Editor (adds `tender_lots` table + lot extraction columns)
 3c. Run `scripts/sql/watchlist_notes_schema.sql` in Supabase SQL Editor (adds `notes` column to `user_watchlist`)
 3d. Run `scripts/sql/lot_count_schema.sql` in Supabase SQL Editor (adds `lot_count` + `max_lots_per_bidder` columns to `tenders`)
+3e. Run `scripts/sql/enable_rls_all_tables.sql` in Supabase SQL Editor (enables RLS on all tables, revokes anon writes, adds team-wide policies for watchlist/reviews/alerts)
 4. Run `python scripts/migrate_sqlite_to_supabase.py` to migrate existing data
 5. Add `SUPABASE_URL` + `SUPABASE_KEY` to GitHub repo secrets
 6. Add `SMTP_USER` + `SMTP_PASSWORD` to GitHub repo secrets
@@ -69,6 +70,7 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-03-05 | **Security audit & hardening** — Comprehensive security audit (50 findings: 4 critical, 12 high, 22 medium, 12 low). Fixes applied on `security_fixes` branch: (1) **RLS migration SQL** — enables Row Level Security on all 9 unprotected Supabase tables, revokes anon writes, adds team-wide policies for watchlist/reviews/alerts, read-only on data tables (MUST run manually in SQL Editor). (2) **CSP header** — Content-Security-Policy added to next.config.ts (script/style/img/connect/frame-ancestors). (3) **GH Actions command injection** — `${{ github.event.inputs.tender_id }}` moved to env var intermediary in extract_building_rights.yml. (4) **SMTP_HOST secret** — hardcoded value moved to `${{ secrets.SMTP_HOST }}` in daily_refresh.yml (MUST add GitHub secret). (5) **HTML email sanitization** — all dynamic values in alerts.py wrapped with `html.escape()`. (6) **CSV formula injection** — cells starting with `=+\-@\t` prefixed with `'` in csv-export.tsx. (7) **Auth hardening** — `getSession()` → `getUser()` in auth-store.ts, OTP type validation against allowlist, generic Hebrew error messages in callback. (8) **Console log gating** — all console.log/warn/error wrapped in `NODE_ENV === "development"` across 10 files. (9) **npm audit fix** — 0 vulnerabilities (hono + @hono/node-server patched). TypeScript compiles cleanly. | `alerts.py`, `frontend/next.config.ts`, `.github/workflows/extract_building_rights.yml`, `.github/workflows/daily_refresh.yml`, `frontend/src/stores/auth-store.ts`, `frontend/src/app/auth/callback/page.tsx`, `frontend/src/components/explorer/csv-export.tsx`, `frontend/src/proxy.ts`, `frontend/src/lib/supabase/client.ts`, `frontend/src/lib/supabase/server.ts`, `frontend/src/components/error-boundary.tsx`, `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/hooks/use-bulk-lots.ts`, `frontend/src/hooks/use-reviews.ts`, `frontend/src/hooks/use-documents.ts`, `scripts/sql/enable_rls_all_tables.sql` (NEW) |
 | 2026-03-04 | **Explorer: show land & pricing data from API** — Added "נתוני קרקע ומחירים" section to Explorer detail viewer, displaying per-lot data directly from the API Tik[] array: area (שטח), reserve price (מחיר סף), appraisal (שומה), development costs (עלויות פיתוח), guarantee (ערבות), units per lot (יח"ד), gush/helka, and taba/plan number. Data was already fetched but never displayed. Works for single and multi-lot tenders. | `pages/explorer.py` |
 | 2026-02-24 | **Automate extraction pipeline + fix merge bug** — (1) Building rights batch (`extract_building_rights_batch.py`): new `get_tenders_needing_building_rights()` queries ALL active tenders with brochure (not just watchlisted); default behavior changed; `MAX_PER_RUN` 10→20; `--watchlist-only` flag for legacy mode. (2) Daily refresh workflow: building rights moved after lot extraction (faster pipeline), limit 5→20, step renamed. (3) **Critical merge fix** in `merge_api_and_pdf_lots()`: lot_number mismatch between API (MitchamName-based) and PDF (sequential/parcel-based) caused zero merges — added 4-level fallback (exact match → positional → PDF-as-base → partial positional). Verified on tenders 405/2024 (8 lots, 7 merged with target/free data) and 311/2025 (23 lots, all merged, sum=2868). 305 tests pass. | `scripts/extract_building_rights_batch.py`, `scripts/extract_lots_batch.py`, `.github/workflows/daily_refresh.yml` |
 | 2026-02-24 | **Management page overhaul + Dashboard simplification** — 12 user-reported changes across 2 pages. **Management** (10 items + 4 refinements): (1) Watchlist table RTL column reorder via reversed DataFrame columns, (2) brochure toggle filter (st.pills הכל/עם חוברת), (3) lot data columns (שוק חופשי, מחיר מטרה, סה"כ, % מחיר מטרה) via new `_aggregate_lot_data()` helper calling `TenderDB.get_lots()`, (4) closing-soon title → "נסגרים ב14 ימים הקרובים", (5) updated caption, (6) divider + "מכרזי מקרקעין לדיור למכירה" header before pies, (7) aligned pie chart params (textfont_size=14, height=220), (8) 3 KPI unit-breakdown metrics (סה"כ/שוק חופשי/מחיר מטרה), (9) top 10 cities bar chart, (10) date-only deadlines in bottom tabs. Refinements: reversed column order for RTL, renamed מכרז→מספר מכרז, fixed בה"כ→סה"כ, fixed % מ.מ.→% מחיר מטרה. **Dashboard** (2 items): (1) removed pie charts + week toggle from main area (kept KPI cards), (2) moved all watchlist management (personal + team add/remove, review editing form) to sidebar with 3 sections. 305 tests pass, both pages import cleanly, app returns HTTP 200. | `pages/management.py`, `pages/dashboard.py` |
@@ -125,6 +127,8 @@ Alert system (`alerts.py`) runs in the daily GitHub Actions cron after document 
 6. **Supabase setup pending** — Need to run SQL schema creation + GRANT SQL + migrate data before app will load from Supabase.
 7. **Streamlit use_container_width deprecation** — Still supported in Streamlit 1.54.0 but may be deprecated in future versions. Migrate to `width` parameter when needed.
 8. **Old brochure format DB columns** — `max_licensable_area` and `development_costs` fields are now extracted but need corresponding columns added to the `tender_lots` table in Supabase (run ALTER TABLE).
+9. **SMTP_HOST GitHub secret needed** — After merging `security_fixes`, add `SMTP_HOST` secret with value `mail.smtp2go.com` to GitHub repo secrets (was previously hardcoded in workflow YAML).
+10. **RLS migration pending** — Run `scripts/sql/enable_rls_all_tables.sql` in Supabase SQL Editor to enable Row Level Security on all tables. Without this, the anon key (visible in browser) allows unrestricted read/write. Policies use team-wide access (all authenticated users see all rows) — role-based restrictions (team vs management) are enforced in frontend via `TEAM_EMAILS` / `MANAGEMENT_EMAILS` env vars.
 
 ---
 
@@ -219,7 +223,8 @@ Gov tender projects/
 │       ├── analytics_enrichment_schema.sql  # SQL: tender_prices + taba_analytics tables + enrichment columns
 │       ├── tender_lots_schema.sql     # SQL: tender_lots table + lot extraction columns on tenders
 │       ├── watchlist_notes_schema.sql # SQL: notes column on user_watchlist
-│       └── lot_count_schema.sql       # SQL: lot_count + max_lots_per_bidder columns on tenders
+│       ├── lot_count_schema.sql       # SQL: lot_count + max_lots_per_bidder columns on tenders
+│       └── enable_rls_all_tables.sql  # SQL: RLS policies + anon write revocation on all tables
 ├── tenders_list_*.json             # Daily API snapshots (JSON backup)
 ├── frontend/                       # Next.js production frontend (deployed on Vercel)
 │   ├── src/

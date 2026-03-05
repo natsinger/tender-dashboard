@@ -25,10 +25,17 @@ function CallbackHandler() {
     async function handleCallback() {
       const code = searchParams.get("code");
       const tokenHash = searchParams.get("token_hash");
-      const type = searchParams.get("type") as EmailOtpType | null;
+      const rawType = searchParams.get("type");
+
+      // Validate OTP type against allowlist
+      const VALID_OTP_TYPES: EmailOtpType[] = ["magiclink", "email"];
+      const type: EmailOtpType | null =
+        rawType && VALID_OTP_TYPES.includes(rawType as EmailOtpType)
+          ? (rawType as EmailOtpType)
+          : null;
 
       if (!code && !tokenHash) {
-        setErrorMsg("No code or token_hash in URL");
+        setErrorMsg("\u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D0\u05D9\u05E0\u05D5 \u05EA\u05E7\u05D9\u05E3 \u05D0\u05D5 \u05E9\u05E4\u05D2 \u05EA\u05D5\u05E7\u05E4\u05D5. \u05E0\u05E1\u05D4/\u05D9 \u05E9\u05E0\u05D9\u05EA.");
         return;
       }
 
@@ -47,17 +54,17 @@ function CallbackHandler() {
         }
 
         if (error) {
-          console.error("[Auth Callback] Error:", error.message, error);
-          setErrorMsg(`${error.message} (${error.status ?? "no status"})`);
+          if (process.env.NODE_ENV === "development") {
+            console.error("[Auth Callback] Error:", error.message, error);
+          }
+          setErrorMsg("\u05D0\u05D9\u05E8\u05E2\u05D4 \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05EA\u05D4\u05DC\u05D9\u05DA \u05D4\u05D0\u05D9\u05DE\u05D5\u05EA. \u05E0\u05E1\u05D4/\u05D9 \u05E9\u05E0\u05D9\u05EA.");
           return;
         }
 
         // Session established — redirect
         window.location.href = "/management";
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[Auth Callback] Unexpected:", msg);
-        setErrorMsg(msg);
+      } catch {
+        setErrorMsg("\u05D0\u05D9\u05E8\u05E2\u05D4 \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05EA\u05D4\u05DC\u05D9\u05DA \u05D4\u05D0\u05D9\u05DE\u05D5\u05EA. \u05E0\u05E1\u05D4/\u05D9 \u05E9\u05E0\u05D9\u05EA.");
       }
     }
 
@@ -72,7 +79,7 @@ function CallbackHandler() {
           <p className="text-lg font-semibold text-red-600 mb-2">
             {"אימות נכשל"}
           </p>
-          <p className="text-sm text-gray-600 mb-4" dir="ltr">
+          <p className="text-sm text-gray-600 mb-4">
             {errorMsg}
           </p>
           <a

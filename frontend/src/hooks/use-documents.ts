@@ -109,7 +109,9 @@ export function useNewDocuments(sinceDays: number = 7) {
           .in("tender_id", batch);
 
         if (tenderErr) {
-          console.warn("Failed to fetch tender info for new docs:", tenderErr.message);
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Failed to fetch tender info for new docs:", tenderErr.message);
+          }
           continue;
         }
 

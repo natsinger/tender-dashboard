@@ -10,6 +10,7 @@ Usage:
     python alerts.py --dry-run    # Show what would be sent without sending
 """
 
+import html as _html
 import logging
 import smtplib
 import sys
@@ -294,30 +295,33 @@ class AlertEngine:
                     "FileType": doc.get("file_type", "application/pdf"),
                 }
                 doc_url = build_document_url(doc_url_data)
-                doc_desc = doc.get("description", "") or doc.get("doc_name", "מסמך")
-                doc_date = doc.get("first_seen", "")
+                doc_desc = _html.escape(
+                    doc.get("description", "") or doc.get("doc_name", "מסמך")
+                )
+                doc_date = _html.escape(doc.get("first_seen", ""))
+                safe_url = _html.escape(doc_url, quote=True)
 
                 doc_items.append(
                     f'<li style="margin-bottom:8px;">'
                     f'<span style="font-weight:500;color:#2B3674;">{doc_desc}</span>'
                     f'<span style="color:#A3AED0;font-size:13px;"> ({doc_date})</span>'
                     f'<br>'
-                    f'<a href="{doc_url}" style="color:#4318FF;text-decoration:none;'
+                    f'<a href="{safe_url}" style="color:#4318FF;text-decoration:none;'
                     f'font-size:13px;">⬇ הורד מסמך</a>'
                     f'</li>'
                 )
 
-            deadline_str = ta.deadline or "לא צוין"
+            deadline_str = _html.escape(ta.deadline or "לא צוין")
             docs_html = "\n".join(doc_items)
 
             tender_blocks.append(f"""
             <div style="margin:16px 0;padding:12px;background:#f8f9fc;
                         border-radius:8px;border-right:4px solid #4318FF;">
               <h3 style="color:#2B3674;margin:0 0 8px 0;">
-                מכרז {ta.tender_id} — {ta.tender_name}
+                מכרז {ta.tender_id} — {_html.escape(ta.tender_name)}
               </h3>
               <p style="color:#A3AED0;margin:0 0 8px 0;">
-                {ta.city} | מועד סגירה: {deadline_str}
+                {_html.escape(ta.city)} | מועד סגירה: {deadline_str}
               </p>
               <p style="font-weight:600;color:#2B3674;">מסמכים חדשים:</p>
               <ul style="padding-right:20px;">{docs_html}</ul>
