@@ -118,7 +118,7 @@ export function CityBarChart() {
       >
         <BarChart
           data={chartData}
-          margin={{ top: 40, right: 10, bottom: 10, left: 10 }}
+          margin={{ top: 40, right: 10, bottom: 10, left: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
           <XAxis dataKey="city" tick={{ fontSize: 12 }} />
