@@ -141,6 +141,102 @@ def get_tenders_needing_extraction(
         return []
 
 
+def _get_all_booklet_tender_ids(
+    db: TenderDB,
+    limit: int = DEFAULT_LIMIT,
+) -> list[int]:
+    """Get active tenders with published_booklet=1 for full re-extraction.
+
+    Filters to relevant tender types (RELEVANT_TENDER_TYPES from config)
+    and active statuses (1=פעיל, 2=נדון בוועדת מכרזים).
+    Returns tender IDs ordered by tender_id descending (newest first).
+
+    Args:
+        db: TenderDB instance.
+        limit: Maximum number of tender IDs to return.
+
+    Returns:
+        List of tender_id integers.
+    """
+    from config import RELEVANT_TENDER_TYPES
+
+    if not db._client:
+        logger.error("No Supabase connection — cannot query tenders")
+        return []
+
+    try:
+        result = (
+            db._client.table("tenders")
+            .select("tender_id")
+            .eq("published_booklet", 1)
+            .in_("status_code", [1, 2])
+            .in_("tender_type_code", list(RELEVANT_TENDER_TYPES))
+            .order("tender_id", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return [r["tender_id"] for r in (result.data or [])]
+
+    except Exception as exc:
+        logger.error("Failed to query booklet tenders: %s", exc)
+        return []
+
+
+def _get_empty_extracted_tender_ids(
+    db: TenderDB,
+    limit: int = DEFAULT_LIMIT,
+) -> list[int]:
+    """Find tenders with a brochure but only API lots (no PDF overlay).
+
+    These are tenders where PDF extraction was skipped, failed, or the
+    insert failed (e.g., due to unique constraint violations).
+
+    Args:
+        db: TenderDB instance.
+        limit: Maximum number of tender IDs to return.
+
+    Returns:
+        List of tender_id integers.
+    """
+    if not db._client:
+        logger.error("No Supabase connection — cannot query tenders")
+        return []
+
+    try:
+        # Get all extracted tenders with a brochure
+        result = (
+            db._client.table("tenders")
+            .select("tender_id")
+            .eq("lot_extraction_status", "extracted")
+            .eq("published_booklet", 1)
+            .order("tender_id")
+            .execute()
+        )
+        candidates = {r["tender_id"] for r in (result.data or [])}
+
+        if not candidates:
+            return []
+
+        # Get tender_ids that already have merged or pdf lots (PDF was processed)
+        has_pdf_data: set[int] = set()
+        for ds in ("merged", "pdf"):
+            rows = (
+                db._client.table("tender_lots")
+                .select("tender_id")
+                .eq("data_source", ds)
+                .execute()
+            )
+            has_pdf_data.update(r["tender_id"] for r in (rows.data or []))
+
+        # Tenders with only API lots need re-extraction with PDF
+        needs_fix = sorted(candidates - has_pdf_data)[:limit]
+        return needs_fix
+
+    except Exception as exc:
+        logger.error("Failed to query empty-extracted tenders: %s", exc)
+        return []
+
+
 def _overlay_pdf_onto_api(
     api_lot: dict,
     pdf_lot: dict,
@@ -579,6 +675,16 @@ def main() -> None:
         action="store_true",
         help="Skip PDF download/extraction — only extract from API Tik[]",
     )
+    parser.add_argument(
+        "--fix-empty",
+        action="store_true",
+        help="Re-extract tenders that have a brochure but only API lots (no PDF overlay)",
+    )
+    parser.add_argument(
+        "--reextract-all",
+        action="store_true",
+        help="Re-extract ALL tenders with published_booklet=1 (full pipeline, regardless of status)",
+    )
     args = parser.parse_args()
 
     db = TenderDB()
@@ -592,6 +698,18 @@ def main() -> None:
     if args.tender_id:
         tender_ids = [args.tender_id]
         logger.info("Processing single tender: %d", args.tender_id)
+    elif args.reextract_all:
+        tender_ids = _get_all_booklet_tender_ids(db, limit=args.limit)
+        logger.info(
+            "Reextract-all mode: found %d tenders with published_booklet=1",
+            len(tender_ids),
+        )
+    elif args.fix_empty:
+        tender_ids = _get_empty_extracted_tender_ids(db, limit=args.limit)
+        logger.info(
+            "Fix-empty mode: found %d tenders with brochure but only API lots",
+            len(tender_ids),
+        )
     elif args.backfill:
         cache_dir = Path(__file__).resolve().parent.parent / "data" / "details_cache"
         tender_ids = get_backfill_tender_ids(cache_dir)

@@ -566,10 +566,10 @@ export function DetailViewer({
                               {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
                             </th>
                             <th className="px-2 py-1 text-right">
-                              {"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
+                              {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
                             </th>
                             <th className="px-2 py-1 text-right">
-                              {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
+                              {"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
                             </th>
                             <th className="px-2 py-1 text-right">
                               {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD"}
@@ -615,13 +615,16 @@ export function DetailViewer({
                                   "\u2014"}
                               </td>
                               <td className="px-2 py-1">
-                                {lot.total_units ?? tikMatch?.Kibolet ?? "\u2014"}
-                              </td>
-                              <td className="px-2 py-1">
-                                {lot.units_free_market ?? "\u2014"}
+                                {lot.total_units ??
+                                  ((lot.units_target_price ?? 0) + (lot.units_free_market ?? 0) > 0
+                                    ? (lot.units_target_price ?? 0) + (lot.units_free_market ?? 0)
+                                    : "\u2014")}
                               </td>
                               <td className="px-2 py-1">
                                 {lot.units_target_price ?? "\u2014"}
+                              </td>
+                              <td className="px-2 py-1">
+                                {lot.units_free_market ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
                                 {formatCurrency(lot.min_price ?? tikMatch?.MechirSaf)}
