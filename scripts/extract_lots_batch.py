@@ -43,10 +43,17 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Optional
+
+# Ensure UTF-8 output on Windows (Hebrew RTL display)
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -212,12 +219,14 @@ def _enrich_pdf_with_api_aggregate(
             if api_val is not None:
                 enriched[field] = api_val
 
-    # Preserve API's mitcham_name and gush_helka_raw on the merged record.
-    # These are API-sourced identifiers that PDF lots don't have.
-    for field in ("mitcham_name", "gush_helka_raw"):
-        api_val = api_lot.get(field)
-        if api_val is not None:
-            enriched[field] = api_val
+    # Preserve API's gush_helka_raw on the merged record.
+    # NOTE: mitcham_name is intentionally NOT copied here because in a
+    # 1-to-many aggregate scenario (1 API lot → N PDF lots), broadcasting
+    # the same mitcham_name to all rows violates the unique constraint
+    # uq_tender_lots_api(tender_id, COALESCE(mitcham_name, '')).
+    api_gush_raw = api_lot.get("gush_helka_raw")
+    if api_gush_raw is not None:
+        enriched["gush_helka_raw"] = api_gush_raw
 
     enriched["data_source"] = "merged"
     return enriched
