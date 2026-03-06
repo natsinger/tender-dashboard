@@ -299,8 +299,10 @@ class TestMergeStrategy3NoBlindGushBroadcast:
         assert merged[2]["gush"] == "6001"
         assert merged[2]["helka"] == "10"
 
-    def test_mitcham_name_broadcast_to_all_pdf_lots(self) -> None:
-        """mitcham_name and gush_helka_raw from API propagate to all PDF lots."""
+    def test_mitcham_name_not_broadcast_in_aggregate(self) -> None:
+        """mitcham_name must NOT be broadcast in 1-to-many aggregate merge
+        (Strategy 3) because it would create duplicate key violations.
+        gush_helka_raw IS broadcast since it's supplementary data."""
         api_lots = [
             {
                 "lot_number": 1121,
@@ -315,9 +317,10 @@ class TestMergeStrategy3NoBlindGushBroadcast:
         ]
         merged = merge_api_and_pdf_lots(api_lots, pdf_lots)
 
-        # mitcham_name and gush_helka_raw from API should be on all merged lots
+        # mitcham_name should NOT be copied (would violate unique constraint)
         for lot in merged:
-            assert lot["mitcham_name"] == "1121"
+            assert "mitcham_name" not in lot or lot.get("mitcham_name") is None
+            # gush_helka_raw IS copied (supplementary, not unique-constrained)
             assert lot["gush_helka_raw"] == [{"Gush": "6001", "Helka": "10"}]
             assert lot["data_source"] == "merged"
 

@@ -43,38 +43,38 @@ WHERE  data_source IN ('api', 'merged')
 -- lot_number per tender (PostgreSQL treats NULLs as distinct). Before we
 -- create the new partial unique indexes, we must remove these duplicates.
 -- Strategy: for each (tender_id, COALESCE(mitcham_name, '')) group in
--- api/merged rows, keep only the row with the highest id (most recent).
+-- api-only rows, keep only the row with the highest id (most recent).
 DELETE FROM tender_lots
 WHERE id NOT IN (
     SELECT MAX(id)
     FROM tender_lots
-    WHERE data_source IN ('api', 'merged')
+    WHERE data_source = 'api'
     GROUP BY tender_id, COALESCE(mitcham_name, '')
 )
-AND data_source IN ('api', 'merged')
+AND data_source = 'api'
 AND EXISTS (
     SELECT 1 FROM tender_lots t2
     WHERE t2.tender_id = tender_lots.tender_id
       AND COALESCE(t2.mitcham_name, '') = COALESCE(tender_lots.mitcham_name, '')
-      AND t2.data_source IN ('api', 'merged')
+      AND t2.data_source = 'api'
       AND t2.id > tender_lots.id
 );
 
--- Also deduplicate PDF rows with duplicate (tender_id, lot_number)
+-- Also deduplicate PDF and merged rows with duplicate (tender_id, lot_number)
 DELETE FROM tender_lots
 WHERE id NOT IN (
     SELECT MAX(id)
     FROM tender_lots
-    WHERE data_source = 'pdf' AND lot_number IS NOT NULL
+    WHERE data_source IN ('pdf', 'merged') AND lot_number IS NOT NULL
     GROUP BY tender_id, lot_number
 )
-AND data_source = 'pdf'
+AND data_source IN ('pdf', 'merged')
 AND lot_number IS NOT NULL
 AND EXISTS (
     SELECT 1 FROM tender_lots t2
     WHERE t2.tender_id = tender_lots.tender_id
       AND t2.lot_number = tender_lots.lot_number
-      AND t2.data_source = 'pdf'
+      AND t2.data_source IN ('pdf', 'merged')
       AND t2.id > tender_lots.id
 );
 
@@ -101,18 +101,19 @@ END $$;
 -- Also drop any index that backs the old unique constraint
 DROP INDEX IF EXISTS tender_lots_tender_id_lot_number_key;
 
--- New index 1: For API-sourced rows, uniqueness is on (tender_id, mitcham_name).
+-- New index 1: For API-only rows, uniqueness is on (tender_id, mitcham_name).
 -- This correctly deduplicates "2 א" vs "2" vs NULL.
 -- COALESCE ensures NULLs are treated as equal (prevent duplicate NULL rows).
 CREATE UNIQUE INDEX IF NOT EXISTS uq_tender_lots_api
     ON tender_lots (tender_id, COALESCE(mitcham_name, ''))
-    WHERE data_source IN ('api', 'merged');
+    WHERE data_source = 'api';
 
--- New index 2: For PDF-only rows, uniqueness is on (tender_id, lot_number).
+-- New index 2: For PDF and merged rows, uniqueness is on (tender_id, lot_number).
 -- PDF lot_numbers are sequential and always non-NULL.
+-- Merged rows use PDF's lot_number as the canonical identifier.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_tender_lots_pdf
     ON tender_lots (tender_id, lot_number)
-    WHERE data_source = 'pdf' AND lot_number IS NOT NULL;
+    WHERE data_source IN ('pdf', 'merged') AND lot_number IS NOT NULL;
 
 -- Fallback: For rows where both mitcham_name and lot_number are NULL,
 -- prevent accidental duplicates per tender by using the row's id.
