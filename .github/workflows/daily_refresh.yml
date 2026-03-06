@@ -2,8 +2,10 @@ name: Daily Tender Refresh
 
 on:
   schedule:
-    # Run at 06:00 UTC (09:00 Israel time) every day
-    - cron: "0 6 * * *"
+    # 10:15 Israel winter (UTC+2) every day
+    - cron: "15 8 * * *"
+    # 17:00 Israel winter (UTC+2) every day
+    - cron: "0 15 * * *"
   workflow_dispatch: # Allow manual trigger
 
 permissions:
