@@ -897,6 +897,32 @@ class TestExtractSection1LotsMultiPage:
         assert lots[0]["lot_number"] == 70998
         assert lots[1]["lot_number"] == 70999
 
+    def test_repeated_header_continuation(self) -> None:
+        """A table on the next page with repeated headers (same score) should
+        append its data rows to the main table, not replace it."""
+        table_page1 = [
+            ["מתחם", "מגרש", "שטח", "ערבות"],
+            ["1", "1121", "8,496", "1,428,000"],
+            ["2", "1124", "7,249", "1,526,000"],
+        ]
+        page1 = _make_mock_page([table_page1])
+
+        # Page 2: same headers + 1 data row (last lot spilled to next page)
+        table_page2 = [
+            ["מתחם", "מגרש", "שטח", "ערבות"],
+            ["3", "1404", "6,892", "1,896,000"],
+        ]
+        page2 = _make_mock_page([table_page2])
+
+        extractor = BrochureLotExtractor()
+        lots = extractor._extract_section1_lots([page1, page2])
+
+        # All 3 lots should be extracted (repeated-header continuation)
+        assert len(lots) == 3
+        assert lots[0]["lot_number"] == 1
+        assert lots[1]["lot_number"] == 2
+        assert lots[2]["lot_number"] == 3
+
     def test_non_adjacent_page_not_continued(self) -> None:
         """A table on page 4 (gap of 3 from page 1) should NOT be
         treated as a continuation."""

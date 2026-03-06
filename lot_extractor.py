@@ -1367,33 +1367,53 @@ class BrochureLotExtractor:
                     continue
 
                 # This table qualifies. Parse data rows.
-                if score > best_score:
-                    data_rows = table[header_rows_consumed:]
-                    lots: list[dict] = []
-                    for row in data_rows:
-                        if not row or all(
-                            cell is None or str(cell).strip() == ""
-                            for cell in row
-                        ):
-                            continue
-                        lot = _parse_row(row, col_mapping)
-                        if lot is not None:
-                            lots.append(lot)
+                data_rows = table[header_rows_consumed:]
+                lots: list[dict] = []
+                for row in data_rows:
+                    if not row or all(
+                        cell is None or str(cell).strip() == ""
+                        for cell in row
+                    ):
+                        continue
+                    lot = _parse_row(row, col_mapping)
+                    if lot is not None:
+                        lots.append(lot)
 
-                    if lots:
-                        best_lots = lots
-                        best_score = score
-                        best_mapping = col_mapping
-                        best_num_cols = len(header_cells)
-                        found_on_page = page_idx
-                        logger.info(
-                            "Page %d: found lot table (score=%d, %d rows). "
-                            "Columns: %s",
-                            page_idx + 1,
-                            score,
-                            len(lots),
-                            col_mapping,
-                        )
+                if not lots:
+                    continue
+
+                if score > best_score:
+                    # Better table found — replace.
+                    best_lots = lots
+                    best_score = score
+                    best_mapping = col_mapping
+                    best_num_cols = len(header_cells)
+                    found_on_page = page_idx
+                    logger.info(
+                        "Page %d: found lot table (score=%d, %d rows). "
+                        "Columns: %s",
+                        page_idx + 1,
+                        score,
+                        len(lots),
+                        col_mapping,
+                    )
+                elif (
+                    score == best_score
+                    and found_on_page >= 0
+                    and 0 < (page_idx - found_on_page) <= max_continuation_gap
+                ):
+                    # Same-score table on a nearby page — repeated-header
+                    # continuation (e.g. last lot spilling to next page with
+                    # headers reprinted).  Append rows instead of replacing.
+                    best_lots.extend(lots)
+                    found_on_page = page_idx
+                    logger.info(
+                        "Page %d: appending %d repeated-header continuation "
+                        "rows (score=%d)",
+                        page_idx + 1,
+                        len(lots),
+                        score,
+                    )
 
         if not best_lots:
             logger.debug("No qualifying lot table found across %d pages", len(pages))
