@@ -79,9 +79,14 @@ export function useBulkLots(tenderIds: number[]) {
       for (const lot of allLots) {
         const agg = result[lot.tender_id];
         if (!agg) continue;
-        agg.free_market += Number(lot.units_free_market) || 0;
-        agg.target_price += Number(lot.units_target_price) || 0;
-        agg.total += Number(lot.total_units) || 0;
+        const fm = Number(lot.units_free_market) || 0;
+        const tp = Number(lot.units_target_price) || 0;
+        agg.free_market += fm;
+        agg.target_price += tp;
+        // total_units may be NULL for merged/PDF lots — fall back to
+        // the sum of target_price + free_market per lot.
+        const lotTotal = Number(lot.total_units) || 0;
+        agg.total += lotTotal > 0 ? lotTotal : fm + tp;
       }
 
       // Compute percentage

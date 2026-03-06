@@ -155,8 +155,8 @@ export function DataTable<TData>({
 
   return (
     <div dir="rtl" className={cn("w-full", className)}>
-      <div className="rounded-md border overflow-hidden">
-        <Table className="table-fixed">
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="table-auto min-w-[900px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -167,6 +167,11 @@ export function DataTable<TData>({
                   return (
                     <TableHead
                       key={header.id}
+                      style={
+                        header.column.columnDef.size
+                          ? { width: header.column.columnDef.size }
+                          : undefined
+                      }
                       className={cn(
                         "text-right",
                         canSort && "cursor-pointer select-none",
