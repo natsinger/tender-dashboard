@@ -265,11 +265,12 @@ def _overlay_pdf_onto_api(
     if pdf_lot_number is not None:
         merged_lot["lot_number"] = pdf_lot_number
 
-    # Overlay PDF-only fields
+    # Overlay PDF-only fields.  If the field key exists in the PDF lot
+    # (even as None), it means the PDF column was present and the value
+    # was explicitly empty/dash — override the API value to None.
     for field in PDF_ONLY_FIELDS:
-        pdf_val = pdf_lot.get(field)
-        if pdf_val is not None:
-            merged_lot[field] = pdf_val
+        if field in pdf_lot:
+            merged_lot[field] = pdf_lot[field]
 
     # For shared fields, prefer API if non-null; otherwise use PDF
     for field in ("zoning_plan", "plot_numbers", "area_sqm"):
