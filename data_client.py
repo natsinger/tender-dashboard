@@ -729,6 +729,10 @@ def extract_lots_from_api(details: Dict[str, Any]) -> List[Dict[str, Any]]:
         for api_field, lot_field in _NUMERIC_MAP.items():
             val = tik.get(api_field)
             if val is not None and val != 0:
+                # MechirSaf=1 is a sentinel for "no minimum price" in the
+                # RMI API — treat it as null to avoid displaying ₪1.
+                if api_field == "MechirSaf" and val <= 1:
+                    continue
                 lot[lot_field] = val
 
         # Winner name (string, only meaningful for awarded tenders)

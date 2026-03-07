@@ -615,10 +615,9 @@ export function DetailViewer({
                                   "\u2014"}
                               </td>
                               <td className="px-2 py-1">
-                                {lot.total_units ??
-                                  ((lot.units_target_price ?? 0) + (lot.units_free_market ?? 0) > 0
+                                {(lot.units_target_price ?? 0) + (lot.units_free_market ?? 0) > 0
                                     ? (lot.units_target_price ?? 0) + (lot.units_free_market ?? 0)
-                                    : "\u2014")}
+                                    : lot.total_units ?? "\u2014"}
                               </td>
                               <td className="px-2 py-1">
                                 {lot.units_target_price ?? "\u2014"}
@@ -662,7 +661,10 @@ export function DetailViewer({
                         <p className="font-bold text-slate-800">
                           {lots
                             .reduce(
-                              (sum, l) => sum + (Number(l.total_units) || 0),
+                              (sum, l) => {
+                                const split = (Number(l.units_target_price) || 0) + (Number(l.units_free_market) || 0);
+                                return sum + (split > 0 ? split : Number(l.total_units) || 0);
+                              },
                               0,
                             )
                             .toLocaleString("he-IL")}
