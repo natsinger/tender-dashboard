@@ -1775,7 +1775,7 @@ class TestExtractLotsFromText:
         lots = _extract_lots_from_text(text)
         assert len(lots) == 1
         assert lots[0]["lot_number"] == 1
-        assert lots[0]["units_target_price"] == 554
+        assert lots[0]["total_units"] == 554
 
     def test_multiple_lots_from_text(self) -> None:
         """Multiple lots mentioned in text."""

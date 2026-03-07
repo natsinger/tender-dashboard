@@ -75,10 +75,13 @@ DEFAULT_LIMIT: int = 50
 # Rate limiting between API calls (seconds)
 API_DELAY: float = 1.0
 
-# Fields that only come from PDF extraction (never in the API).
+# Fields that come from PDF extraction and should override API values.
+# min_price is included because the API uses MechirSaf=1 as a sentinel
+# for "no minimum", but the PDF has the actual value (or a clear dash).
 PDF_ONLY_FIELDS: set[str] = {
     "units_target_price",
     "units_free_market",
+    "min_price",
     "zoning_designation",
     "discount_amount",
     "sqm_value_current",

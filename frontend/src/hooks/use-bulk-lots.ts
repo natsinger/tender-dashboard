@@ -83,10 +83,11 @@ export function useBulkLots(tenderIds: number[]) {
         const tp = Number(lot.units_target_price) || 0;
         agg.free_market += fm;
         agg.target_price += tp;
-        // total_units may be NULL for merged/PDF lots — fall back to
-        // the sum of target_price + free_market per lot.
-        const lotTotal = Number(lot.total_units) || 0;
-        agg.total += lotTotal > 0 ? lotTotal : fm + tp;
+        // Prefer the PDF-extracted split (tp + fm) when available, since
+        // the API's total_units (Kibolet) may represent a different metric.
+        // Fall back to total_units only when no split data exists.
+        const splitTotal = fm + tp;
+        agg.total += splitTotal > 0 ? splitTotal : Number(lot.total_units) || 0;
       }
 
       // Compute percentage
