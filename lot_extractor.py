@@ -1102,7 +1102,7 @@ def _extract_lots_from_text(
     if num_lots == 1:
         lot: dict[str, object] = {"lot_number": 1, "confidence": 0.5}
         if total_units is not None:
-            lot["units_target_price"] = total_units
+            lot["total_units"] = total_units
         lots.append(lot)
         logger.info(
             "Text-based lot extraction: 1 lot, units=%s", total_units,
