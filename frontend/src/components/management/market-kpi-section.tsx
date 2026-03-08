@@ -2,16 +2,17 @@
  * MarketKPISection component for the Management page.
  *
  * Displays a 2x2 chart grid (brochure donut, region donut, top-10 cities
- * bar chart, tender type pie) plus 5 KPI metric cards. Mirrors the
- * Section 2B + CHANGE 9 from the Streamlit management.py page.
+ * bar chart, tender type pie) plus 5 KPI metric cards. Default view shows
+ * brochure tenders only (more reliable data); toggle to see all.
  */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { MegidoPieChart } from "@/components/charts/pie-chart";
 import { MegidoBarChart } from "@/components/charts/bar-chart";
 import { MetricCard } from "@/components/metric-card";
+import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
 import type { LotAggregation } from "@/hooks/use-bulk-lots";
 import type { TenderWithComputed } from "@/types/database";
 
@@ -113,44 +114,74 @@ export function MarketKPISection({
   closingSoonCount,
   lotMap,
 }: MarketKPISectionProps) {
+  const [brochureFilter, setBrochureFilter] =
+    useState<BrochureFilter>("with_brochure");
+
+  // Filter tenders based on brochure toggle
+  const filteredTenders = useMemo(() => {
+    if (brochureFilter === "with_brochure") {
+      return cardActiveTenders.filter((t) => Boolean(t.published_booklet));
+    }
+    return cardActiveTenders;
+  }, [cardActiveTenders, brochureFilter]);
+
   const brochureData = useMemo(
     () => buildBrochureData(cardActiveTenders),
     [cardActiveTenders],
   );
   const regionData = useMemo(
-    () => buildRegionData(cardActiveTenders),
-    [cardActiveTenders],
+    () => buildRegionData(filteredTenders),
+    [filteredTenders],
   );
   const tenderTypeData = useMemo(
-    () => buildTenderTypeData(cardActiveTenders),
-    [cardActiveTenders],
+    () => buildTenderTypeData(filteredTenders),
+    [filteredTenders],
   );
   const cityBarData = useMemo(
-    () => buildCityBarData(cardActiveTenders),
-    [cardActiveTenders],
+    () => buildCityBarData(filteredTenders),
+    [filteredTenders],
   );
 
-  // KPI aggregations
-  const totalUnits = useMemo(
-    () => cardActiveTenders.reduce((sum, t) => sum + (t.units ?? 0), 0),
-    [cardActiveTenders],
-  );
-
-  const { totalFreeMarket, totalTargetPrice } = useMemo(() => {
+  // KPI aggregations — all use lot-based data for consistency
+  const { totalUnits, totalFreeMarket, totalTargetPrice } = useMemo(() => {
+    let total = 0;
     let fm = 0;
     let tp = 0;
-    for (const agg of Object.values(lotMap)) {
+    const tenderIds = new Set(filteredTenders.map((t) => t.tender_id));
+
+    for (const [tidStr, agg] of Object.entries(lotMap)) {
+      const tid = Number(tidStr);
+      if (!tenderIds.has(tid)) continue;
       fm += agg.free_market;
       tp += agg.target_price;
+      total += agg.total;
     }
-    return { totalFreeMarket: fm, totalTargetPrice: tp };
-  }, [lotMap]);
+    return { totalUnits: total, totalFreeMarket: fm, totalTargetPrice: tp };
+  }, [filteredTenders, lotMap]);
+
+  // Count how many filtered tenders actually have lot data
+  const tenderIdsWithLots = useMemo(() => {
+    const tenderIds = new Set(filteredTenders.map((t) => t.tender_id));
+    let count = 0;
+    for (const [tidStr, agg] of Object.entries(lotMap)) {
+      if (tenderIds.has(Number(tidStr)) && agg.total > 0) count++;
+    }
+    return count;
+  }, [filteredTenders, lotMap]);
+
+  const scopeLabel = `\u05DE\u05EA\u05D5\u05DA ${tenderIdsWithLots} / ${filteredTenders.length} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD`;
 
   return (
     <section>
-      <h4 className="mb-4 text-lg font-semibold text-slate-800">
-        {"\u05DE\u05DB\u05E8\u05D6\u05D9 \u05DE\u05E7\u05E8\u05E7\u05E2\u05D9\u05DF \u05DC\u05D3\u05D9\u05D5\u05E8 \u05DC\u05DE\u05DB\u05D9\u05E8\u05D4"}
-      </h4>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h4 className="text-lg font-semibold text-slate-800">
+          {"\u05DE\u05DB\u05E8\u05D6\u05D9 \u05DE\u05E7\u05E8\u05E7\u05E2\u05D9\u05DF \u05DC\u05D3\u05D9\u05D5\u05E8 \u05DC\u05DE\u05DB\u05D9\u05E8\u05D4"}
+        </h4>
+        <BrochureToggle
+          value={brochureFilter}
+          onChange={setBrochureFilter}
+        />
+      </div>
 
       {/* 2x2 chart grid + KPI cards */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
@@ -199,7 +230,12 @@ export function MarketKPISection({
           <div className="grid grid-cols-2 gap-3">
             <MetricCard
               label={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD"}
-              value={cardActiveTenders.length.toLocaleString("he-IL")}
+              value={filteredTenders.length.toLocaleString("he-IL")}
+              subtitle={
+                brochureFilter === "with_brochure"
+                  ? `\u05DE\u05EA\u05D5\u05DA ${cardActiveTenders.length} \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD`
+                  : undefined
+              }
             />
             <MetricCard
               label={"\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05D1-14 \u05D9\u05D5\u05DD"}
@@ -207,11 +243,12 @@ export function MarketKPISection({
             />
           </div>
 
-          {/* Row 2: Unit breakdowns */}
+          {/* Row 2: Unit breakdowns (lot-based) */}
           <div className="grid grid-cols-3 gap-3">
             <MetricCard
               label={'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
               value={totalUnits.toLocaleString("he-IL")}
+              subtitle={scopeLabel}
             />
             <MetricCard
               label={"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
