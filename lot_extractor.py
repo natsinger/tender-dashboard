@@ -63,7 +63,8 @@ SECTION1_HEADERS = {
     "units_target_price": [
         "מחיר מטרה", "הרטמ ריחמ",
         "יח\"ד.*מטרה", "ד\"חי.*הרטמ",
-        "הרטמ",  # single-word fallback for reversed multi-line headers
+        "ה רטמ",  # pdfplumber may insert a space in reversed מטרה
+        "הרטמ",   # single-word fallback for reversed multi-line headers
         "הרכשהל",  # reversed: להשכרה (for rental) — used in type 6 brochures
     ],
     "units_free_market": [
@@ -76,7 +77,9 @@ SECTION1_HEADERS = {
         "ד\"חי רפסמ",   # reversed: מספר יח"ד (number of units)
         "מספר יח\"ד",   # normal: מספר יח"ד
         "ד\"חי 'סמ",    # reversed: מס' יח"ד
-        "ד\"חי",         # single-word: יח"ד (housing units)
+        "כ\"הס ד\"חי",  # reversed: יח"ד סה"כ (total units)
+        "סה\"כ יח\"ד",  # normal: סה"כ יח"ד
+        "ד\"חי",         # single-word fallback: יח"ד (housing units)
     ],
     "min_price": [
         "מחיר מינימום", "םומינימ ריחמ",
@@ -383,6 +386,12 @@ _SUMMABLE_FLOAT_FIELDS: set[str] = {
 }
 
 
+# Keywords that indicate a column is about price/cost, not raw unit count.
+# Used to prevent the generic ד"חי fallback in total_units from matching
+# price-per-unit columns (e.g. "הגבלת מחיר בהשוואה ד"חי").
+_PRICE_EXCLUSION_KEYWORDS: list[str] = ["ריחמ", "מחיר", "הלבגה", "הגבלה"]
+
+
 def _find_section1_column_mapping(
     header_cells: list[Optional[str]],
 ) -> dict[str, int]:
@@ -400,8 +409,17 @@ def _find_section1_column_mapping(
     for col_idx, cell in enumerate(header_cells):
         if cell is None:
             continue
+        cleaned = " ".join(cell.split())
         for field_name, keywords in SECTION1_HEADERS.items():
             if field_name not in mapping and _header_matches(cell, keywords):
+                # Guard: when total_units matches via the generic ד"חי
+                # fallback, reject columns that contain price-related words
+                # (these are price-per-unit columns, not unit counts).
+                if (
+                    field_name == "total_units"
+                    and any(pw in cleaned for pw in _PRICE_EXCLUSION_KEYWORDS)
+                ):
+                    continue
                 mapping[field_name] = col_idx
                 break  # One field per column
     return mapping
