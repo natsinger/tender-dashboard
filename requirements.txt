@@ -1,5 +1,4 @@
-# Dashboard core
-streamlit==1.54.0
+# Data processing
 pandas==2.3.3
 plotly==6.5.2
 requests==2.32.5

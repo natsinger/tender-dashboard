@@ -2,9 +2,8 @@
 Centralized configuration for the Land Tenders Dashboard.
 
 Loads settings from (in priority order):
-1. Streamlit secrets (st.secrets) — for Streamlit Cloud deployment
-2. Environment variables / .env file — for local development
-3. Hardcoded defaults — safe fallbacks
+1. Environment variables / .env file
+2. Hardcoded defaults — safe fallbacks
 
 Usage:
     from config import cfg
@@ -24,21 +23,10 @@ except ImportError:
 
 
 def _get(key: str, default: str = "") -> str:
-    """Get a config value from st.secrets, then env vars, then default."""
-    # Priority 1: Streamlit secrets (available on Streamlit Cloud)
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            return str(st.secrets[key])
-    except Exception:
-        pass
-
-    # Priority 2: Environment variable
+    """Get a config value from env vars, then default."""
     val = os.environ.get(key)
     if val is not None:
         return val
-
-    # Priority 3: Default
     return default
 
 
