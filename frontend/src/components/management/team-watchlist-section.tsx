@@ -133,6 +133,8 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
   {
     id: "deadline",
     header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
+    accessorFn: (row) => row.days_to_deadline ?? Infinity,
+    sortingFn: "basic",
     size: 100,
     cell: ({ row }) => {
       const t = row.original.tender;
