@@ -3,7 +3,7 @@ Tender watchlist alert engine.
 
 Checks for new documents on watched tenders and sends email notifications
 via SMTP2GO. Designed to run standalone in GitHub Actions cron
-or be imported by the Streamlit app for test sends.
+or be imported by other modules for test sends.
 
 Usage:
     python alerts.py              # Check all watchlists and send alerts

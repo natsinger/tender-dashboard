@@ -19,6 +19,8 @@ interface MetricCardProps {
   label: string;
   /** Large bold value text. */
   value: string | number;
+  /** Optional subtitle shown below the value (e.g. scope context). */
+  subtitle?: string;
   /** Optional delta string (e.g. "+12" or "-5"). Determines icon & color. */
   delta?: string | number | null;
   /** Override delta direction. Auto-detected from delta sign by default. */
@@ -59,6 +61,7 @@ const DELTA_STYLES: Record<
 export function MetricCard({
   label,
   value,
+  subtitle,
   delta,
   deltaDirection,
   className,
@@ -89,6 +92,10 @@ export function MetricCard({
           </span>
         )}
       </div>
+
+      {subtitle && (
+        <p className="mt-1 text-[11px] text-slate-400">{subtitle}</p>
+      )}
     </div>
   );
 }

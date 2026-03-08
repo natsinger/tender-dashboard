@@ -13,7 +13,7 @@ Document selection priority (find_best_brochure):
        text only.  PirsumType=3.
 
 This module runs WITHOUT Playwright — it only uses HTTP requests and pdfplumber,
-making it safe for Streamlit Cloud deployment.
+making it safe for headless/CI deployment.
 
 Usage:
     from brochure_analyzer import download_and_analyze_brochure, trigger_extraction_workflow
