@@ -1,9 +1,15 @@
 """
-Tender watchlist alert engine.
+Tender alert engine.
 
-Checks for new documents on watched tenders and sends email notifications
-via SMTP2GO. Designed to run standalone in GitHub Actions cron
-or be imported by other modules for test sends.
+Two alert types:
+1. **Watchlist document alerts** — new documents on any team-watched tender.
+   All watchlist entries are merged team-wide (regardless of who added them)
+   and a single email is sent to ALERT_RECIPIENTS.
+2. **New tender alerts** — newly-listed tenders matching criteria
+   (CARD_TENDER_TYPES + RELEVANT_PURPOSES).
+
+Sends email notifications via SMTP2GO. Designed to run standalone
+in GitHub Actions cron or be imported by other modules.
 
 Usage:
     python alerts.py              # Check all watchlists and send alerts
@@ -14,7 +20,6 @@ import html as _html
 import logging
 import smtplib
 import sys
-from collections import defaultdict
 from dataclasses import dataclass, field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -26,7 +31,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import (
     ALERT_RECIPIENTS,
+    CARD_TENDER_TYPES,
     DASHBOARD_URL,
+    RELEVANT_PURPOSES,
     SMTP_FROM,
     SMTP_HOST,
     SMTP_PASSWORD,
@@ -55,10 +62,9 @@ class TenderAlert:
 
 
 @dataclass
-class UserAlertBundle:
-    """All alerts for a single user, ready to send as one email."""
+class AlertBundle:
+    """All document alerts for the team, ready to send as one email."""
 
-    user_email: str
     tender_alerts: list[TenderAlert] = field(default_factory=list)
 
     @property
@@ -70,13 +76,13 @@ class UserAlertBundle:
 # ── Alert engine ─────────────────────────────────────────────────────────────
 
 class AlertEngine:
-    """Core alert logic: detect new documents, compose emails, send via SMTP."""
+    """Core alert logic: detect new documents/tenders, compose emails, send via SMTP."""
 
     def __init__(self, db: TenderDB, user_db: UserDB, dry_run: bool = False) -> None:
         """Initialize the alert engine.
 
         Args:
-            db: TenderDB instance for tender/document queries (SQLite).
+            db: TenderDB instance for tender/document queries.
             user_db: UserDB instance for watchlist/alert_history (Supabase).
             dry_run: If True, log what would be sent without actually sending.
         """
@@ -112,13 +118,17 @@ class AlertEngine:
             )
             return False
 
+    # ── Watchlist document alerts (team-wide) ─────────────────────────
+
     def check_and_send(self) -> int:
-        """Main entry point. Check all watchlists and send alert emails.
+        """Check all watchlists for new documents and send one team email.
+
+        All watchlist entries across all users are merged. Deduplication
+        uses TEAM_EMAIL so the whole team shares a single alert history.
 
         Returns:
-            Number of emails sent (or would be sent in dry-run mode).
+            Number of emails sent (0 or 1, or would-be-sent in dry-run).
         """
-        # Verify SMTP connectivity before doing any work (skip in dry-run mode)
         if not self.dry_run:
             if not self._verify_smtp_connection():
                 logger.error(
@@ -132,78 +142,64 @@ class AlertEngine:
             logger.info("No active watchlist entries found")
             return 0
 
-        # Group entries by user
-        user_entries: dict[str, list[dict]] = defaultdict(list)
+        # Merge all entries team-wide: deduplicate by tender_id,
+        # keep the earliest created_at per tender for the "since" date.
+        tender_since: dict[int, str] = {}
         for entry in watchlist_entries:
-            user_entries[entry["user_email"]].append(entry)
+            tid = entry["tender_id"]
+            created = entry["created_at"]
+            if tid not in tender_since or created < tender_since[tid]:
+                tender_since[tid] = created
 
         logger.info(
-            "Processing watchlists: %d users, %d total entries",
-            len(user_entries), len(watchlist_entries),
+            "Processing watchlists: %d unique tenders from %d entries",
+            len(tender_since), len(watchlist_entries),
         )
 
-        emails_sent = 0
-        emails_failed = 0
-        total_new_docs = 0
-        for user_email, entries in user_entries.items():
-            bundle = self._build_user_bundle(user_email, entries)
-            if not bundle or not bundle.tender_alerts:
-                continue
+        bundle = self._build_team_bundle(tender_since)
+        if not bundle or not bundle.tender_alerts:
+            logger.info("No new documents found for watched tenders")
+            return 0
 
-            total_new_docs += bundle.total_docs
-            logger.info(
-                "User %s: %d tenders with %d new documents",
-                user_email, len(bundle.tender_alerts), bundle.total_docs,
-            )
-
-            if self.dry_run:
-                self._log_dry_run(bundle)
-                emails_sent += 1
-            else:
-                success = self._send_alert_email(bundle)
-                if success:
-                    self._record_sent_alerts(bundle)
-                    emails_sent += 1
-                else:
-                    emails_failed += 1
-
-        # Structured summary for CI visibility
         logger.info(
-            "=== Alert summary | watchlist_entries=%d docs_found=%d "
-            "emails_sent=%d emails_failed=%d ===",
-            len(watchlist_entries),
-            total_new_docs,
-            emails_sent,
-            emails_failed,
+            "Team alert: %d tenders with %d new documents",
+            len(bundle.tender_alerts), bundle.total_docs,
         )
-        return emails_sent
 
-    def _build_user_bundle(
-        self, user_email: str, entries: list[dict],
-    ) -> Optional[UserAlertBundle]:
-        """Build an alert bundle for a user by checking each watched tender.
+        if self.dry_run:
+            self._log_dry_run(bundle)
+            return 1
+
+        success = self._send_watchlist_email(bundle)
+        if success:
+            self._record_sent_alerts(bundle)
+            return 1
+        return 0
+
+    def _build_team_bundle(
+        self, tender_since: dict[int, str],
+    ) -> Optional[AlertBundle]:
+        """Build an alert bundle for the team by checking each watched tender.
+
+        Uses TEAM_EMAIL for deduplication in alert_history so the whole
+        team shares a single set of "already sent" document IDs.
 
         Args:
-            user_email: The user's email.
-            entries: List of watchlist entries for this user.
+            tender_since: Mapping of tender_id → earliest watchlist created_at.
 
         Returns:
-            UserAlertBundle with non-empty tender alerts, or None.
+            AlertBundle with non-empty tender alerts, or None.
         """
-        bundle = UserAlertBundle(user_email=user_email)
+        bundle = AlertBundle()
 
-        for entry in entries:
-            tender_id = entry["tender_id"]
-            since_date = entry["created_at"]
-
-            # Find unsent new docs: exclude already-sent IDs (from Supabase)
-            sent_ids = self.user_db.get_sent_doc_ids(user_email, tender_id)
+        for tender_id, since_date in tender_since.items():
+            # Dedup against TEAM_EMAIL (shared team history)
+            sent_ids = self.user_db.get_sent_doc_ids(TEAM_EMAIL, tender_id)
             new_docs = self.db.get_new_docs_excluding(tender_id, since_date, sent_ids)
 
             if not new_docs:
                 continue
 
-            # Look up tender details for the email
             tender = self.db.get_tender_by_id(tender_id)
             if not tender:
                 continue
@@ -219,17 +215,20 @@ class AlertEngine:
 
         return bundle if bundle.tender_alerts else None
 
-    def _record_sent_alerts(self, bundle: UserAlertBundle) -> None:
-        """Record all sent alerts in Supabase alert_history for deduplication."""
+    def _record_sent_alerts(self, bundle: AlertBundle) -> None:
+        """Record all sent alerts in Supabase alert_history for deduplication.
+
+        Uses TEAM_EMAIL so all team members share a single dedup set.
+        """
         for ta in bundle.tender_alerts:
             for doc in ta.new_docs:
                 self.user_db.record_alert_sent(
-                    bundle.user_email, ta.tender_id, doc["row_id"],
+                    TEAM_EMAIL, ta.tender_id, doc["row_id"],
                 )
 
-    def _log_dry_run(self, bundle: UserAlertBundle) -> None:
+    def _log_dry_run(self, bundle: AlertBundle) -> None:
         """Log what would be sent in dry-run mode."""
-        logger.info("[DRY RUN] Would send email to: %s", bundle.user_email)
+        logger.info("[DRY RUN] Would send email to: %s", ALERT_RECIPIENTS)
         for ta in bundle.tender_alerts:
             logger.info(
                 "  Tender %d (%s): %d new docs",
@@ -239,10 +238,10 @@ class AlertEngine:
                 doc_label = doc.get("description") or doc.get("doc_name", "מסמך")
                 logger.info("    - %s (%s)", doc_label, doc["first_seen"])
 
-    # ── Email composition ────────────────────────────────────────────────
+    # ── Watchlist email composition ───────────────────────────────────
 
-    def _send_alert_email(self, bundle: UserAlertBundle) -> bool:
-        """Compose and send alert email for a user.
+    def _send_watchlist_email(self, bundle: AlertBundle) -> bool:
+        """Compose and send watchlist document alert to the team.
 
         Args:
             bundle: All alerts to include in the email.
@@ -255,23 +254,15 @@ class AlertEngine:
             return False
 
         subject = f"🏗️ עדכון מכרזים — {bundle.total_docs} מסמכים חדשים"
-        html_body = self._compose_html(bundle)
+        html_body = self._compose_watchlist_html(bundle)
 
-        # Team watchlist alerts go to all ALERT_RECIPIENTS
-        recipients: str | list[str] = (
-            ALERT_RECIPIENTS if bundle.user_email == TEAM_EMAIL else bundle.user_email
-        )
-        return send_smtp_email(
-            to=recipients,
-            subject=subject,
-            html_body=html_body,
-        )
+        return send_smtp_email(to=ALERT_RECIPIENTS, subject=subject, html_body=html_body)
 
-    def _compose_html(self, bundle: UserAlertBundle) -> str:
+    def _compose_watchlist_html(self, bundle: AlertBundle) -> str:
         """Build Hebrew RTL HTML email with document links.
 
         Args:
-            bundle: All alerts for one user.
+            bundle: All document alerts.
 
         Returns:
             HTML string for the email body.
@@ -284,7 +275,6 @@ class AlertEngine:
         for ta in bundle.tender_alerts:
             doc_items = []
             for doc in ta.new_docs:
-                # Build download URL from document data
                 doc_url_data = {
                     "MichrazID": ta.tender_id,
                     "RowID": doc["row_id"],
@@ -362,6 +352,139 @@ class AlertEngine:
     <p style="color:#A3AED0;font-size:12px;text-align:center;margin-top:16px;">
       התראה זו נשלחה אוטומטית ממערכת מעקב מכרזי קרקע.<br>
       לביטול התראות, הסר/י מכרזים מרשימת המעקב בלוח.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    # ── New tender alerts ─────────────────────────────────────────────
+
+    def send_new_tender_alert(self, new_tenders: list[dict]) -> bool:
+        """Send an alert email for newly-listed tenders matching criteria.
+
+        Filters new tenders by CARD_TENDER_TYPES and RELEVANT_PURPOSES,
+        then sends a single email to ALERT_RECIPIENTS.
+
+        Args:
+            new_tenders: List of tender dicts (from the API fetch DataFrame).
+                Each dict must have: tender_id, tender_name, city, deadline,
+                tender_type_code, tender_type, purpose, units.
+
+        Returns:
+            True if email was sent (or would be in dry-run), False if
+            no matching tenders or send failed.
+        """
+        # Filter to matching criteria
+        matching = [
+            t for t in new_tenders
+            if (
+                t.get("tender_type_code") in CARD_TENDER_TYPES
+                and (
+                    not t.get("purpose")
+                    or t.get("purpose") in RELEVANT_PURPOSES
+                )
+            )
+        ]
+
+        if not matching:
+            logger.info("No new tenders match alert criteria")
+            return False
+
+        logger.info(
+            "New tender alert: %d tenders match criteria (from %d new)",
+            len(matching), len(new_tenders),
+        )
+
+        if self.dry_run:
+            logger.info("[DRY RUN] Would send new-tender alert to: %s", ALERT_RECIPIENTS)
+            for t in matching:
+                logger.info(
+                    "  Tender %d: %s (%s) — %s",
+                    t.get("tender_id", 0),
+                    t.get("tender_name", ""),
+                    t.get("city", ""),
+                    t.get("tender_type", ""),
+                )
+            return True
+
+        subject = f"🆕 {len(matching)} מכרזים חדשים פורסמו"
+        html_body = self._compose_new_tender_html(matching)
+
+        return send_smtp_email(to=ALERT_RECIPIENTS, subject=subject, html_body=html_body)
+
+    def _compose_new_tender_html(self, tenders: list[dict]) -> str:
+        """Build Hebrew RTL HTML email listing newly-listed tenders.
+
+        Args:
+            tenders: List of tender dicts matching alert criteria.
+
+        Returns:
+            HTML string for the email body.
+        """
+        from datetime import date as _date
+
+        today_str = _date.today().strftime("%d/%m/%Y")
+
+        tender_blocks = []
+        for t in tenders:
+            tid = t.get("tender_id", 0)
+            name = _html.escape(str(t.get("tender_name", "")))
+            city = _html.escape(str(t.get("city", "—")))
+            ttype = _html.escape(str(t.get("tender_type", "—")))
+            purpose = _html.escape(str(t.get("purpose", "—")))
+            units = t.get("units")
+            units_str = str(units) if units else "—"
+            deadline = _html.escape(str(t.get("deadline", "לא צוין")))
+
+            tender_blocks.append(f"""
+            <div style="margin:16px 0;padding:12px;background:#f8f9fc;
+                        border-radius:8px;border-right:4px solid #22C55E;">
+              <h3 style="color:#2B3674;margin:0 0 8px 0;">
+                מכרז {tid} — {name}
+              </h3>
+              <p style="color:#A3AED0;margin:0 0 4px 0;">
+                {city} | {ttype} | {purpose}
+              </p>
+              <p style="color:#A3AED0;margin:0 0 4px 0;">
+                יח"ד: {units_str} | מועד סגירה: {deadline}
+              </p>
+            </div>""")
+
+        tenders_html = "\n".join(tender_blocks)
+
+        dashboard_button = ""
+        if DASHBOARD_URL:
+            dashboard_button = f"""
+            <p style="text-align:center;">
+              <a href="{DASHBOARD_URL}"
+                 style="display:inline-block;background:#22C55E;color:#fff;
+                        padding:10px 24px;border-radius:20px;text-decoration:none;
+                        font-weight:500;">
+                צפה בלוח מכרזים
+              </a>
+            </p>"""
+
+        return f"""<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;direction:rtl;text-align:right;
+             background:#f4f7fe;padding:20px;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;
+              padding:24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+    <h2 style="color:#2B3674;margin-bottom:4px;">
+      🆕 מכרזים חדשים פורסמו
+    </h2>
+    <p style="color:#A3AED0;font-size:14px;">{today_str} | {len(tenders)} מכרזים חדשים</p>
+
+    <hr style="border:1px solid #E9EDF7;">
+    {tenders_html}
+    <hr style="border:1px solid #E9EDF7;">
+    {dashboard_button}
+
+    <p style="color:#A3AED0;font-size:12px;text-align:center;margin-top:16px;">
+      התראה זו נשלחה אוטומטית ממערכת מעקב מכרזי קרקע.<br>
+      מכרזים מסוג: פומבי רגיל, מחיר מטרה, דיור במחיר מופחת.
     </p>
   </div>
 </body>

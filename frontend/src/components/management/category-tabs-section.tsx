@@ -74,10 +74,17 @@ const compactColumns: ColumnDef<CompactRow, unknown>[] = [
       row.original.published_booklet ? "\u2705" : "\u274C",
   },
   {
-    accessorKey: "tender_name",
-    header: "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6",
-    cell: ({ getValue }) => (
-      <span className="text-sm font-medium">{getValue<string>()}</span>
+    accessorKey: "deadline",
+    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
+    sortingFn: "alphanumeric",
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1.5 whitespace-nowrap">
+        <DeadlineBadge
+          daysRemaining={row.original.days_to_deadline}
+          compact
+        />
+        <span className="text-sm">{formatDeadline(row.original.deadline)}</span>
+      </div>
     ),
   },
   {
@@ -94,16 +101,10 @@ const compactColumns: ColumnDef<CompactRow, unknown>[] = [
     cell: ({ getValue }) => getValue<number | null>() ?? "\u2014",
   },
   {
-    id: "deadline_fmt",
-    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
-    cell: ({ row }) => (
-      <div className="flex items-center gap-1.5 whitespace-nowrap">
-        <DeadlineBadge
-          daysRemaining={row.original.days_to_deadline}
-          compact
-        />
-        <span className="text-sm">{formatDeadline(row.original.deadline)}</span>
-      </div>
+    accessorKey: "tender_name",
+    header: "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6",
+    cell: ({ getValue }) => (
+      <span className="text-sm font-medium">{getValue<string>()}</span>
     ),
   },
 ];
