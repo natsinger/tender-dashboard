@@ -69,14 +69,14 @@ export function PageHeader({
     >
       {/* Title side (right in RTL) */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">{title}</h1>
+        <h1 className="text-xl font-bold text-megido-text-heading">{title}</h1>
         {subtitle && (
-          <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-sm text-megido-text-muted">{subtitle}</p>
         )}
       </div>
 
       {/* Date side (left in RTL) */}
-      <span className="shrink-0 text-sm text-slate-500">
+      <span className="shrink-0 text-sm text-megido-text-muted">
         {formatHebrewDate(displayDate)}
       </span>
     </div>

@@ -21,6 +21,7 @@ import {
 import { MetricCard } from "@/components/metric-card";
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
 import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { corePalette } from "@/design-system/tokens/colors";
 import type { SupplyPipelineRow } from "@/lib/utils/analytics-engine";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +49,7 @@ export function MarketOverviewSection({
 }: MarketOverviewSectionProps) {
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">
+      <h2 className="text-lg font-semibold text-megido-text-heading">
         סקירת שוק
       </h2>
 
@@ -79,9 +80,9 @@ export function MarketOverviewSection({
             data={pipelineData}
             margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} orientation="right" />
             <Tooltip />
             <Legend
               verticalAlign="top"
@@ -118,7 +119,7 @@ export function MarketOverviewSection({
           </ComposedChart>
         </ChartWrapper>
       ) : (
-        <p className="py-6 text-center text-sm text-slate-400">
+        <p className="py-6 text-center text-sm text-megido-text-muted">
           אין מספיק נתונים לתצוגת צינור היצע
         </p>
       )}

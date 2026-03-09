@@ -17,7 +17,9 @@ import {
   LabelList,
 } from "recharts";
 import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { corePalette } from "@/design-system/tokens/colors";
 import { ChartWrapper } from "./chart-wrapper";
+import { HebrewTooltip } from "./hebrew-tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,9 +74,9 @@ export function MegidoBarChart({
       <BarChart
         data={data}
         layout={isHorizontal ? "vertical" : "horizontal"}
-        margin={{ top: 30, right: 10, bottom: 10, left: 10 }}
+        margin={{ top: 30, right: 10, bottom: 10, left: 10 }} /* RTL: right margin for YAxis */
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+        <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
 
         {isHorizontal ? (
           <>
@@ -84,24 +86,25 @@ export function MegidoBarChart({
               dataKey={xKey}
               tick={{ fontSize: 12 }}
               width={80}
+              orientation="right"
             />
           </>
         ) : (
           <>
             <XAxis dataKey={xKey} tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} orientation="right" />
           </>
         )}
 
-        <Tooltip />
+        <Tooltip content={<HebrewTooltip />} />
 
-        <Bar dataKey={yKey} fill={barColor} radius={[4, 4, 0, 0]}>
+        <Bar dataKey={yKey} fill={barColor} radius={isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}>
           {showLabels && (
             <LabelList
               dataKey={yKey}
               position={isHorizontal ? "right" : "top"}
-              fontSize={13}
-              fill="#1E293B"
+              fontSize={14}
+              fill={corePalette.textHeading}
               fontWeight={600}
             />
           )}

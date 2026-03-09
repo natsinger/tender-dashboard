@@ -22,6 +22,8 @@ import {
 } from "recharts";
 
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
+import { HebrewTooltip } from "@/components/charts/hebrew-tooltip";
+import { corePalette } from "@/design-system/tokens/colors";
 import { useActiveTenders } from "@/hooks";
 import { RELEVANT_TENDER_TYPES } from "@/lib/constants";
 
@@ -54,7 +56,7 @@ interface CityChartItem {
 // ---------------------------------------------------------------------------
 
 export function CityBarChart() {
-  const { data: activeTenders, isLoading } = useActiveTenders();
+  const { data: activeTenders, isLoading, isError, refetch } = useActiveTenders();
 
   const chartData = useMemo<CityChartItem[]>(() => {
     if (!activeTenders || activeTenders.length === 0) return [];
@@ -92,10 +94,29 @@ export function CityBarChart() {
   if (isLoading) {
     return (
       <section dir="rtl">
-        <p className="mb-2 text-[13px] font-medium text-slate-500">
+        <p className="mb-2 text-sm font-medium text-megido-text-muted">
           {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
         </p>
-        <div className="h-[320px] animate-pulse rounded-md bg-slate-100" />
+        <div className="h-[320px] animate-pulse rounded-md bg-megido-neutral-100" />
+      </section>
+    );
+  }
+
+  if (isError) {
+    return (
+      <section dir="rtl">
+        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">
+            {"שגיאה בטעינת הנתונים"}
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
+          >
+            {"נסה שוב"}
+          </button>
+        </div>
       </section>
     );
   }
@@ -103,7 +124,7 @@ export function CityBarChart() {
   if (chartData.length === 0) {
     return (
       <section dir="rtl">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-megido-text-muted">
           {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05E2\u05E8\u05D9\u05DD"}
         </p>
       </section>
@@ -120,16 +141,16 @@ export function CityBarChart() {
           data={chartData}
           margin={{ top: 40, right: 10, bottom: 10, left: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+          <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
           <XAxis dataKey="city" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
-          <Tooltip />
-          <Bar dataKey="tender_count" fill="#2563EB" radius={[4, 4, 0, 0]}>
+          <YAxis tick={{ fontSize: 12 }} orientation="right" />
+          <Tooltip content={<HebrewTooltip labelMap={{ tender_count: "מכרזים", total_units: 'יח"ד' }} />} />
+          <Bar dataKey="tender_count" fill={corePalette.primary} radius={[4, 4, 0, 0]}>
             {/* Value label inside bar */}
             <LabelList
               dataKey="tender_count"
               position="inside"
-              fontSize={13}
+              fontSize={14}
               fill="#FFFFFF"
               fontWeight={600}
             />
@@ -138,7 +159,7 @@ export function CityBarChart() {
               dataKey="annotation"
               position="top"
               fontSize={10}
-              fill="#1E293B"
+              fill={corePalette.textHeading}
               offset={4}
             />
           </Bar>

@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
 import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { corePalette } from "@/design-system/tokens/colors";
 import type {
   PriceTrendRow,
   TabaSummaryRow,
@@ -92,7 +93,7 @@ export function PriceSection({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">ניתוח מחירים</h2>
+      <h2 className="text-lg font-semibold text-megido-text-heading">ניתוח מחירים</h2>
 
       <Tabs defaultValue="trends" dir="rtl">
         <TabsList>
@@ -112,9 +113,9 @@ export function PriceSection({
                 data={priceChartData}
                 margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} orientation="right" />
                 <Tooltip />
                 <Legend
                   verticalAlign="top"
@@ -138,7 +139,7 @@ export function PriceSection({
               </LineChart>
             </ChartWrapper>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               {`אין נתוני מחירים עם שטח קרקע תקין לחישוב מחיר למ"ר`}
             </p>
           )}
@@ -148,10 +149,10 @@ export function PriceSection({
         <TabsContent value="taba">
           {tabaSummary.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">{`מספר תב"ע`}</th>
                       <th className="px-3 py-2 text-center font-semibold">
                         מכרזים
@@ -177,7 +178,7 @@ export function PriceSection({
                     {tabaSummary.slice(0, 50).map((row) => (
                       <tr
                         key={row.planNumber}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">{row.planNumber}</td>
                         <td className="px-3 py-2 text-center">
@@ -203,12 +204,12 @@ export function PriceSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 {`ניתוח מצטבר לפי תב"ע -- מחירים, פרמיות וקצב מכרזים`}
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               {`אין נתוני תב"ע מעובדים`}
             </p>
           )}
@@ -218,10 +219,10 @@ export function PriceSection({
         <TabsContent value="premium">
           {premiumData.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">מכרז</th>
                       <th className="px-3 py-2 text-center font-semibold">
                         שומה
@@ -245,7 +246,7 @@ export function PriceSection({
                     {premiumData.slice(0, 50).map((row, i) => (
                       <tr
                         key={`${row.tenderId}-${i}`}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">{row.tenderId}</td>
                         <td className="px-3 py-2 text-center">
@@ -269,12 +270,12 @@ export function PriceSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 {`פרמיית/הנחת מחיר זכייה ביחס לשומת רמ"י ומחיר סף`}
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מכרזים עם נתוני הצעות זוכות
             </p>
           )}

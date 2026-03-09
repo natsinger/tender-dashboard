@@ -1,12 +1,12 @@
 /**
  * NewDocumentsSection component.
  *
- * Row 1 of the dashboard: two tables (new documents + new brochures in last 7 days)
- * on the left, with two MetricCards (active tenders count, closing soon count)
- * on the right. Tables stack vertically on mobile.
+ * Row 1 of the dashboard: two tables stacked vertically showing new documents
+ * and new brochures in the last 7 days. KPI metric cards have been moved to
+ * the combined KpiCategoryRow component.
  *
  * Data comes from useNewDocuments(7) for documents, and useActiveTenders()
- * for KPI metrics.
+ * for tender info lookup.
  */
 "use client";
 
@@ -15,21 +15,10 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Download } from "lucide-react";
 
 import { DataTable } from "@/components/data-table";
-import { MetricCard } from "@/components/metric-card";
 import { useNewDocuments, useActiveTenders } from "@/hooks";
-import {
-  CLOSING_SOON_DAYS,
-  RELEVANT_TENDER_TYPES,
-} from "@/lib/constants";
-import { buildDocumentUrl, getClosingSoonTenders } from "@/lib/utils/tenders";
+import { RELEVANT_TENDER_TYPES } from "@/lib/constants";
+import { buildDocumentUrl } from "@/lib/utils/tenders";
 import type { TenderDocumentWithInfo, TenderWithComputed } from "@/types/database";
-
-// ---------------------------------------------------------------------------
-// Tender type codes for the "active (excluding initiative)" KPI card
-// ---------------------------------------------------------------------------
-
-/** Tender type codes for the KPI card: public(1), target price(5), reduced(8). */
-const CARD_TENDER_TYPES = new Set([1, 5, 8]);
 
 // ---------------------------------------------------------------------------
 // Row type for the document tables
@@ -86,7 +75,7 @@ const docColumns: ColumnDef<DocTableRow, unknown>[] = [
           href={download_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+          className="inline-flex items-center gap-1 text-sm font-medium text-megido-primary hover:underline"
         >
           <Download className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{doc_description || "\u05DE\u05E1\u05DE\u05DA"}</span>
@@ -146,10 +135,21 @@ function buildDocRows(
 // ---------------------------------------------------------------------------
 
 export function NewDocumentsSection() {
-  const { data: newDocs, isLoading: docsLoading } = useNewDocuments(7);
-  const { data: activeTenders, isLoading: tendersLoading } = useActiveTenders();
+  const {
+    data: newDocs,
+    isLoading: docsLoading,
+    isError: docsError,
+    refetch: refetchDocs,
+  } = useNewDocuments(7);
+  const {
+    data: activeTenders,
+    isLoading: tendersLoading,
+    isError: tendersError,
+    refetch: refetchTenders,
+  } = useActiveTenders();
 
   const isLoading = docsLoading || tendersLoading;
+  const isError = docsError || tendersError;
 
   // Derive relevant-type active tenders
   const relevantActive = useMemo(
@@ -199,63 +199,56 @@ export function NewDocumentsSection() {
     [relevantActive, newBrochureTenderIds, brochureDocs],
   );
 
-  // KPI metrics
-  const cardActiveCount = useMemo(
-    () =>
-      relevantActive.filter((t) =>
-        CARD_TENDER_TYPES.has(t.tender_type_code ?? 0),
-      ).length,
-    [relevantActive],
-  );
-
-  const closingSoonCount = useMemo(
-    () => getClosingSoonTenders(relevantActive, CLOSING_SOON_DAYS).length,
-    [relevantActive],
-  );
+  if (isError) {
+    return (
+      <section dir="rtl">
+        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">
+            {"\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D8\u05E2\u05D9\u05E0\u05EA \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void refetchDocs();
+              void refetchTenders();
+            }}
+            className="rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
+          >
+            {"\u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1"}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section dir="rtl">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
-        {/* Left: two tables stacked */}
-        <div className="space-y-4">
-          {/* New documents table */}
-          <div>
-            <h3 className="mb-2 text-[15px] font-semibold text-slate-800">
-              {"\u05D4\u05D5\u05D3\u05E2\u05D5\u05EA \u05D7\u05D3\u05E9\u05D5\u05EA \u05D1\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD (7 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05D0\u05D7\u05E8\u05D5\u05E0\u05D9\u05DD)"}
-            </h3>
-            <DataTable
-              columns={docColumns}
-              data={docTableRows}
-              isLoading={isLoading}
-              pageSize={8}
-              emptyMessage={"\u05D0\u05D9\u05DF \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD \u05D4\u05E9\u05D1\u05D5\u05E2"}
-            />
-          </div>
-
-          {/* New brochures table */}
-          <div>
-            <h3 className="mb-2 text-[15px] font-semibold text-slate-800">
-              {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E4\u05D5\u05E8\u05E1\u05DE\u05D4 \u05D1\u05D4\u05DD \u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6 \u05D7\u05D3\u05E9\u05D4"}
-            </h3>
-            <DataTable
-              columns={docColumns}
-              data={brochureTableRows}
-              isLoading={isLoading}
-              pageSize={8}
-              emptyMessage={"\u05D0\u05D9\u05DF \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD \u05D4\u05E9\u05D1\u05D5\u05E2"}
-            />
-          </div>
+      <div className="space-y-4">
+        {/* New documents table */}
+        <div>
+          <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
+            {"\u05D4\u05D5\u05D3\u05E2\u05D5\u05EA \u05D7\u05D3\u05E9\u05D5\u05EA \u05D1\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD (7 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05D0\u05D7\u05E8\u05D5\u05E0\u05D9\u05DD)"}
+          </h3>
+          <DataTable
+            columns={docColumns}
+            data={docTableRows}
+            isLoading={isLoading}
+            pageSize={5}
+            emptyMessage={"\u05D0\u05D9\u05DF \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD \u05D4\u05E9\u05D1\u05D5\u05E2"}
+          />
         </div>
 
-        {/* Right: KPI metric cards */}
-        <div className="flex flex-col gap-4">
-          <MetricCard
-            label={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD (\u05DC\u05DC\u05D0 \u05D9\u05D9\u05D6\u05D5\u05DD)"}
-            value={isLoading ? "\u2026" : cardActiveCount.toLocaleString("he-IL")}
-          />
-          <MetricCard
-            label={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D9\u05D9\u05E1\u05D2\u05E8\u05D5 \u05D1\u05E9\u05D1\u05D5\u05E2\u05D9\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}
-            value={isLoading ? "\u2026" : closingSoonCount.toLocaleString("he-IL")}
+        {/* New brochures table */}
+        <div>
+          <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
+            {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E4\u05D5\u05E8\u05E1\u05DE\u05D4 \u05D1\u05D4\u05DD \u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6 \u05D7\u05D3\u05E9\u05D4"}
+          </h3>
+          <DataTable
+            columns={docColumns}
+            data={brochureTableRows}
+            isLoading={isLoading}
+            pageSize={5}
+            emptyMessage={"\u05D0\u05D9\u05DF \u05E4\u05E8\u05D9\u05D8\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD \u05D4\u05E9\u05D1\u05D5\u05E2"}
           />
         </div>
       </div>

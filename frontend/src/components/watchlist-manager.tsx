@@ -9,9 +9,18 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Trash2, Search, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAddToWatchlist, useRemoveFromWatchlist } from "@/hooks";
 import type { Tender, WatchlistItemWithTender } from "@/types/database";
 
@@ -63,6 +72,7 @@ export function WatchlistManager({
   const [searchText, setSearchText] = useState("");
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -120,8 +130,14 @@ export function WatchlistManager({
       { email, tenderId: selectedTender.tender_id },
       {
         onSuccess: () => {
+          toast.success("המכרז נוסף למעקב בהצלחה");
           setSelectedTender(null);
           setSearchText("");
+        },
+        onError: (error) => {
+          toast.error("שגיאה בהוספת מכרז למעקב", {
+            description: error.message,
+          });
         },
       },
     );
@@ -129,7 +145,21 @@ export function WatchlistManager({
 
   const handleRemove = useCallback(
     (tenderId: number) => {
-      removeMutation.mutate({ email, tenderId });
+      removeMutation.mutate(
+        { email, tenderId },
+        {
+          onSuccess: () => {
+            toast.success("המכרז הוסר מהמעקב");
+            setConfirmRemoveId(null);
+          },
+          onError: (error) => {
+            toast.error("שגיאה בהסרת מכרז מהמעקב", {
+              description: error.message,
+            });
+            setConfirmRemoveId(null);
+          },
+        },
+      );
     },
     [email, removeMutation],
   );
@@ -161,7 +191,7 @@ export function WatchlistManager({
         <div className="relative flex-1" ref={containerRef}>
           {/* Search input */}
           <div className="relative">
-            <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-megido-text-muted" />
             <input
               ref={inputRef}
               type="text"
@@ -172,13 +202,13 @@ export function WatchlistManager({
               }}
               placeholder="הקלד שם של עיר או מספר מכרז"
               autoComplete="off"
-              className="h-9 w-full rounded-md border border-megido-border bg-white px-9 text-sm text-slate-800 placeholder:text-slate-400 focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
+              className="h-9 w-full rounded-md border border-megido-border bg-white px-9 text-sm text-megido-text-heading placeholder:text-megido-text-muted focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
             />
             {searchText && (
               <button
                 type="button"
                 onClick={handleClear}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-megido-text-muted hover:text-megido-neutral-600"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -187,9 +217,9 @@ export function WatchlistManager({
 
           {/* Dropdown results */}
           {dropdownOpen && searchText.trim() && (
-            <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-megido-border bg-white shadow-lg">
+            <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-megido-border bg-megido-bg-card shadow-lg">
               {filteredTenders.length === 0 ? (
-                <p className="px-3 py-2 text-sm text-slate-400">
+                <p className="px-3 py-2 text-sm text-megido-text-muted">
                   {"\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D5 \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA"}
                 </p>
               ) : (
@@ -199,17 +229,17 @@ export function WatchlistManager({
                       <button
                         type="button"
                         onClick={() => handleSelectTender(t)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-right text-sm transition-colors hover:bg-slate-50"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-end text-sm transition-colors hover:bg-megido-neutral-50"
                       >
                         <div className="min-w-0 flex-1">
-                          <span className="block truncate font-medium text-slate-800">
+                          <span className="block truncate font-medium text-megido-text-heading">
                             {(t.tender_name ?? "").slice(0, 40)}
                           </span>
-                          <span className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="flex items-center gap-2 text-xs text-megido-text-muted">
                             {t.city && (
                               <span className="text-blue-500">{t.city}</span>
                             )}
-                            <span className="text-slate-400">
+                            <span className="text-megido-text-muted">
                               #{t.tender_id}
                             </span>
                             {t.units != null && t.units > 0 && (
@@ -223,7 +253,7 @@ export function WatchlistManager({
                     </li>
                   ))}
                   {filteredTenders.length === MAX_RESULTS && (
-                    <p className="px-3 py-1.5 text-xs text-slate-400">
+                    <p className="px-3 py-1.5 text-xs text-megido-text-muted">
                       {"\u05DE\u05E6\u05D9\u05D2 30 \u05EA\u05D5\u05E6\u05D0\u05D5\u05EA \u05E8\u05D0\u05E9\u05D5\u05E0\u05D5\u05EA, \u05D4\u05E7\u05DC\u05D3 \u05E2\u05D5\u05D3 \u05DC\u05E6\u05DE\u05E6\u05DD..."}
                     </p>
                   )}
@@ -250,12 +280,12 @@ export function WatchlistManager({
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-10 animate-pulse rounded-md bg-slate-100"
+              className="h-10 animate-pulse rounded-md bg-megido-neutral-100"
             />
           ))}
         </div>
       ) : watchlistItems.length === 0 ? (
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-megido-text-muted">
           {isTeam
             ? "\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"
             : "\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D1\u05DE\u05E2\u05E7\u05D1 \u05D0\u05D9\u05E9\u05D9"}
@@ -274,10 +304,10 @@ export function WatchlistManager({
             return (
               <li
                 key={item.tender_id}
-                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50"
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-megido-neutral-50"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-slate-800">
+                  <p className="truncate text-sm text-megido-text-heading">
                     {displayName}
                   </p>
                   <div className="flex items-center gap-2">
@@ -293,9 +323,9 @@ export function WatchlistManager({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => handleRemove(item.tender_id)}
+                  onClick={() => setConfirmRemoveId(item.tender_id)}
                   disabled={removeMutation.isPending}
-                  className="shrink-0 text-slate-400 hover:text-red-500"
+                  className="shrink-0 text-megido-text-muted hover:text-red-500"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -304,6 +334,40 @@ export function WatchlistManager({
           })}
         </ul>
       )}
+
+      {/* Confirmation dialog for remove */}
+      <Dialog
+        open={confirmRemoveId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemoveId(null);
+        }}
+      >
+        <DialogContent dir="rtl" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{"הסרת מכרז"}</DialogTitle>
+            <DialogDescription>
+              {"האם למחוק את המכרז מהרשימה?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-start">
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirmRemoveId !== null) handleRemove(confirmRemoveId);
+              }}
+              disabled={removeMutation.isPending}
+            >
+              {"מחק"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmRemoveId(null)}
+            >
+              {"ביטול"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

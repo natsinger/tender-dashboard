@@ -77,13 +77,13 @@ function ScoreCell({ value }: { value: number }) {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-2 w-16 overflow-hidden rounded-full bg-megido-neutral-200">
         <div
           className={cn("h-full rounded-full", color)}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-xs tabular-nums text-slate-600">
+      <span className="text-xs tabular-nums text-megido-neutral-600">
         {Math.round(pct)}
       </span>
     </div>
@@ -132,7 +132,7 @@ function SkeletonRow({ colCount }: { colCount: number }) {
     <TableRow>
       {Array.from({ length: colCount }).map((_, i) => (
         <TableCell key={i}>
-          <div className="h-4 animate-pulse rounded bg-slate-200" />
+          <div className="h-4 animate-pulse rounded bg-megido-neutral-200" />
         </TableCell>
       ))}
     </TableRow>
@@ -277,7 +277,7 @@ function useExplorerColumns(): ColumnDef<ScoredTender, unknown>[] {
           return val ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           ) : (
-            <Circle className="h-4 w-4 text-slate-300" />
+            <Circle className="h-4 w-4 text-megido-neutral-300" />
           );
         },
         sortingFn: (rowA, rowB, columnId) => {
@@ -343,7 +343,7 @@ export function ExplorerTable({
   return (
     <div dir="rtl" className={cn("w-full", className)}>
       {/* Record count */}
-      <p className="mb-2 text-sm text-slate-500">
+      <p className="mb-2 text-sm text-megido-text-muted">
         {totalRows.toLocaleString("he-IL")}{" "}
         {"\u05E8\u05E9\u05D5\u05DE\u05D5\u05EA"}{" "}
         {"\u2014"}{" "}
@@ -369,7 +369,7 @@ export function ExplorerTable({
                       key={header.id}
                       style={widthPercent ? { width: widthPercent } : undefined}
                       className={cn(
-                        "text-right whitespace-nowrap overflow-hidden",
+                        "text-end whitespace-nowrap overflow-hidden",
                         canSort && "cursor-pointer select-none",
                       )}
                       onClick={
@@ -392,7 +392,7 @@ export function ExplorerTable({
                             ) : sorted === "desc" ? (
                               <ArrowDown className="h-3.5 w-3.5" />
                             ) : (
-                              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                              <ArrowUpDown className="h-3.5 w-3.5 text-megido-text-muted" />
                             )}
                           </span>
                         )}
@@ -422,14 +422,14 @@ export function ExplorerTable({
                     key={row.id}
                     className={cn(
                       "cursor-pointer",
-                      isSelected && "bg-blue-50",
+                      isSelected && "bg-megido-primary-50",
                     )}
                     onClick={() => handleRowClick(tender)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
                         key={cell.id}
-                        className="text-right overflow-hidden text-ellipsis"
+                        className="text-end overflow-hidden text-ellipsis"
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
@@ -444,7 +444,7 @@ export function ExplorerTable({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-slate-500"
+                  className="h-24 text-center text-megido-text-muted"
                 >
                   {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05DC\u05D4\u05E6\u05D2\u05D4"}
                 </TableCell>
@@ -456,7 +456,7 @@ export function ExplorerTable({
 
       {/* Pagination + record count footer */}
       <div className="flex items-center justify-between px-2 py-3">
-        <span className="text-sm text-slate-500">
+        <span className="text-sm text-megido-text-muted">
           {"\u05E2\u05DE\u05D5\u05D3"} {pageIndex + 1}{" "}
           {"\u05DE\u05EA\u05D5\u05DA"} {Math.max(pageCount, 1)}
           {" "}

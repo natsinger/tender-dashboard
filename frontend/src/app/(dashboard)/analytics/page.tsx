@@ -60,7 +60,7 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-center py-20">
           <div className="space-y-3 text-center">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-            <p className="text-sm text-slate-500">טוען נתוני ניתוח...</p>
+            <p className="text-sm text-megido-text-muted">טוען נתוני ניתוח...</p>
           </div>
         </div>
       </div>

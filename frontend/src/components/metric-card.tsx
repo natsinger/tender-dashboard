@@ -51,7 +51,7 @@ const DELTA_STYLES: Record<
 > = {
   up: { text: "text-emerald-600", Icon: TrendingUp },
   down: { text: "text-red-500", Icon: TrendingDown },
-  neutral: { text: "text-slate-400", Icon: Minus },
+  neutral: { text: "text-megido-text-muted", Icon: Minus },
 };
 
 // ---------------------------------------------------------------------------
@@ -72,18 +72,19 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        "relative rounded-xl border border-slate-200 bg-white p-4",
+        "relative rounded-xl border border-megido-border bg-megido-bg-card p-4",
         "transition-shadow duration-200 hover:shadow-md",
+        "focus-visible:ring-2 focus-visible:ring-megido-primary focus-visible:ring-offset-2",
         className,
       )}
     >
       {/* Blue right border accent (3px) */}
-      <div className="absolute bottom-3 right-0 top-3 w-[3px] rounded-full bg-[#2563EB]" />
+      <div className="absolute bottom-3 end-0 top-3 w-[3px] rounded-full bg-megido-primary" />
 
-      <p className="mb-1 text-xs font-medium text-slate-500">{label}</p>
+      <p className="mb-1 text-xs font-medium text-megido-text-muted">{label}</p>
 
       <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-bold text-slate-900">{value}</span>
+        <span className="ltr-nums text-2xl font-bold text-megido-text-heading">{value}</span>
 
         {delta != null && (
           <span className={cn("flex items-center gap-0.5 text-sm font-medium", deltaColor)}>
@@ -94,7 +95,7 @@ export function MetricCard({
       </div>
 
       {subtitle && (
-        <p className="mt-1 text-[11px] text-slate-400">{subtitle}</p>
+        <p className="mt-1 text-[0.64rem] text-megido-text-muted">{subtitle}</p>
       )}
     </div>
   );

@@ -26,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { corePalette } from "@/design-system/tokens/colors";
 import type {
   RegionalVolumeRow,
   MomentumRow,
@@ -83,7 +84,7 @@ const DIRECTION_LABELS: Record<string, string> = {
 const DIRECTION_COLORS: Record<string, string> = {
   up: "bg-emerald-100 text-emerald-700",
   down: "bg-red-100 text-red-700",
-  stable: "bg-slate-100 text-slate-600",
+  stable: "bg-megido-neutral-100 text-megido-neutral-600",
 };
 
 // ---------------------------------------------------------------------------
@@ -101,7 +102,7 @@ export function TrendsSection({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">מגמות</h2>
+      <h2 className="text-lg font-semibold text-megido-text-heading">מגמות</h2>
 
       <Tabs defaultValue="volume" dir="rtl">
         <TabsList>
@@ -122,9 +123,9 @@ export function TrendsSection({
                 data={volChartData}
                 margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} orientation="right" />
                 <Tooltip />
                 <Legend
                   verticalAlign="top"
@@ -148,7 +149,7 @@ export function TrendsSection({
               </LineChart>
             </ChartWrapper>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין נתונים זמינים לנפח אזורי
             </p>
           )}
@@ -157,10 +158,10 @@ export function TrendsSection({
         {/* Tab 2: Regional momentum */}
         <TabsContent value="momentum">
           {momentumData.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                  <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                     <th className="px-3 py-2 font-semibold">מחוז</th>
                     <th className="px-3 py-2 text-center font-semibold">
                       תקופה אחרונה
@@ -180,7 +181,7 @@ export function TrendsSection({
                   {momentumData.map((row) => (
                     <tr
                       key={row.region}
-                      className="border-b border-slate-100 hover:bg-slate-50/50"
+                      className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                     >
                       <td className="px-3 py-2">{row.region}</td>
                       <td className="px-3 py-2 text-center">
@@ -206,7 +207,7 @@ export function TrendsSection({
               </table>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מספיק נתונים לניתוח מומנטום
             </p>
           )}
@@ -223,9 +224,9 @@ export function TrendsSection({
                 data={monthlyData}
                 margin={{ top: 30, right: 10, bottom: 10, left: 10 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                 <XAxis dataKey="monthNameHe" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} orientation="right" />
                 <Tooltip />
                 <Bar
                   dataKey="avgCount"
@@ -237,14 +238,14 @@ export function TrendsSection({
                     dataKey="avgCount"
                     position="top"
                     fontSize={12}
-                    fill="#1E293B"
+                    fill={corePalette.textHeading}
                     fontWeight={600}
                   />
                 </Bar>
               </BarChart>
             </ChartWrapper>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין נתונים להתפלגות חודשית
             </p>
           )}
@@ -261,9 +262,9 @@ export function TrendsSection({
                 data={movingAvgData}
                 margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} orientation="right" />
                 <Tooltip />
                 <Legend
                   verticalAlign="top"
@@ -297,7 +298,7 @@ export function TrendsSection({
               </LineChart>
             </ChartWrapper>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין נתונים לממוצעים נעים
             </p>
           )}

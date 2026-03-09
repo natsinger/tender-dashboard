@@ -13,9 +13,11 @@ import { useAuthStore } from "@/stores/auth-store";
 interface TopbarProps {
   userEmail: string;
   onMenuClick: () => void;
+  /** Optional page title shown on mobile only. */
+  pageTitle?: string;
 }
 
-export function Topbar({ userEmail, onMenuClick }: TopbarProps) {
+export function Topbar({ userEmail, onMenuClick, pageTitle }: TopbarProps) {
   const logout = useAuthStore((s) => s.logout);
 
   async function handleLogout() {
@@ -37,6 +39,13 @@ export function Topbar({ userEmail, onMenuClick }: TopbarProps) {
       </Button>
 
       <Separator orientation="vertical" className="h-6 md:hidden" />
+
+      {/* Page title (mobile only) */}
+      {pageTitle && (
+        <h2 className="text-base font-semibold text-megido-text-heading md:hidden">
+          {pageTitle}
+        </h2>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />

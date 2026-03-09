@@ -116,16 +116,16 @@ function MultiSelect({
 
   return (
     <div ref={ref} className="relative flex-1" dir="rtl">
-      <label className="mb-1 block text-xs font-medium text-slate-600">
+      <label className="mb-1 block text-xs font-medium text-megido-neutral-600">
         {label}
       </label>
       <button
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm",
-          "hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/40",
-          selected.length > 0 ? "text-slate-900" : "text-slate-400",
+          "flex w-full items-center justify-between gap-2 rounded-md border border-megido-border bg-megido-bg-card px-3 py-2 text-sm",
+          "hover:border-megido-neutral-300 focus:outline-none focus:ring-2 focus:ring-megido-primary/40",
+          selected.length > 0 ? "text-megido-text-heading" : "text-megido-text-muted",
         )}
       >
         <span className="truncate">{displayText}</span>
@@ -137,45 +137,45 @@ function MultiSelect({
                 e.stopPropagation();
                 clearAll();
               }}
-              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-full p-0.5 text-megido-text-muted hover:bg-megido-neutral-100 hover:text-megido-neutral-600"
             >
               <X className="h-3 w-3" />
             </button>
           )}
-          <ChevronDown className="h-4 w-4 text-slate-400" />
+          <ChevronDown className="h-4 w-4 text-megido-text-muted" />
         </div>
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+        <div className="absolute end-0 top-full z-50 mt-1 w-full rounded-md border border-megido-border bg-megido-bg-card shadow-lg">
           {/* Search input */}
-          <div className="border-b border-slate-100 p-2">
+          <div className="border-b border-megido-neutral-100 p-2">
             <input
               ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={`\u05D7\u05E4\u05E9...`}
-              className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400/40"
+              className="w-full rounded border border-megido-border bg-megido-neutral-50 px-2 py-1.5 text-sm outline-none placeholder:text-megido-text-muted focus:border-megido-primary focus:ring-1 focus:ring-megido-primary/40"
             />
           </div>
 
           <div className="max-h-48 overflow-y-auto">
             {filteredOptions.length === 0 ? (
-              <p className="p-3 text-center text-sm text-slate-400">
+              <p className="p-3 text-center text-sm text-megido-text-muted">
                 {"\u05D0\u05D9\u05DF \u05D0\u05E4\u05E9\u05E8\u05D5\u05D9\u05D5\u05EA"}
               </p>
             ) : (
               filteredOptions.map((opt) => (
                 <label
                   key={opt}
-                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50"
+                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-megido-neutral-50"
                 >
                   <input
                     type="checkbox"
                     checked={selected.includes(opt)}
                     onChange={() => toggleOption(opt)}
-                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-megido-neutral-300 text-megido-primary focus:ring-blue-500"
                   />
                   <span className="truncate">{opt}</span>
                 </label>

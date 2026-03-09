@@ -139,15 +139,15 @@ export default function WatchlistPage() {
         <button
           type="button"
           onClick={() => setWatchlistOpen((prev) => !prev)}
-          className="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50/50 md:p-6"
+          className="flex w-full items-center justify-between p-4 transition-colors hover:bg-megido-neutral-50/50 md:p-6"
         >
           <h3 className="text-lg font-semibold text-megido-text-heading">
             {"\u05E8\u05E9\u05D9\u05DE\u05EA \u05DE\u05E2\u05E7\u05D1"}
           </h3>
           {watchlistOpen ? (
-            <ChevronUp className="h-5 w-5 text-slate-500" />
+            <ChevronUp className="h-5 w-5 text-megido-text-muted" />
           ) : (
-            <ChevronDown className="h-5 w-5 text-slate-500" />
+            <ChevronDown className="h-5 w-5 text-megido-text-muted" />
           )}
         </button>
 
@@ -171,7 +171,7 @@ export default function WatchlistPage() {
         <button
           type="button"
           onClick={() => setFavoritesOpen((prev) => !prev)}
-          className="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50/50 md:p-6"
+          className="flex w-full items-center justify-between p-4 transition-colors hover:bg-megido-neutral-50/50 md:p-6"
         >
           <h3 className="text-lg font-semibold text-megido-text-heading">
             {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"}
@@ -180,9 +180,9 @@ export default function WatchlistPage() {
             </span>
           </h3>
           {favoritesOpen ? (
-            <ChevronUp className="h-5 w-5 text-slate-500" />
+            <ChevronUp className="h-5 w-5 text-megido-text-muted" />
           ) : (
-            <ChevronDown className="h-5 w-5 text-slate-500" />
+            <ChevronDown className="h-5 w-5 text-megido-text-muted" />
           )}
         </button>
 
@@ -207,7 +207,7 @@ export default function WatchlistPage() {
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}
-                    className="h-10 animate-pulse rounded-md bg-slate-100"
+                    className="h-10 animate-pulse rounded-md bg-megido-neutral-100"
                   />
                 ))}
               </div>
@@ -221,7 +221,7 @@ export default function WatchlistPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" dir="rtl">
                     <thead>
-                      <tr className="border-b border-megido-border text-right text-xs font-medium text-megido-text-muted">
+                      <tr className="border-b border-megido-border text-end text-xs font-medium text-megido-text-muted">
                         <th className="px-2 py-2">
                           {"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}
                         </th>
@@ -256,13 +256,13 @@ export default function WatchlistPage() {
                         return (
                           <tr
                             key={item.tender_id}
-                            className="border-b border-megido-border/50 transition-colors hover:bg-slate-50/50"
+                            className="border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50"
                           >
                             {/* Review status */}
                             <td className="px-2 py-2">
                               <Badge
                                 variant={getReviewBadgeVariant(statusText)}
-                                className="text-[11px]"
+                                className="text-[0.64rem]"
                               >
                                 {statusText}
                               </Badge>

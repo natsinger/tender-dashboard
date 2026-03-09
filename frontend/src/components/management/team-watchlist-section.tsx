@@ -82,7 +82,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     header: "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA",
     size: 110,
     cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500 line-clamp-2">
+      <span className="text-xs text-megido-text-muted line-clamp-2">
         {getValue<string>() || "\u2014"}
       </span>
     ),
@@ -180,7 +180,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
     size: 120,
     cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500 line-clamp-2">
+      <span className="text-xs text-megido-text-muted line-clamp-2">
         {getValue<string>() || "\u2014"}
       </span>
     ),
@@ -264,7 +264,7 @@ export function TeamWatchlistSection() {
 
   return (
     <section>
-      <h4 className="mb-3 text-lg font-semibold text-slate-800">
+      <h4 className="mb-3 text-lg font-semibold text-megido-text-heading">
         {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA"}
       </h4>
 
@@ -293,7 +293,7 @@ export function TeamWatchlistSection() {
           emptyMessage=""
         />
       ) : (
-        <p className="py-4 text-sm text-slate-500">
+        <p className="py-4 text-sm text-megido-text-muted">
           {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD. \u05D4\u05D5\u05E1\u05E3 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D3\u05E8\u05DA \u05D3\u05D0\u05E9\u05D1\u05D5\u05E8\u05D3 \u05D7\u05D3\u05E8 \u05D4\u05E2\u05E1\u05E7\u05D0\u05D5\u05EA."}
         </p>
       )}

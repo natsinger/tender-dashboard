@@ -92,11 +92,11 @@ function DetailField({
 }) {
   return (
     <div className="flex items-start gap-2 py-1">
-      <span className="shrink-0 text-sm font-semibold text-slate-700">
+      <span className="shrink-0 text-sm font-semibold text-megido-neutral-700">
         {label}:
       </span>
       {children ?? (
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-megido-neutral-600">
           {value != null ? String(value) : "\u2014"}
         </span>
       )}
@@ -164,7 +164,7 @@ export function DetailViewer({
       {/* Collapsible header */}
       <button
         type="button"
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+        className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-megido-text-heading hover:bg-megido-neutral-50"
         onClick={() => setExpanded((prev) => !prev)}
       >
         <span>
@@ -182,11 +182,11 @@ export function DetailViewer({
           {/* Tender selector */}
           <div className="flex items-end gap-3">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-slate-600">
+              <label className="mb-1 block text-xs font-medium text-megido-neutral-600">
                 {"\u05D1\u05D7\u05E8 \u05DE\u05DB\u05E8\u05D6"}
               </label>
               <select
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                className="w-full rounded-md border border-megido-border bg-megido-bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 value={activeTenderId ?? ""}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -210,38 +210,38 @@ export function DetailViewer({
             <div className="space-y-4">
               {/* Overview metrics row */}
               <div className="grid grid-cols-2 gap-x-8 gap-y-1 sm:grid-cols-4">
-                <div className="rounded-md bg-slate-50 p-3 text-center">
-                  <p className="text-xs text-slate-500">
+                <div className="rounded-md bg-megido-neutral-50 p-3 text-center">
+                  <p className="text-xs text-megido-text-muted">
                     {"\u05DE\u05E1' \u05DE\u05DB\u05E8\u05D6"}
                   </p>
-                  <p className="text-lg font-bold text-slate-800">
+                  <p className="text-lg font-bold text-megido-text-heading">
                     {activeTender.tender_id}
                   </p>
                 </div>
-                <div className="rounded-md bg-slate-50 p-3 text-center">
-                  <p className="text-xs text-slate-500">
+                <div className="rounded-md bg-megido-neutral-50 p-3 text-center">
+                  <p className="text-xs text-megido-text-muted">
                     {"\u05E1\u05D8\u05D8\u05D5\u05E1"}
                   </p>
-                  <p className="text-lg font-bold text-slate-800">
+                  <p className="text-lg font-bold text-megido-text-heading">
                     {activeTender.status ?? "\u2014"}
                   </p>
                 </div>
-                <div className="rounded-md bg-slate-50 p-3 text-center">
-                  <p className="text-xs text-slate-500">
+                <div className="rounded-md bg-megido-neutral-50 p-3 text-center">
+                  <p className="text-xs text-megido-text-muted">
                     {'\u05D9\u05D7"\u05D3'}
                   </p>
-                  <p className="text-lg font-bold text-slate-800">
+                  <p className="text-lg font-bold text-megido-text-heading">
                     {activeTender.units != null
                       ? activeTender.units.toLocaleString("he-IL")
                       : "\u2014"}
                   </p>
                 </div>
-                <div className="rounded-md bg-slate-50 p-3 text-center">
-                  <p className="text-xs text-slate-500">
+                <div className="rounded-md bg-megido-neutral-50 p-3 text-center">
+                  <p className="text-xs text-megido-text-muted">
                     {"\u05D9\u05DE\u05D9\u05DD \u05DC\u05E1\u05D2\u05D9\u05E8\u05D4"}
                   </p>
                   <div className="flex items-center justify-center gap-2">
-                    <p className="text-lg font-bold text-slate-800">
+                    <p className="text-lg font-bold text-megido-text-heading">
                       {daysRemaining ?? "\u2014"}
                     </p>
                     <DeadlineBadge daysRemaining={daysRemaining} />
@@ -275,7 +275,7 @@ export function DetailViewer({
                   label={"\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4"}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-600">
+                    <span className="text-sm text-megido-neutral-600">
                       {formatDate(activeTender.deadline)}
                     </span>
                     <DeadlineBadge daysRemaining={daysRemaining} />
@@ -318,79 +318,79 @@ export function DetailViewer({
               {/* Land & Pricing Data — only shown when no Supabase lots exist (fallback) */}
               {(!lots || lots.length === 0) && (
               <div className="border-t pt-3">
-                <h4 className="mb-2 text-sm font-semibold text-slate-800">
+                <h4 className="mb-2 text-sm font-semibold text-megido-text-heading">
                   {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05E7\u05E8\u05E7\u05E2 \u05D5\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}
                 </h4>
 
                 {detailsLoading ? (
-                  <div className="h-16 animate-pulse rounded bg-slate-200" />
+                  <div className="h-16 animate-pulse rounded bg-megido-neutral-200" />
                 ) : rmiDetails?.Tik && rmiDetails.Tik.length > 0 ? (
                   <div className="space-y-3">
                     {rmiDetails.Tik.map((tik: TikEntry, idx: number) => (
                       <div key={tik.TikID ?? idx}>
                         {rmiDetails.Tik.length > 1 && (
-                          <p className="mb-1 text-xs font-semibold text-slate-600">
+                          <p className="mb-1 text-xs font-semibold text-megido-neutral-600">
                             {'\u05DE\u05D6\u05D4\u05D4 \u05E8\u05DE"\u05D9'} {tik.MitchamName ?? idx + 1}
                           </p>
                         )}
 
                         {/* Metrics grid */}
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {'\u05E9\u05D8\u05D7 (\u05DE"\u05E8)'}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.Shetach
                                 ? tik.Shetach.toLocaleString("he-IL")
                                 : "\u2014"}
                             </p>
                           </div>
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {"\u05DE\u05D7\u05D9\u05E8 \u05E1\u05E3 (\u20AA)"}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.MechirSaf
                                 ? tik.MechirSaf.toLocaleString("he-IL")
                                 : "\u2014"}
                             </p>
                           </div>
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {"\u05E9\u05D5\u05DE\u05D4 (\u20AA)"}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.mechirShuma
                                 ? tik.mechirShuma.toLocaleString("he-IL")
                                 : "\u2014"}
                             </p>
                           </div>
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {"\u05E2\u05DC\u05D5\u05D9\u05D5\u05EA \u05E4\u05D9\u05EA\u05D5\u05D7 (\u20AA)"}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.HotzaotPituach
                                 ? tik.HotzaotPituach.toLocaleString("he-IL")
                                 : "\u2014"}
                             </p>
                           </div>
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {"\u05E2\u05E8\u05D1\u05D5\u05EA (\u20AA)"}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.SchumArvut
                                 ? tik.SchumArvut.toLocaleString("he-IL")
                                 : "\u2014"}
                             </p>
                           </div>
-                          <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                            <p className="text-xs text-slate-500">
+                          <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                            <p className="text-xs text-megido-text-muted">
                               {'\u05D9\u05D7"\u05D3 \u05D1\u05DE\u05EA\u05D7\u05DD'}
                             </p>
-                            <p className="font-bold text-slate-800">
+                            <p className="font-bold text-megido-text-heading">
                               {tik.Kibolet
                                 ? tik.Kibolet.toLocaleString("he-IL")
                                 : "\u2014"}
@@ -401,7 +401,7 @@ export function DetailViewer({
                         {/* Gush/Helka + Plan */}
                         {(tik.GushHelka?.length > 0 ||
                           tik.TochnitMigrash?.length > 0) && (
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-megido-text-muted">
                             {tik.GushHelka?.map(
                               (gh) => `\u05D2\u05D5\u05E9 ${gh.Gush} \u05D7\u05DC\u05E7\u05D4 ${gh.Helka}`,
                             ).join(" | ")}
@@ -418,7 +418,7 @@ export function DetailViewer({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-megido-text-muted">
                     {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05E7\u05E8\u05E7\u05E2 \u05D5\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}
                   </p>
                 )}
@@ -427,13 +427,13 @@ export function DetailViewer({
 
               {/* Building rights section */}
               <div className="border-t pt-3">
-                <h4 className="mb-2 text-sm font-semibold text-slate-800">
+                <h4 className="mb-2 text-sm font-semibold text-megido-text-heading">
                   {"\u05D6\u05DB\u05D5\u05D9\u05D5\u05EA \u05D1\u05E0\u05D9\u05D9\u05D4"}
                 </h4>
 
                 {/* Extraction status */}
                 {activeTender.extraction_status && (
-                  <p className="mb-2 text-xs text-slate-500">
+                  <p className="mb-2 text-xs text-megido-text-muted">
                     {"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05D7\u05D9\u05DC\u05D5\u05E5"}:{" "}
                     {activeTender.extraction_status}
                   </p>
@@ -441,7 +441,7 @@ export function DetailViewer({
 
                 {/* Plan number */}
                 {activeTender.plan_number && (
-                  <p className="mb-2 text-sm text-slate-600">
+                  <p className="mb-2 text-sm text-megido-neutral-600">
                     <span className="font-semibold">
                       {'\u05EA\u05D1"\u05E2'}:
                     </span>{" "}
@@ -451,36 +451,36 @@ export function DetailViewer({
 
                 {/* Brochure summary */}
                 {activeTender.brochure_summary && (
-                  <div className="mb-2 rounded-md bg-slate-50 p-3">
-                    <p className="mb-1 text-xs font-medium text-slate-500">
+                  <div className="mb-2 rounded-md bg-megido-neutral-50 p-3">
+                    <p className="mb-1 text-xs font-medium text-megido-text-muted">
                       {"\u05E1\u05D9\u05DB\u05D5\u05DD \u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6"}
                     </p>
-                    <p className="whitespace-pre-line text-sm text-slate-600">
+                    <p className="whitespace-pre-line text-sm text-megido-neutral-600">
                       {activeTender.brochure_summary}
                     </p>
                   </div>
                 )}
 
                 {rightsLoading ? (
-                  <div className="h-12 animate-pulse rounded bg-slate-200" />
+                  <div className="h-12 animate-pulse rounded bg-megido-neutral-200" />
                 ) : buildingRights && buildingRights.length > 0 ? (
                   <div className="max-h-48 overflow-y-auto rounded-md border">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b bg-slate-50">
-                          <th className="px-2 py-1 text-right">
+                        <tr className="border-b bg-megido-neutral-50">
+                          <th className="px-2 py-1 text-end">
                             {"\u05D9\u05E2\u05D5\u05D3"}
                           </th>
-                          <th className="px-2 py-1 text-right">
+                          <th className="px-2 py-1 text-end">
                             {"\u05E9\u05D9\u05DE\u05D5\u05E9"}
                           </th>
-                          <th className="px-2 py-1 text-right">
+                          <th className="px-2 py-1 text-end">
                             {'\u05E9\u05D8\u05D7 \u05DE\u05D2\u05E8\u05E9 (\u05DE"\u05E8)'}
                           </th>
-                          <th className="px-2 py-1 text-right">
+                          <th className="px-2 py-1 text-end">
                             {'\u05D9\u05D7"\u05D3'}
                           </th>
-                          <th className="px-2 py-1 text-right">
+                          <th className="px-2 py-1 text-end">
                             {"\u05E7\u05D5\u05DE\u05D5\u05EA"}
                           </th>
                         </tr>
@@ -510,7 +510,7 @@ export function DetailViewer({
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-megido-text-muted">
                     {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D6\u05DB\u05D5\u05D9\u05D5\u05EA \u05D1\u05E0\u05D9\u05D9\u05D4"}
                   </p>
                 )}
@@ -518,10 +518,10 @@ export function DetailViewer({
 
               {/* Lots data section — unified table (Supabase lots enriched with live API data) */}
               <div className="border-t pt-3">
-                <h4 className="mb-2 text-sm font-semibold text-slate-800">
+                <h4 className="mb-2 text-sm font-semibold text-megido-text-heading">
                   {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD"}
                   {lots && lots.length > 0 && (
-                    <span className="mr-1 text-xs font-normal text-slate-500">
+                    <span className="me-1 text-xs font-normal text-megido-text-muted">
                       ({lots.length})
                     </span>
                   )}
@@ -538,49 +538,49 @@ export function DetailViewer({
                   )}
 
                 {lotsLoading ? (
-                  <div className="h-12 animate-pulse rounded bg-slate-200" />
+                  <div className="h-12 animate-pulse rounded bg-megido-neutral-200" />
                 ) : lots && lots.length > 0 ? (
                   <>
                     <div className="max-h-80 overflow-y-auto rounded-md border">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b bg-slate-50">
-                            <th className="px-2 py-1 text-right">
+                          <tr className="border-b bg-megido-neutral-50">
+                            <th className="px-2 py-1 text-end">
                               {"\u05DE\u05EA\u05D7\u05DD"}
                             </th>
                             {lots.some((l) => l.mitcham_name) && (
-                              <th className="px-2 py-1 text-right">
+                              <th className="px-2 py-1 text-end">
                                 {'\u05DE\u05D6\u05D4\u05D4 \u05E8\u05DE"\u05D9'}
                               </th>
                             )}
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05D2\u05D5\u05E9"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05D7\u05DC\u05E7\u05D4"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {'\u05E9\u05D8\u05D7 \u05D1\u05DE"\u05E8'}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05E9\u05D5\u05DE\u05D4"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05E2\u05E8\u05D1\u05D5\u05EA"}
                             </th>
-                            <th className="px-2 py-1 text-right">
+                            <th className="px-2 py-1 text-end">
                               {"\u05D6\u05D5\u05DB\u05D4"}
                             </th>
                           </tr>
@@ -646,19 +646,19 @@ export function DetailViewer({
 
                     {/* Lot summary metrics */}
                     <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                        <p className="text-xs text-slate-500">
+                      <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                        <p className="text-xs text-megido-text-muted">
                           {'\u05E1\u05D4"\u05DB \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD'}
                         </p>
-                        <p className="font-bold text-slate-800">
+                        <p className="font-bold text-megido-text-heading">
                           {lots.length}
                         </p>
                       </div>
-                      <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                        <p className="text-xs text-slate-500">
+                      <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                        <p className="text-xs text-megido-text-muted">
                           {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
                         </p>
-                        <p className="font-bold text-slate-800">
+                        <p className="font-bold text-megido-text-heading">
                           {lots
                             .reduce(
                               (sum, l) => {
@@ -670,11 +670,11 @@ export function DetailViewer({
                             .toLocaleString("he-IL")}
                         </p>
                       </div>
-                      <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                        <p className="text-xs text-slate-500">
+                      <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                        <p className="text-xs text-megido-text-muted">
                           {'\u05D9\u05D7"\u05D3 \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4'}
                         </p>
-                        <p className="font-bold text-slate-800">
+                        <p className="font-bold text-megido-text-heading">
                           {lots
                             .reduce(
                               (sum, l) =>
@@ -684,11 +684,11 @@ export function DetailViewer({
                             .toLocaleString("he-IL")}
                         </p>
                       </div>
-                      <div className="rounded bg-slate-50 px-3 py-2 text-center">
-                        <p className="text-xs text-slate-500">
+                      <div className="rounded bg-megido-neutral-50 px-3 py-2 text-center">
+                        <p className="text-xs text-megido-text-muted">
                           {'\u05D9\u05D7"\u05D3 \u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9'}
                         </p>
-                        <p className="font-bold text-slate-800">
+                        <p className="font-bold text-megido-text-heading">
                           {lots
                             .reduce(
                               (sum, l) =>
@@ -701,7 +701,7 @@ export function DetailViewer({
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-megido-text-muted">
                     {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD \u05DC\u05DE\u05DB\u05E8\u05D6 \u05D6\u05D4"}
                   </p>
                 )}
@@ -723,7 +723,7 @@ export function DetailViewer({
               </div>
             </div>
           ) : (
-            <p className="py-8 text-center text-sm text-slate-400">
+            <p className="py-8 text-center text-sm text-megido-text-muted">
               {"\u05D1\u05D7\u05E8 \u05DE\u05DB\u05E8\u05D6 \u05DE\u05D4\u05E8\u05E9\u05D9\u05DE\u05D4 \u05D0\u05D5 \u05DC\u05D7\u05E5 \u05E2\u05DC \u05E9\u05D5\u05E8\u05D4 \u05D1\u05D8\u05D1\u05DC\u05D4"}
             </p>
           )}

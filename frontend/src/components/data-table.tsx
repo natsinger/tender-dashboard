@@ -67,7 +67,7 @@ function SkeletonRow({ colCount }: { colCount: number }) {
     <TableRow>
       {Array.from({ length: colCount }).map((_, i) => (
         <TableCell key={i}>
-          <div className="h-4 animate-pulse rounded bg-slate-200" />
+          <div className="h-4 animate-pulse rounded bg-megido-neutral-200" />
         </TableCell>
       ))}
     </TableRow>
@@ -172,9 +172,21 @@ export function DataTable<TData>({
                           ? { width: header.column.columnDef.size }
                           : undefined
                       }
+                      tabIndex={canSort ? 0 : undefined}
+                      onKeyDown={
+                        canSort
+                          ? (e: React.KeyboardEvent) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                header.column.getToggleSortingHandler()?.(e);
+                              }
+                            }
+                          : undefined
+                      }
                       className={cn(
-                        "text-right",
+                        "text-end",
                         canSort && "cursor-pointer select-none",
+                        canSort && "focus-visible:ring-2 focus-visible:ring-megido-primary focus-visible:ring-offset-2 outline-none",
                       )}
                       onClick={
                         canSort
@@ -196,7 +208,7 @@ export function DataTable<TData>({
                             ) : sorted === "desc" ? (
                               <ArrowDown className="h-3.5 w-3.5" />
                             ) : (
-                              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                              <ArrowUpDown className="h-3.5 w-3.5 text-megido-text-muted" />
                             )}
                           </span>
                         )}
@@ -220,7 +232,7 @@ export function DataTable<TData>({
                   data-state={row.getIsSelected() ? "selected" : undefined}
                   className={cn(
                     enableSelection && "cursor-pointer",
-                    row.getIsSelected() && "bg-blue-50",
+                    row.getIsSelected() && "bg-megido-primary-50",
                   )}
                   onClick={
                     enableSelection
@@ -231,7 +243,7 @@ export function DataTable<TData>({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className="text-right overflow-hidden text-ellipsis"
+                      className="text-end overflow-hidden text-ellipsis"
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -245,7 +257,7 @@ export function DataTable<TData>({
               <TableRow>
                 <TableCell
                   colSpan={colCount}
-                  className="h-24 text-center text-slate-500"
+                  className="h-24 text-center text-megido-text-muted"
                 >
                   {emptyMessage}
                 </TableCell>
@@ -258,7 +270,7 @@ export function DataTable<TData>({
       {/* Pagination controls */}
       {pageCount > 1 && (
         <div className="flex items-center justify-between px-2 py-3">
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-megido-text-muted">
             {"\u05E2\u05DE\u05D5\u05D3"} {pageIndex + 1}{" "}
             {"\u05DE\u05EA\u05D5\u05DA"} {pageCount}
           </span>

@@ -14,8 +14,9 @@ import {
   Legend,
   Tooltip,
 } from "recharts";
-import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { categoricalColors } from "@/design-system/tokens/chart-colors";
 import { ChartWrapper } from "./chart-wrapper";
+import { HebrewTooltip } from "./hebrew-tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,7 +37,7 @@ interface MegidoPieChartProps {
   title?: string;
   /** Chart height in pixels. Defaults to 264. */
   height?: number;
-  /** Custom color palette. Defaults to MEGIDO_CHART_COLORS. */
+  /** Custom color palette. Defaults to categoricalColors. */
   colors?: readonly string[];
   /** Additional CSS classes. */
   className?: string;
@@ -93,7 +94,7 @@ export function MegidoPieChart({
   valueKey,
   title,
   height = 264,
-  colors = MEGIDO_CHART_COLORS,
+  colors = categoricalColors,
   className,
 }: MegidoPieChartProps) {
   return (
@@ -117,7 +118,7 @@ export function MegidoPieChart({
             />
           ))}
         </Pie>
-        <Tooltip />
+        <Tooltip content={<HebrewTooltip />} />
         <Legend
           layout="horizontal"
           verticalAlign="bottom"
