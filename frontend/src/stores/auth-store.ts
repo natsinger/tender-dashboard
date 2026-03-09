@@ -27,14 +27,28 @@ interface AuthState {
 }
 
 // ---------------------------------------------------------------------------
+// Dev bypass: compute initial state at module load time (no async, no effects)
+// ---------------------------------------------------------------------------
+
+const DEV_BYPASS =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+
+const DEV_EMAIL = process.env.NEXT_PUBLIC_TEAM_EMAIL ?? "dev@megido.co.il";
+const DEV_PASSWORD = process.env.NEXT_PUBLIC_DEV_PASSWORD ?? "";
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
-  email: null,
-  role: null,
-  isAuthenticated: false,
-  isLoading: true,
+  // When dev bypass is active, start already authenticated (no flicker)
+  // but NOT initialized, so initialize() still runs to create a real
+  // Supabase session for RLS-protected data queries.
+  email: DEV_BYPASS ? DEV_EMAIL : null,
+  role: DEV_BYPASS ? "team" : null,
+  isAuthenticated: DEV_BYPASS,
+  isLoading: !DEV_BYPASS,
   initialized: false,
 
   /**
@@ -52,6 +66,29 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     set({ isLoading: true });
 
     try {
+      // Dev bypass: auto-signin with password to create a real Supabase session
+      // (needed for RLS-protected data queries)
+      if (DEV_BYPASS && DEV_PASSWORD) {
+        const { data: { user }, error } = await supabase.auth.signInWithPassword({
+          email: DEV_EMAIL,
+          password: DEV_PASSWORD,
+        });
+
+        if (!error && user?.email) {
+          console.info("[Auth] Dev auto-signin successful as", user.email);
+          set({
+            email: user.email,
+            role: "team",
+            isAuthenticated: true,
+            isLoading: false,
+            initialized: true,
+          });
+          return;
+        }
+
+        console.warn("[Auth] Dev auto-signin failed:", error?.message ?? "no user");
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();

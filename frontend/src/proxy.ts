@@ -67,6 +67,14 @@ export default async function proxy(request: NextRequest) {
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
+  // Dev-only auth bypass: skip all session checks in local development
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true"
+  ) {
+    return NextResponse.next();
+  }
+
   try {
     // Create Supabase client with cookie bridging (also refreshes tokens).
     // NOTE: Do NOT destructure `response` here -- it would capture a stale

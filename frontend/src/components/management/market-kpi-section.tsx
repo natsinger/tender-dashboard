@@ -211,8 +211,9 @@ export function MarketKPISection({
             data={cityBarData}
             xKey="city"
             yKey="count"
+            annotationKey="annotation"
             title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
-            height={320}
+            height={420}
           />
 
           {/* Tender type pie chart */}

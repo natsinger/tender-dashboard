@@ -51,9 +51,13 @@ export function ChartWrapper({
       {title && (
         <p className="mb-2 text-sm font-medium text-megido-text-muted">{title}</p>
       )}
-      <ResponsiveContainer width={width} height={height}>
-        {children}
-      </ResponsiveContainer>
+      {/* Force LTR on the chart container — Recharts ResponsiveContainer
+          calculates width incorrectly inside dir="rtl" parents. */}
+      <div dir="ltr">
+        <ResponsiveContainer width={width} height={height}>
+          {children}
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

@@ -97,7 +97,7 @@ export function CityBarChart() {
         <p className="mb-2 text-sm font-medium text-megido-text-muted">
           {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
         </p>
-        <div className="h-[320px] animate-pulse rounded-md bg-megido-neutral-100" />
+        <div className="h-[380px] animate-pulse rounded-md bg-megido-neutral-100" />
       </section>
     );
   }
@@ -135,15 +135,22 @@ export function CityBarChart() {
     <section dir="rtl">
       <ChartWrapper
         title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
-        height={320}
+        height={380}
       >
         <BarChart
           data={chartData}
-          margin={{ top: 40, right: 10, bottom: 10, left: 0 }}
+          margin={{ top: 40, right: 30, bottom: 60, left: 10 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
-          <XAxis dataKey="city" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} orientation="right" />
+          <XAxis
+            dataKey="city"
+            tick={{ fontSize: 11 }}
+            interval={0}
+            angle={-45}
+            textAnchor="end"
+            dy={10}
+          />
+          <YAxis tick={{ fontSize: 12 }} orientation="right" allowDecimals={false} />
           <Tooltip content={<HebrewTooltip labelMap={{ tender_count: "מכרזים", total_units: 'יח"ד' }} />} />
           <Bar dataKey="tender_count" fill={corePalette.primary} radius={[4, 4, 0, 0]}>
             {/* Value label inside bar */}

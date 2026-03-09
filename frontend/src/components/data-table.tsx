@@ -184,7 +184,7 @@ export function DataTable<TData>({
                           : undefined
                       }
                       className={cn(
-                        "text-end",
+                        "text-start",
                         canSort && "cursor-pointer select-none",
                         canSort && "focus-visible:ring-2 focus-visible:ring-megido-primary focus-visible:ring-offset-2 outline-none",
                       )}
@@ -243,7 +243,7 @@ export function DataTable<TData>({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
-                      className="text-end overflow-hidden text-ellipsis"
+                      className="text-start overflow-hidden text-ellipsis"
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
