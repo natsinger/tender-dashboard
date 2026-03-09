@@ -61,7 +61,23 @@ def main() -> None:
     filepath = client.save_json_snapshot(df)
     logger.info("JSON snapshot saved: %s (%d tenders)", filepath, len(df))
 
-    # 3. Save to SQLite database
+    # 3. Detect new tender IDs (before upsert) for new-tender alerts
+    new_tender_rows: list[dict] = []
+    try:
+        from db import TenderDB as _TenderDB_pre
+        existing_ids = _TenderDB_pre().get_all_tender_ids()
+        fetched_ids = set(df["tender_id"].tolist())
+        new_ids = fetched_ids - existing_ids
+        if new_ids:
+            new_tender_rows = df[df["tender_id"].isin(new_ids)].to_dict("records")
+            logger.info(
+                "Detected %d new tender(s) not yet in DB: %s",
+                len(new_ids), sorted(new_ids),
+            )
+    except Exception as exc:
+        logger.warning("New-tender detection failed (non-fatal): %s", exc)
+
+    # 4. Save to database
     try:
         rows = client.save_to_db(df)
         logger.info("Saved %d tenders to database", rows)
@@ -72,7 +88,7 @@ def main() -> None:
             traceback.format_exc(),
         )
 
-    # 4. Sync documents for active tenders (non-fatal — skipped if API is slow)
+    # 5. Sync documents for active tenders (non-fatal — skipped if API is slow)
     try:
         if "status_code" in df.columns:
             active_ids = df[df["status_code"].isin([1, 2, 3])]["tender_id"].tolist()
@@ -110,7 +126,7 @@ def main() -> None:
     except Exception as exc:
         logger.warning("Document sync failed (non-fatal): %s", exc)
 
-    # 5. Log summary
+    # 6. Log summary
     try:
         from db import TenderDB
         stats = TenderDB().get_stats()
@@ -118,18 +134,25 @@ def main() -> None:
     except Exception as exc:
         logger.warning("Could not read DB stats: %s", exc)
 
-    # 6. Check watchlist alerts and send emails (non-fatal)
-    alerts_attempted = 0
-    alerts_sent = 0
+    # 7. Check watchlist alerts and send emails (non-fatal)
+    watchlist_emails = 0
+    new_tender_email = 0
     try:
         from alerts import AlertEngine
         from db import TenderDB as _TenderDB
         from user_db import UserDB as _UserDB
 
         engine = AlertEngine(_TenderDB(), _UserDB())
-        alerts_sent = engine.check_and_send()
-        alerts_attempted = alerts_sent  # engine handles failures internally
-        logger.info("Alerts: %d email(s) sent", alerts_sent)
+
+        # Watchlist document alerts (team-wide)
+        watchlist_emails = engine.check_and_send()
+        logger.info("Watchlist alerts: %d email(s) sent", watchlist_emails)
+
+        # New tender alerts (if any new tenders were detected in step 3)
+        if new_tender_rows:
+            sent = engine.send_new_tender_alert(new_tender_rows)
+            new_tender_email = 1 if sent else 0
+            logger.info("New-tender alert: %s", "sent" if sent else "not sent")
     except Exception as exc:
         logger.error(
             "Alert check failed (non-fatal): %s\n%s",
@@ -137,11 +160,11 @@ def main() -> None:
             traceback.format_exc(),
         )
 
-    # 7. Final summary
+    # 8. Final summary
     logger.info(
-        "=== Daily refresh complete | emails_sent=%d alerts_attempted=%d ===",
-        alerts_sent,
-        alerts_attempted,
+        "=== Daily refresh complete | watchlist_emails=%d new_tender_email=%d ===",
+        watchlist_emails,
+        new_tender_email,
     )
 
 

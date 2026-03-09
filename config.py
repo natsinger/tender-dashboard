@@ -105,6 +105,18 @@ DEFAULT_FETCH_DELAY: float = float(_get("DEFAULT_FETCH_DELAY", "1.0"))
 # 1=פומבי רגיל, 5=מחיר מטרה, 6=דיור להשכרה, 8=מחיר מופחת, 9=מכרז ייזום
 RELEVANT_TENDER_TYPES: Set[int] = {1, 5, 6, 8, 9}
 
+# Tender types for KPI cards / new-tender alerts (codes 1, 5, 8).
+# 1=פומבי רגיל, 5=מחיר מטרה, 8=דיור במחיר מופחת
+CARD_TENDER_TYPES: Set[int] = {1, 5, 8}
+
+# Purpose values that qualify a tender for new-tender alerts.
+RELEVANT_PURPOSES: set[str] = {
+    "בנייה רוויה",
+    "בנייה נמוכה/צמודת קרקע",
+    "מגורים/מסחר/מלונאות/נופש",
+    "דיור מוגן (בית אבות)",
+}
+
 # Statuses excluded from the default "active" view
 NON_ACTIVE_STATUSES: list = [
     "נסגר", "בוטל", "לא אקטואלי", "תהליך מסתיים", "עוכב", "מכרז סגור",

@@ -143,8 +143,21 @@ export function MarketKPISection({
     [filteredTenders],
   );
 
-  // KPI aggregations — all use lot-based data for consistency
+  // KPI aggregations — lot-based when brochure filter is active,
+  // tender-level when showing all tenders.
+  const isBrochureMode = brochureFilter === "with_brochure";
+
   const { totalUnits, totalFreeMarket, totalTargetPrice } = useMemo(() => {
+    if (!isBrochureMode) {
+      // All tenders mode: sum tender-level units (no FM/TP split available)
+      let total = 0;
+      for (const t of filteredTenders) {
+        total += t.units ?? 0;
+      }
+      return { totalUnits: total, totalFreeMarket: 0, totalTargetPrice: 0 };
+    }
+
+    // Brochure mode: use lot-level data for accurate breakdown
     let total = 0;
     let fm = 0;
     let tp = 0;
@@ -158,7 +171,7 @@ export function MarketKPISection({
       total += agg.total;
     }
     return { totalUnits: total, totalFreeMarket: fm, totalTargetPrice: tp };
-  }, [filteredTenders, lotMap]);
+  }, [filteredTenders, lotMap, isBrochureMode]);
 
   // Count how many filtered tenders actually have lot data
   const tenderIdsWithLots = useMemo(() => {
@@ -170,7 +183,10 @@ export function MarketKPISection({
     return count;
   }, [filteredTenders, lotMap]);
 
-  const scopeLabel = `\u05DE\u05EA\u05D5\u05DA ${tenderIdsWithLots} / ${filteredTenders.length} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD`;
+  const allModeScopeLines = [
+    "\u05E1\u05D5\u05D2\u05D9 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD: \u05DE\u05DB\u05E8\u05D6 \u05E4\u05D5\u05DE\u05D1\u05D9 \u05E8\u05D2\u05D9\u05DC, \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4, \u05D3\u05D9\u05D5\u05E8 \u05D1\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D5\u05E4\u05D7\u05EA",
+    "\u05D9\u05D9\u05E2\u05D5\u05D3: \u05D1\u05E0\u05D9\u05D9\u05D4 \u05E8\u05D5\u05D5\u05D9\u05D4, \u05D1\u05E0\u05D9\u05D9\u05D4 \u05E0\u05DE\u05D5\u05DB\u05D4/\u05E6\u05DE\u05D5\u05D3\u05EA \u05E7\u05E8\u05E7\u05E2/\u05D3\u05D9\u05D5\u05E8 \u05DE\u05D5\u05D2\u05DF",
+  ];
 
   return (
     <section>
@@ -233,11 +249,6 @@ export function MarketKPISection({
             <MetricCard
               label={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD"}
               value={filteredTenders.length.toLocaleString("he-IL")}
-              subtitle={
-                brochureFilter === "with_brochure"
-                  ? `\u05DE\u05EA\u05D5\u05DA ${cardActiveTenders.length} \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD`
-                  : undefined
-              }
             />
             <MetricCard
               label={"\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05D1-14 \u05D9\u05D5\u05DD"}
@@ -245,22 +256,54 @@ export function MarketKPISection({
             />
           </div>
 
-          {/* Row 2: Unit breakdowns (lot-based) */}
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard
-              label={'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
-              value={totalUnits.toLocaleString("he-IL")}
-              subtitle={scopeLabel}
-            />
-            <MetricCard
-              label={"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
-              value={totalFreeMarket.toLocaleString("he-IL")}
-            />
-            <MetricCard
-              label={"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
-              value={totalTargetPrice.toLocaleString("he-IL")}
-            />
-          </div>
+          {/* Row 2: Unit breakdowns */}
+          {isBrochureMode ? (
+            <div className="grid grid-cols-3 gap-3">
+              <MetricCard
+                label={'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
+                value={totalUnits.toLocaleString("he-IL")}
+              />
+              <MetricCard
+                label={"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
+                value={totalFreeMarket.toLocaleString("he-IL")}
+              />
+              <MetricCard
+                label={"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
+                value={totalTargetPrice.toLocaleString("he-IL")}
+              />
+            </div>
+          ) : (
+            <div
+              className="relative rounded-xl border border-megido-border bg-megido-bg-card p-4 transition-shadow duration-200 hover:shadow-md"
+            >
+              {/* Blue right border accent */}
+              <div className="absolute bottom-3 end-0 top-3 w-[3px] rounded-full bg-megido-primary" />
+
+              <div className="flex items-start justify-between gap-4">
+                {/* Right (RTL start): value + label */}
+                <div className="shrink-0">
+                  <p className="mb-1 text-xs font-medium text-megido-text-muted">
+                    {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
+                  </p>
+                  <span className="ltr-nums text-2xl font-bold text-megido-text-heading">
+                    {totalUnits.toLocaleString("he-IL")}
+                  </span>
+                </div>
+
+                {/* Left (RTL end): scope description */}
+                <div className="text-xs leading-relaxed text-megido-text-muted">
+                  {allModeScopeLines.map((line, i) => {
+                    const [title, rest] = line.split(": ");
+                    return (
+                      <p key={i}>
+                        <span className="font-semibold text-megido-text-heading">{title}:</span>{" "}{rest}
+                      </p>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

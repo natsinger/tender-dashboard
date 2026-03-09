@@ -526,6 +526,37 @@ class TenderDB:
             logger.error("get_new_documents failed: %s", exc)
             return pd.DataFrame()
 
+    def get_all_tender_ids(self) -> set[int]:
+        """Return a set of all tender IDs currently in the database.
+
+        Used by the alert engine to detect newly-listed tenders before upsert.
+
+        Returns:
+            Set of tender_id integers, or empty set on error.
+        """
+        if not self._client:
+            return set()
+        try:
+            all_ids: set[int] = set()
+            batch_size = 1000
+            offset = 0
+            while True:
+                result = (
+                    self._client.table("tenders")
+                    .select("tender_id")
+                    .range(offset, offset + batch_size - 1)
+                    .execute()
+                )
+                batch = result.data or []
+                all_ids.update(row["tender_id"] for row in batch)
+                if len(batch) < batch_size:
+                    break
+                offset += batch_size
+            return all_ids
+        except Exception as exc:
+            logger.error("get_all_tender_ids failed: %s", exc)
+            return set()
+
     def get_tender_by_id(self, tender_id: int) -> Optional[dict]:
         """Look up a single tender by ID.
 
