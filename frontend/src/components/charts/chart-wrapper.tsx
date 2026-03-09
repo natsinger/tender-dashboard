@@ -21,6 +21,8 @@ interface ChartWrapperProps {
   height?: number;
   /** Chart width. Defaults to "100%". */
   width?: number | `${number}%`;
+  /** Accessible label describing the chart content. */
+  ariaLabel?: string;
   /** Additional CSS classes on the outer wrapper div. */
   className?: string;
   /** The Recharts chart element to render inside the container. */
@@ -35,17 +37,27 @@ export function ChartWrapper({
   title,
   height = 300,
   width = "100%" as const,
+  ariaLabel,
   className,
   children,
 }: ChartWrapperProps) {
   return (
-    <div dir="rtl" className={cn("w-full", className)}>
+    <div
+      dir="rtl"
+      role="img"
+      aria-label={ariaLabel ?? title ?? "תרשים"}
+      className={cn("w-full", className)}
+    >
       {title && (
-        <p className="mb-2 text-[13px] font-medium text-slate-500">{title}</p>
+        <p className="mb-2 text-sm font-medium text-megido-text-muted">{title}</p>
       )}
-      <ResponsiveContainer width={width} height={height}>
-        {children}
-      </ResponsiveContainer>
+      {/* Force LTR on the chart container — Recharts ResponsiveContainer
+          calculates width incorrectly inside dir="rtl" parents. */}
+      <div dir="ltr">
+        <ResponsiveContainer width={width} height={height}>
+          {children}
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

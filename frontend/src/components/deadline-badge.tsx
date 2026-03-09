@@ -36,9 +36,9 @@ interface BadgeStyle {
 function getBadgeStyle(days: number | null | undefined): BadgeStyle {
   if (days == null || Number.isNaN(days)) {
     return {
-      bg: "bg-slate-100",
-      text: "text-slate-500",
-      border: "border-slate-200",
+      bg: "bg-megido-neutral-100",
+      text: "text-megido-text-muted",
+      border: "border-megido-border",
       emoji: "\u26AA",
     };
   }

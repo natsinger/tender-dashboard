@@ -71,7 +71,7 @@ const columns: ColumnDef<ReviewRow, unknown>[] = [
     accessorKey: "notes",
     header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
     cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500">
+      <span className="text-xs text-megido-text-muted">
         {getValue<string>() || "\u2014"}
       </span>
     ),
@@ -83,7 +83,12 @@ const columns: ColumnDef<ReviewRow, unknown>[] = [
 // ---------------------------------------------------------------------------
 
 export function ReviewStatusTable() {
-  const { data: watchlistItems, isLoading: wlLoading } = useTeamWatchlist();
+  const {
+    data: watchlistItems,
+    isLoading: wlLoading,
+    isError: wlError,
+    refetch: refetchWl,
+  } = useTeamWatchlist();
 
   // Get tender IDs for review status lookup
   const tenderIds = useMemo(
@@ -97,10 +102,15 @@ export function ReviewStatusTable() {
     [watchlistItems],
   );
 
-  const { data: reviewMap, isLoading: reviewLoading } =
-    useReviewStatuses(tenderIds);
+  const {
+    data: reviewMap,
+    isLoading: reviewLoading,
+    isError: reviewError,
+    refetch: refetchReviews,
+  } = useReviewStatuses(tenderIds);
 
   const isLoading = wlLoading || reviewLoading;
+  const isError = wlError || reviewError;
 
   // Build table rows
   const rows: ReviewRow[] = useMemo(() => {
@@ -128,9 +138,34 @@ export function ReviewStatusTable() {
       });
   }, [watchlistItems, reviewMap]);
 
+  if (isError) {
+    return (
+      <section dir="rtl">
+        <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
+          {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}
+        </h3>
+        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">
+            {"שגיאה בטעינת הנתונים"}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void refetchWl();
+              void refetchReviews();
+            }}
+            className="rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
+          >
+            {"נסה שוב"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section dir="rtl">
-      <h3 className="mb-2 text-base font-semibold text-slate-800">
+      <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
         {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}
       </h3>
 
@@ -140,11 +175,11 @@ export function ReviewStatusTable() {
         <DataTable
           columns={columns}
           data={rows}
-          pageSize={20}
+          pageSize={10}
           emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD."}
         />
       ) : (
-        <p className="py-4 text-sm text-slate-500">
+        <p className="py-4 text-sm text-megido-text-muted">
           {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD. \u05D4\u05D5\u05E1\u05E3 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D3\u05E8\u05DA \u05D4\u05EA\u05E4\u05E8\u05D9\u05D8 \u05D4\u05E6\u05D3\u05D3\u05D9 \u2190"}
         </p>
       )}

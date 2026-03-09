@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { corePalette } from "@/design-system/tokens/colors";
 import { getRadarData } from "@/lib/utils/analytics-engine";
 import type { ScoreDistribution } from "@/lib/utils/analytics-engine";
 import type { ScoredTender } from "@/types/database";
@@ -102,7 +103,7 @@ export function ScoringSection({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">ניקוד מכרזים</h2>
+      <h2 className="text-lg font-semibold text-megido-text-heading">ניקוד מכרזים</h2>
 
       <Tabs defaultValue="top20" dir="rtl">
         <TabsList>
@@ -115,10 +116,10 @@ export function ScoringSection({
         <TabsContent value="top20">
           {topTenders.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-hidden rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full table-fixed text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">שם מכרז</th>
                       <th className="px-3 py-2 font-semibold">עיר</th>
                       <th className="px-3 py-2 font-semibold">מחוז</th>
@@ -134,7 +135,7 @@ export function ScoringSection({
                     {topTenders.map((t) => (
                       <tr
                         key={t.tender_id}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="truncate px-3 py-2">
                           {t.tender_name ?? "\u2014"}
@@ -159,13 +160,13 @@ export function ScoringSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 20 המכרזים עם הציון הגבוה ביותר (דחיפות 20%, גודל 20%, מוכנות
                 25%, מיקום 20%, טריות 15%)
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מכרזים לניקוד
             </p>
           )}
@@ -180,9 +181,9 @@ export function ScoringSection({
                   data={histogramData}
                   margin={{ top: 20, right: 10, bottom: 10, left: 10 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                   <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} orientation="right" />
                   <Tooltip />
                   <Bar
                     dataKey="count"
@@ -203,7 +204,7 @@ export function ScoringSection({
               </div>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין ציונים זמינים להתפלגות
             </p>
           )}
@@ -246,15 +247,15 @@ export function ScoringSection({
                       data={radarData}
                       margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
                     >
-                      <PolarGrid stroke="#E2E8F0" />
+                      <PolarGrid stroke={corePalette.border} />
                       <PolarAngleAxis
                         dataKey="dimension"
-                        tick={{ fontSize: 12, fill: "#1E293B" }}
+                        tick={{ fontSize: 12, fill: corePalette.textHeading }}
                       />
                       <PolarRadiusAxis
                         angle={90}
                         domain={[0, 100]}
-                        tick={{ fontSize: 9, fill: "#64748B" }}
+                        tick={{ fontSize: 9, fill: corePalette.textMuted }}
                       />
                       <Radar
                         name="ציון"
@@ -290,14 +291,14 @@ export function ScoringSection({
                     />
                   </div>
 
-                  <p className="text-center text-sm font-semibold text-slate-700">
+                  <p className="text-center text-sm font-semibold text-megido-neutral-700">
                     ציון כולל: {selectedTender.total_score.toFixed(1)} / 100
                   </p>
                 </>
               )}
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מכרזים לניתוח מעמיק
             </p>
           )}

@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 
 import { MegidoPieChart } from "@/components/charts/pie-chart";
+import { corePalette } from "@/design-system/tokens/colors";
 import { MegidoBarChart } from "@/components/charts/bar-chart";
 import { MetricCard } from "@/components/metric-card";
 import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
@@ -174,7 +175,7 @@ export function MarketKPISection({
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h4 className="text-lg font-semibold text-slate-800">
+        <h4 className="text-lg font-semibold text-megido-text-heading">
           {"\u05DE\u05DB\u05E8\u05D6\u05D9 \u05DE\u05E7\u05E8\u05E7\u05E2\u05D9\u05DF \u05DC\u05D3\u05D9\u05D5\u05E8 \u05DC\u05DE\u05DB\u05D9\u05E8\u05D4"}
         </h4>
         <BrochureToggle
@@ -194,7 +195,7 @@ export function MarketKPISection({
               valueKey="value"
               title={"\u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6"}
               height={264}
-              colors={["#2563EB", "#E2E8F0"]}
+              colors={[corePalette.primary, corePalette.border]}
             />
             <MegidoPieChart
               data={regionData}
@@ -210,8 +211,9 @@ export function MarketKPISection({
             data={cityBarData}
             xKey="city"
             yKey="count"
+            annotationKey="annotation"
             title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
-            height={320}
+            height={420}
           />
 
           {/* Tender type pie chart */}

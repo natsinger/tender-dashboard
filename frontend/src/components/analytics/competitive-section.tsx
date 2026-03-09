@@ -55,7 +55,7 @@ const TREND_LABELS: Record<string, string> = {
 const TREND_BADGE: Record<string, string> = {
   saturating: "bg-red-100 text-red-700",
   opening: "bg-emerald-100 text-emerald-700",
-  stable: "bg-slate-100 text-slate-600",
+  stable: "bg-megido-neutral-100 text-megido-neutral-600",
 };
 
 function formatDate(iso: string): string {
@@ -90,7 +90,7 @@ export function CompetitiveSection({
 }: CompetitiveSectionProps) {
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-slate-800">
+      <h2 className="text-lg font-semibold text-megido-text-heading">
         מודיעין תחרותי
       </h2>
 
@@ -106,10 +106,10 @@ export function CompetitiveSection({
         <TabsContent value="lifecycle">
           {lifecycleData.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">מחוז</th>
                       <th className="px-3 py-2 font-semibold">סוג מכרז</th>
                       <th className="px-3 py-2 text-center font-semibold">
@@ -127,7 +127,7 @@ export function CompetitiveSection({
                     {lifecycleData.map((row, i) => (
                       <tr
                         key={`${row.region}-${row.tenderType}-${i}`}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">{row.region}</td>
                         <td className="px-3 py-2">{row.tenderType}</td>
@@ -143,12 +143,12 @@ export function CompetitiveSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 ניתוח זמני מחזור חיים למכרזים שנסגרו -- מפרסום ועד סגירה
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מכרזים סגורים בטווח הנבחר לניתוח מחזור חיים
             </p>
           )}
@@ -158,10 +158,10 @@ export function CompetitiveSection({
         <TabsContent value="overlap">
           {overlapData.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">תחילת שבוע</th>
                       <th className="px-3 py-2 text-center font-semibold">
                         מכרזים
@@ -176,7 +176,7 @@ export function CompetitiveSection({
                     {overlapData.map((row, i) => (
                       <tr
                         key={`${row.weekStart}-${i}`}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">
                           {formatDate(row.weekStart)}
@@ -200,13 +200,13 @@ export function CompetitiveSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 שבועות עם חפיפת מועדי סגירה -- רמת תחרות נמוכה (1-2), בינונית
                 (3-5), גבוהה (6+)
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין נתוני מועדי סגירה לניתוח חפיפה
             </p>
           )}
@@ -216,10 +216,10 @@ export function CompetitiveSection({
         <TabsContent value="saturation">
           {saturationData.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">מחוז</th>
                       <th className="px-3 py-2 text-center font-semibold">
                         פעילים
@@ -242,7 +242,7 @@ export function CompetitiveSection({
                     {saturationData.map((row) => (
                       <tr
                         key={row.region}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">{row.region}</td>
                         <td className="px-3 py-2 text-center">
@@ -277,12 +277,12 @@ export function CompetitiveSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 ציון רוויה 0-100 (ביחס למחוז הפעיל ביותר). 6 חודשים אחרונים.
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין מספיק נתונים לניתוח רוויה אזורית
             </p>
           )}
@@ -292,10 +292,10 @@ export function CompetitiveSection({
         <TabsContent value="docs">
           {docIntelData.length > 0 ? (
             <div className="space-y-2">
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b-2 border-slate-200 bg-slate-50 text-right">
+                    <tr className="border-b-2 border-megido-border bg-megido-neutral-50 text-end">
                       <th className="px-3 py-2 font-semibold">מחוז</th>
                       <th className="px-3 py-2 text-center font-semibold">
                         שיעור חוברות %
@@ -309,7 +309,7 @@ export function CompetitiveSection({
                     {docIntelData.map((row) => (
                       <tr
                         key={row.region}
-                        className="border-b border-slate-100 hover:bg-slate-50/50"
+                        className="border-b border-megido-neutral-100 hover:bg-megido-neutral-50/50"
                       >
                         <td className="px-3 py-2">{row.region}</td>
                         <td className="px-3 py-2 text-center">
@@ -323,12 +323,12 @@ export function CompetitiveSection({
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-megido-text-muted">
                 מודיעין זמינות מסמכים וחוברות לפי מחוז
               </p>
             </div>
           ) : (
-            <p className="py-6 text-center text-sm text-slate-400">
+            <p className="py-6 text-center text-sm text-megido-text-muted">
               אין נתוני מסמכים זמינים
             </p>
           )}

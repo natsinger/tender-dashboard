@@ -1,15 +1,14 @@
 /**
- * ClosingSoonSection component for the Management page.
+ * ClosingSoonDashboard component.
  *
- * Collapsible section showing tenders closing within 14 days.
- * Includes a brochure filter toggle, a compact data table, and
- * click-to-open tender detail modal. Mirrors Section 2 of the
- * Streamlit management.py page.
+ * Dashboard-specific version of the closing-soon table. Unlike the management
+ * version, this is NOT collapsible (always visible) and fetches its own data
+ * using useActiveTenders + getClosingSoonTenders. Shows tenders closing within
+ * CLOSING_SOON_DAYS with brochure toggle filter and click-to-open detail modal.
  */
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/data-table";
@@ -17,18 +16,17 @@ import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggl
 import { DeadlineBadge } from "@/components/deadline-badge";
 import { TenderDetailModal } from "@/components/tender-detail-modal";
 import { useTenderLots, useTenderBuildingRights } from "@/hooks/use-lots";
+import { useActiveTenders } from "@/hooks";
+import {
+  CLOSING_SOON_DAYS,
+  RELEVANT_TENDER_TYPES,
+} from "@/lib/constants";
+import { getClosingSoonTenders } from "@/lib/utils/tenders";
 import type { TenderWithComputed } from "@/types/database";
 
 // ---------------------------------------------------------------------------
-// Types
+// Row type
 // ---------------------------------------------------------------------------
-
-interface ClosingSoonSectionProps {
-  /** Tenders closing within 14 days (pre-filtered by caller). */
-  tenders: TenderWithComputed[];
-  /** Whether data is still loading. */
-  isLoading: boolean;
-}
 
 interface ClosingRow {
   tender_id: number;
@@ -109,11 +107,7 @@ const columns: ColumnDef<ClosingRow, unknown>[] = [
 // Component
 // ---------------------------------------------------------------------------
 
-export function ClosingSoonSection({
-  tenders,
-  isLoading,
-}: ClosingSoonSectionProps) {
-  const [expanded, setExpanded] = useState(false);
+export function ClosingSoonDashboard() {
   const [brochureFilter, setBrochureFilter] = useState<BrochureFilter>("all");
 
   // Modal state
@@ -126,9 +120,25 @@ export function ClosingSoonSection({
     selectedTender?.tender_id,
   );
 
-  // Build rows
+  // Fetch active tenders
+  const {
+    data: activeTenders,
+    isLoading,
+    isError,
+    refetch,
+  } = useActiveTenders();
+
+  // Filter to relevant types, then to closing soon
+  const closingSoonTenders = useMemo(() => {
+    const relevant = (activeTenders ?? []).filter((t) =>
+      RELEVANT_TENDER_TYPES.has(t.tender_type_code ?? 0),
+    );
+    return getClosingSoonTenders(relevant, CLOSING_SOON_DAYS);
+  }, [activeTenders]);
+
+  // Build rows with brochure filter
   const rows: ClosingRow[] = useMemo(() => {
-    let filtered = tenders;
+    let filtered = closingSoonTenders;
 
     if (brochureFilter === "with_brochure") {
       filtered = filtered.filter((t) => Boolean(t.published_booklet));
@@ -146,7 +156,7 @@ export function ClosingSoonSection({
       published_booklet: Boolean(t.published_booklet),
       _tender: t,
     }));
-  }, [tenders, brochureFilter]);
+  }, [closingSoonTenders, brochureFilter]);
 
   const handleRowSelect = (row: ClosingRow | null) => {
     if (row) {
@@ -155,58 +165,63 @@ export function ClosingSoonSection({
     }
   };
 
-  return (
-    <section>
-      {/* Collapsible header */}
-      <button
-        type="button"
-        onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-2 rounded-md py-2 text-end transition-colors hover:bg-megido-neutral-50"
-      >
-        {expanded ? (
-          <ChevronUp className="h-5 w-5 text-megido-text-muted" />
-        ) : (
-          <ChevronDown className="h-5 w-5 text-megido-text-muted" />
-        )}
-        <h4 className="text-lg font-semibold text-megido-text-heading">
-          {"\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05D114 \u05D9\u05DE\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}{" "}
-          <span className="text-base font-normal text-megido-text-muted">
-            ({tenders.length})
-          </span>
-        </h4>
-      </button>
-
-      {/* Collapsible content */}
-      {expanded && (
-        <div className="mt-2">
-          {tenders.length > 0 ? (
-            <>
-              <BrochureToggle
-                value={brochureFilter}
-                onChange={setBrochureFilter}
-                className="mb-3"
-              />
-              <DataTable
-                columns={columns}
-                data={rows}
-                isLoading={isLoading}
-                enableSelection
-                onRowSelect={handleRowSelect}
-                pageSize={15}
-                emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05EA\u05D5\u05DA 14 \u05D9\u05D5\u05DD."}
-              />
-              <p className="mt-2 text-xs text-megido-text-muted">
-                {"\u05DB\u05DC\u05DC \u05D4\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D9\u05D9\u05E1\u05D2\u05E8\u05D5 \u05D114 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}{" "}
-                {"\u2014"} {tenders.length}{" "}
-                {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
-              </p>
-            </>
-          ) : (
-            <p className="py-3 text-sm text-megido-text-muted">
-              {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05EA\u05D5\u05DA 14 \u05D9\u05D5\u05DD."}
-            </p>
-          )}
+  if (isError) {
+    return (
+      <section dir="rtl">
+        <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
+          {"\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05D114 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}
+        </h3>
+        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-700">
+            {"\u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05D8\u05E2\u05D9\u05E0\u05EA \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"}
+          </p>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-200"
+          >
+            {"\u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1"}
+          </button>
         </div>
+      </section>
+    );
+  }
+
+  return (
+    <section dir="rtl">
+      <h3 className="mb-2 text-base font-semibold text-megido-text-heading">
+        {"\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05D114 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}{" "}
+        <span className="text-base font-normal text-megido-text-muted">
+          ({closingSoonTenders.length})
+        </span>
+      </h3>
+
+      {closingSoonTenders.length > 0 ? (
+        <>
+          <BrochureToggle
+            value={brochureFilter}
+            onChange={setBrochureFilter}
+            className="mb-3"
+          />
+          <DataTable
+            columns={columns}
+            data={rows}
+            isLoading={isLoading}
+            enableSelection
+            onRowSelect={handleRowSelect}
+            pageSize={10}
+            emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05EA\u05D5\u05DA 14 \u05D9\u05D5\u05DD."}
+          />
+          <p className="mt-2 text-xs text-megido-text-muted">
+            {"\u05DB\u05DC\u05DC \u05D4\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D9\u05D9\u05E1\u05D2\u05E8\u05D5 \u05D114 \u05D4\u05D9\u05DE\u05D9\u05DD \u05D4\u05E7\u05E8\u05D5\u05D1\u05D9\u05DD"}{" "}
+            {"\u2014"} {closingSoonTenders.length}{" "}
+            {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
+          </p>
+        </>
+      ) : (
+        <p className="py-3 text-sm text-megido-text-muted">
+          {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05EA\u05D5\u05DA 14 \u05D9\u05D5\u05DD."}
+        </p>
       )}
 
       <TenderDetailModal

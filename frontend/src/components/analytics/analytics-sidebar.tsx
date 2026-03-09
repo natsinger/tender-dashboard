@@ -91,19 +91,19 @@ export function AnalyticsSidebar({
   return (
     <aside
       className={cn(
-        "space-y-5 rounded-xl border border-slate-200 bg-white p-4",
+        "space-y-5 rounded-xl border border-megido-border bg-megido-bg-card p-4",
         className,
       )}
     >
       {/* Date range filter */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-700">סינון תאריך</h3>
+        <h3 className="text-sm font-semibold text-megido-neutral-700">סינון תאריך</h3>
 
         <div className="space-y-1.5">
-          <label className="block text-xs text-slate-500">מתאריך</label>
+          <label className="block text-xs text-megido-text-muted">מתאריך</label>
           <input
             type="date"
-            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-megido-border px-2 py-1.5 text-sm text-megido-neutral-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             value={startDate ? startDate.slice(0, 10) : ""}
             min={minDate?.slice(0, 10) ?? ""}
             max={endDate?.slice(0, 10) ?? maxDate?.slice(0, 10) ?? ""}
@@ -114,10 +114,10 @@ export function AnalyticsSidebar({
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs text-slate-500">עד תאריך</label>
+          <label className="block text-xs text-megido-text-muted">עד תאריך</label>
           <input
             type="date"
-            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-megido-border px-2 py-1.5 text-sm text-megido-neutral-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             value={endDate ? endDate.slice(0, 10) : ""}
             min={startDate?.slice(0, 10) ?? minDate?.slice(0, 10) ?? ""}
             max={maxDate?.slice(0, 10) ?? ""}
@@ -131,7 +131,7 @@ export function AnalyticsSidebar({
           <button
             type="button"
             onClick={handleClearDates}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-megido-primary hover:underline"
           >
             נקה תאריכים
           </button>
@@ -141,50 +141,50 @@ export function AnalyticsSidebar({
       {/* Region filter */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">סינון מחוז</h3>
+          <h3 className="text-sm font-semibold text-megido-neutral-700">סינון מחוז</h3>
           {selectedRegions.length > 0 && (
             <button
               type="button"
               onClick={handleClearRegions}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-megido-primary hover:underline"
             >
               נקה ({selectedRegions.length})
             </button>
           )}
         </div>
 
-        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-100 p-2">
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-megido-neutral-100 p-2">
           {regions.length > 0 ? (
             regions.map((region) => (
               <label
                 key={region}
-                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-slate-50"
+                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-megido-neutral-50"
               >
                 <input
                   type="checkbox"
                   checked={selectedRegions.includes(region)}
                   onChange={() => handleRegionToggle(region)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 accent-blue-600"
+                  className="h-3.5 w-3.5 rounded border-megido-neutral-300 accent-blue-600"
                 />
-                <span className="text-slate-700">{region}</span>
+                <span className="text-megido-neutral-700">{region}</span>
               </label>
             ))
           ) : (
-            <p className="py-1 text-xs text-slate-400">אין מחוזות זמינים</p>
+            <p className="py-1 text-xs text-megido-text-muted">אין מחוזות זמינים</p>
           )}
         </div>
 
         {selectedRegions.length === 0 && (
-          <p className="text-xs text-slate-400">כל המחוזות</p>
+          <p className="text-xs text-megido-text-muted">כל המחוזות</p>
         )}
       </div>
 
       {/* Quick stats footer */}
-      <div className="space-y-1 border-t border-slate-100 pt-3">
-        <p className="text-xs text-slate-400">
+      <div className="space-y-1 border-t border-megido-neutral-100 pt-3">
+        <p className="text-xs text-megido-text-muted">
           עדכון: {dateStr}
         </p>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-megido-text-muted">
           רשומות: {filteredCount.toLocaleString("he-IL")} (מ-
           {totalCount.toLocaleString("he-IL")})
         </p>

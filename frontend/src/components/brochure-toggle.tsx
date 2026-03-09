@@ -46,7 +46,7 @@ export function BrochureToggle({
     <div
       dir="rtl"
       className={cn(
-        "inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1",
+        "inline-flex items-center gap-1 rounded-lg bg-megido-neutral-100 p-1",
         className,
       )}
     >
@@ -60,8 +60,8 @@ export function BrochureToggle({
             className={cn(
               "rounded-md px-3 py-1 text-sm font-medium transition-colors",
               isActive
-                ? "bg-[#2563EB] text-white shadow-sm"
-                : "bg-transparent text-slate-500 hover:text-slate-700",
+                ? "bg-megido-primary text-white shadow-sm"
+                : "bg-transparent text-megido-text-muted hover:text-megido-neutral-700",
             )}
           >
             {pill.label}

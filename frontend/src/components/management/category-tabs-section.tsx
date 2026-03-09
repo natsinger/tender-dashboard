@@ -141,7 +141,7 @@ function CategoryTabContent({
 
   if (tenders.length === 0) {
     return (
-      <p className="py-4 text-sm text-slate-500">{emptyMessage}</p>
+      <p className="py-4 text-sm text-megido-text-muted">{emptyMessage}</p>
     );
   }
 
@@ -159,7 +159,7 @@ function CategoryTabContent({
         pageSize={10}
         emptyMessage={emptyMessage}
       />
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-megido-text-muted">
         {tenders.length} {label}{" "}
         {"\u05E4\u05E2\u05D9\u05DC\u05D9\u05DD"}
       </p>
@@ -201,7 +201,7 @@ export function CategoryTabsSection({
 
   return (
     <section>
-      <h4 className="mb-4 text-lg font-semibold text-slate-800">
+      <h4 className="mb-4 text-lg font-semibold text-megido-text-heading">
         {"\u05E1\u05D5\u05D2\u05D9\u05DD \u05E0\u05D5\u05E1\u05E4\u05D9\u05DD"}
       </h4>
 

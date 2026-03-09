@@ -38,21 +38,22 @@ export function CategoryCard({
     <div
       dir="rtl"
       className={cn(
-        "relative rounded-xl border border-slate-200 bg-white p-4 shadow-sm",
+        "relative rounded-xl border border-megido-border bg-megido-bg-card p-4 shadow-sm",
         "transition-shadow duration-200 hover:shadow-md",
+        "focus-visible:ring-2 focus-visible:ring-megido-primary focus-visible:ring-offset-2",
         className,
       )}
     >
       {/* Blue right border accent (3px) */}
-      <div className="absolute bottom-3 right-0 top-3 w-[3px] rounded-full bg-[#2563EB]" />
+      <div className="absolute bottom-3 end-0 top-3 w-[3px] rounded-full bg-megido-primary" />
 
-      <p className="mb-1 text-xs font-medium text-slate-500">{label}</p>
+      <p className="mb-1 text-xs font-medium text-megido-text-muted">{label}</p>
 
       <div className="flex items-baseline gap-2">
-        <span className="text-[22px] font-bold text-slate-900">
+        <span className="ltr-nums text-xl font-bold text-megido-text-heading">
           {units.toLocaleString("he-IL")} {'\u05D9\u05D7"\u05D3'}
         </span>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-megido-text-muted">
           {count} {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
         </span>
       </div>

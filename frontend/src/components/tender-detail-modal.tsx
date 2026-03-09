@@ -81,11 +81,11 @@ function DetailField({
 }) {
   return (
     <div className="flex items-start gap-2 py-1">
-      <span className="shrink-0 text-sm font-semibold text-slate-700">
+      <span className="shrink-0 text-sm font-semibold text-megido-neutral-700">
         {label}:
       </span>
       {children ?? (
-        <span className="text-sm text-slate-600">
+        <span className="text-sm text-megido-neutral-600">
           {value != null ? String(value) : "\u2014"}
         </span>
       )}
@@ -139,7 +139,7 @@ export function TenderDetailModal({
           {/* Deadline with badge */}
           <DetailField label={"\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4"}>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-megido-neutral-600">
                 {formatDate(tender.deadline)}
               </span>
               <DeadlineBadge daysRemaining={daysRemaining} />
@@ -177,18 +177,18 @@ export function TenderDetailModal({
         {/* Building rights section */}
         {buildingRights && buildingRights.length > 0 && (
           <div className="mt-4 border-t pt-3">
-            <h4 className="mb-2 text-sm font-semibold text-slate-800">
+            <h4 className="mb-2 text-sm font-semibold text-megido-text-heading">
               {"\u05D6\u05DB\u05D5\u05D9\u05D5\u05EA \u05D1\u05E0\u05D9\u05D9\u05D4"}
             </h4>
             <div className="max-h-48 overflow-y-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="px-2 py-1 text-right">{"\u05D9\u05E2\u05D5\u05D3"}</th>
-                    <th className="px-2 py-1 text-right">{"\u05E9\u05D9\u05DE\u05D5\u05E9"}</th>
-                    <th className="px-2 py-1 text-right">{'\u05E9\u05D8\u05D7 \u05DE\u05D2\u05E8\u05E9 (\u05DE"\u05E8)'}</th>
-                    <th className="px-2 py-1 text-right">{'\u05D9\u05D7"\u05D3'}</th>
-                    <th className="px-2 py-1 text-right">{"\u05E7\u05D5\u05DE\u05D5\u05EA"}</th>
+                  <tr className="border-b bg-megido-neutral-50">
+                    <th className="px-2 py-1 text-end">{"\u05D9\u05E2\u05D5\u05D3"}</th>
+                    <th className="px-2 py-1 text-end">{"\u05E9\u05D9\u05DE\u05D5\u05E9"}</th>
+                    <th className="px-2 py-1 text-end">{'\u05E9\u05D8\u05D7 \u05DE\u05D2\u05E8\u05E9 (\u05DE"\u05E8)'}</th>
+                    <th className="px-2 py-1 text-end">{'\u05D9\u05D7"\u05D3'}</th>
+                    <th className="px-2 py-1 text-end">{"\u05E7\u05D5\u05DE\u05D5\u05EA"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,19 +212,19 @@ export function TenderDetailModal({
         {/* Lots data section */}
         {lots && lots.length > 0 && (
           <div className="mt-4 border-t pt-3">
-            <h4 className="mb-2 text-sm font-semibold text-slate-800">
+            <h4 className="mb-2 text-sm font-semibold text-megido-text-heading">
               {"\u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD"} ({lots.length})
             </h4>
             <div className="max-h-48 overflow-y-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="px-2 py-1 text-right">{"\u05DE\u05EA\u05D7\u05DD"}</th>
-                    <th className="px-2 py-1 text-right">{"\u05D2\u05D5\u05E9"}</th>
-                    <th className="px-2 py-1 text-right">{"\u05D7\u05DC\u05E7\u05D4"}</th>
-                    <th className="px-2 py-1 text-right">{'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}</th>
-                    <th className="px-2 py-1 text-right">{"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}</th>
-                    <th className="px-2 py-1 text-right">{"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}</th>
+                  <tr className="border-b bg-megido-neutral-50">
+                    <th className="px-2 py-1 text-end">{"\u05DE\u05EA\u05D7\u05DD"}</th>
+                    <th className="px-2 py-1 text-end">{"\u05D2\u05D5\u05E9"}</th>
+                    <th className="px-2 py-1 text-end">{"\u05D7\u05DC\u05E7\u05D4"}</th>
+                    <th className="px-2 py-1 text-end">{'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}</th>
+                    <th className="px-2 py-1 text-end">{"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}</th>
+                    <th className="px-2 py-1 text-end">{"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}</th>
                   </tr>
                 </thead>
                 <tbody>

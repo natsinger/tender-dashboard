@@ -108,76 +108,83 @@ export function DetailedAnalytics() {
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-right hover:bg-slate-50"
+        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-end hover:bg-megido-neutral-50"
       >
         {expanded ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" />
+          <ChevronUp className="h-4 w-4 shrink-0 text-megido-text-muted" />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-megido-text-muted" />
         )}
-        <span className="text-base font-semibold text-slate-800">
+        <span className="text-base font-semibold text-megido-text-heading">
           {"\u05E0\u05D9\u05EA\u05D5\u05D7 \u05DE\u05E4\u05D5\u05E8\u05D8"}
         </span>
       </button>
 
-      {/* Collapsible content */}
-      {expanded && (
-        <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Chart 1: Top 10 cities horizontal bar */}
-          {cityBarData.length > 0 ? (
-            <MegidoBarChart
-              data={cityBarData}
-              xKey="city"
-              yKey="count"
-              title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8"}
-              orientation="horizontal"
-              height={260}
-            />
-          ) : (
-            <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"} />
-          )}
+      {/* Collapsible content with smooth animation */}
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+        style={{
+          gridTemplateRows: expanded ? "1fr" : "0fr",
+        }}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-3 grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Chart 1: Top 10 cities horizontal bar */}
+            {cityBarData.length > 0 ? (
+              <MegidoBarChart
+                data={cityBarData}
+                xKey="city"
+                yKey="count"
+                title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8"}
+                orientation="horizontal"
+                height={260}
+              />
+            ) : (
+              <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"} />
+            )}
 
-          {/* Chart 2: Tenders by type donut */}
-          {typeDonutData.length > 0 ? (
-            <MegidoPieChart
-              data={typeDonutData}
-              nameKey="name"
-              valueKey="value"
-              title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2"}
-              height={260}
-            />
-          ) : (
-            <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"} />
-          )}
+            {/* Chart 2: Tenders by type donut */}
+            {typeDonutData.length > 0 ? (
+              <MegidoPieChart
+                data={typeDonutData}
+                nameKey="name"
+                valueKey="value"
+                title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2"}
+                height={260}
+              />
+            ) : (
+              <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD"} />
+            )}
 
-          {/* Chart 3: Tenders over time */}
-          {timelineData.length > 0 ? (
-            <MegidoLineChart
-              data={timelineData}
-              xKey="month"
-              yKey="count"
-              title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05D0\u05D5\u05E8\u05DA \u05D6\u05DE\u05DF"}
-              height={260}
-            />
-          ) : (
-            <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05EA\u05D0\u05E8\u05D9\u05DB\u05D9\u05DD"} />
-          )}
+            {/* Chart 3: Tenders over time */}
+            {timelineData.length > 0 ? (
+              <MegidoLineChart
+                data={timelineData}
+                xKey="month"
+                yKey="count"
+                title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05D0\u05D5\u05E8\u05DA \u05D6\u05DE\u05DF"}
+                height={260}
+              />
+            ) : (
+              <EmptyChart label={"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05EA\u05D0\u05E8\u05D9\u05DB\u05D9\u05DD"} />
+            )}
 
-          {/* Chart 4: Units by tender type */}
-          {unitsByTypeData.length > 0 ? (
-            <MegidoBarChart
-              data={unitsByTypeData}
-              xKey="type"
-              yKey="units"
-              title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2'}
-              orientation="vertical"
-              height={260}
-            />
-          ) : (
-            <EmptyChart label={'\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D9\u05D7"\u05D3'} />
-          )}
+            {/* Chart 4: Units by tender type */}
+            {unitsByTypeData.length > 0 ? (
+              <MegidoBarChart
+                data={unitsByTypeData}
+                xKey="type"
+                yKey="units"
+                title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2'}
+                orientation="vertical"
+                height={260}
+              />
+            ) : (
+              <EmptyChart label={'\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D9\u05D7"\u05D3'} />
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -188,8 +195,8 @@ export function DetailedAnalytics() {
 
 function EmptyChart({ label }: { label: string }) {
   return (
-    <div className="flex h-[260px] items-center justify-center rounded-md border border-dashed border-slate-200">
-      <p className="text-sm text-slate-500">{label}</p>
+    <div className="flex h-[260px] items-center justify-center rounded-md border border-dashed border-megido-border">
+      <p className="text-sm text-megido-text-muted">{label}</p>
     </div>
   );
 }

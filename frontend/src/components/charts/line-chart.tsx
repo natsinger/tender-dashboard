@@ -15,7 +15,9 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { corePalette } from "@/design-system/tokens/colors";
 import { ChartWrapper } from "./chart-wrapper";
+import { HebrewTooltip } from "./hebrew-tooltip";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,7 +56,7 @@ export function MegidoLineChart({
   yKey,
   title,
   height = 260,
-  lineColor = "#1E3A5F",
+  lineColor = corePalette.secondary,
   showDots = true,
   className,
 }: MegidoLineChartProps) {
@@ -64,10 +66,10 @@ export function MegidoLineChart({
         data={data}
         margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+        <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
         <XAxis dataKey={xKey} tick={{ fontSize: 12 }} />
-        <YAxis tick={{ fontSize: 12 }} />
-        <Tooltip />
+        <YAxis tick={{ fontSize: 12 }} orientation="right" />
+        <Tooltip content={<HebrewTooltip />} />
         <Line
           type="monotone"
           dataKey={yKey}
