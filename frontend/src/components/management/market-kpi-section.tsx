@@ -13,10 +13,24 @@ import { MegidoPieChart } from "@/components/charts/pie-chart";
 import { corePalette } from "@/design-system/tokens/colors";
 import { MegidoBarChart } from "@/components/charts/bar-chart";
 import { MetricCard } from "@/components/metric-card";
-import { UnitCompositionCard } from "@/components/management/unit-composition-card";
+import {
+  UnitCompositionCard,
+  type CompositionSegment,
+} from "@/components/management/unit-composition-card";
 import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
 import type { LotAggregation } from "@/hooks/use-bulk-lots";
 import type { TenderWithComputed } from "@/types/database";
+
+// ---------------------------------------------------------------------------
+// Segment color map for tender types
+// ---------------------------------------------------------------------------
+
+const TYPE_COLORS: Record<string, string> = {
+  "\u05DE\u05DB\u05E8\u05D6 \u05E4\u05D5\u05DE\u05D1\u05D9 \u05E8\u05D2\u05D9\u05DC": "bg-megido-primary",
+  "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4": "bg-emerald-500",
+  "\u05D3\u05D9\u05D5\u05E8 \u05D1\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D5\u05E4\u05D7\u05EA": "bg-amber-500",
+};
+const TYPE_FALLBACK_COLOR = "bg-neutral-400";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,46 +162,60 @@ export function MarketKPISection({
   // tender-level when showing all tenders.
   const isBrochureMode = brochureFilter === "with_brochure";
 
-  const { totalUnits, totalFreeMarket, totalTargetPrice } = useMemo(() => {
-    if (!isBrochureMode) {
-      // All tenders mode: sum tender-level units (no FM/TP split available)
+  // Brochure mode: lot-level FM/TP breakdown
+  const { totalUnits: brochureTotal, segments: brochureSegments, footnote: brochureFootnote } =
+    useMemo(() => {
       let total = 0;
-      for (const t of filteredTenders) {
-        total += t.units ?? 0;
+      let fm = 0;
+      let tp = 0;
+      let withData = 0;
+      const tenderIds = new Set(filteredTenders.map((t) => t.tender_id));
+
+      for (const [tidStr, agg] of Object.entries(lotMap)) {
+        const tid = Number(tidStr);
+        if (!tenderIds.has(tid)) continue;
+        fm += agg.free_market;
+        tp += agg.target_price;
+        total += agg.total;
+        if (agg.total > 0) withData++;
       }
-      return { totalUnits: total, totalFreeMarket: 0, totalTargetPrice: 0 };
-    }
 
-    // Brochure mode: use lot-level data for accurate breakdown
+      const unclassified = total - fm - tp;
+      const segments: CompositionSegment[] = [];
+      if (fm > 0) segments.push({ label: "\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9", value: fm, color: "bg-megido-primary" });
+      if (tp > 0) segments.push({ label: "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4", value: tp, color: "bg-emerald-500" });
+      if (unclassified > 0) segments.push({ label: "\u05DC\u05DC\u05D0 \u05E4\u05D9\u05E8\u05D5\u05D8", value: unclassified, color: "bg-neutral-300" });
+
+      const footnote = filteredTenders.length > 0
+        ? `\u05DE\u05D1\u05D5\u05E1\u05E1 \u05E2\u05DC ${withData} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD \u05DE\u05EA\u05D5\u05DA ${filteredTenders.length}`
+        : undefined;
+
+      return { totalUnits: total, segments, footnote };
+    }, [filteredTenders, lotMap]);
+
+  // All-tenders mode: breakdown by tender type
+  const { totalUnits: allTotal, segments: allSegments } = useMemo(() => {
+    const typeUnits: Record<string, number> = {};
     let total = 0;
-    let fm = 0;
-    let tp = 0;
-    const tenderIds = new Set(filteredTenders.map((t) => t.tender_id));
 
-    for (const [tidStr, agg] of Object.entries(lotMap)) {
-      const tid = Number(tidStr);
-      if (!tenderIds.has(tid)) continue;
-      fm += agg.free_market;
-      tp += agg.target_price;
-      total += agg.total;
+    for (const t of filteredTenders) {
+      const units = t.units ?? 0;
+      const type = t.tender_type ?? "\u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2";
+      typeUnits[type] = (typeUnits[type] ?? 0) + units;
+      total += units;
     }
-    return { totalUnits: total, totalFreeMarket: fm, totalTargetPrice: tp };
-  }, [filteredTenders, lotMap, isBrochureMode]);
 
-  // Count how many filtered tenders actually have lot data
-  const tenderIdsWithLots = useMemo(() => {
-    const tenderIds = new Set(filteredTenders.map((t) => t.tender_id));
-    let count = 0;
-    for (const [tidStr, agg] of Object.entries(lotMap)) {
-      if (tenderIds.has(Number(tidStr)) && agg.total > 0) count++;
-    }
-    return count;
-  }, [filteredTenders, lotMap]);
+    const segments: CompositionSegment[] = Object.entries(typeUnits)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({
+        label,
+        value,
+        color: TYPE_COLORS[label] ?? TYPE_FALLBACK_COLOR,
+      }));
 
-  const allModeScopeLines = [
-    "\u05E1\u05D5\u05D2\u05D9 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD: \u05DE\u05DB\u05E8\u05D6 \u05E4\u05D5\u05DE\u05D1\u05D9 \u05E8\u05D2\u05D9\u05DC, \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4, \u05D3\u05D9\u05D5\u05E8 \u05D1\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D5\u05E4\u05D7\u05EA",
-    "\u05D9\u05D9\u05E2\u05D5\u05D3: \u05D1\u05E0\u05D9\u05D9\u05D4 \u05E8\u05D5\u05D5\u05D9\u05D4, \u05D1\u05E0\u05D9\u05D9\u05D4 \u05E0\u05DE\u05D5\u05DB\u05D4/\u05E6\u05DE\u05D5\u05D3\u05EA \u05E7\u05E8\u05E7\u05E2/\u05D3\u05D9\u05D5\u05E8 \u05DE\u05D5\u05D2\u05DF",
-  ];
+    return { totalUnits: total, segments };
+  }, [filteredTenders]);
 
   return (
     <section>
@@ -257,46 +285,18 @@ export function MarketKPISection({
             />
           </div>
 
-          {/* Row 2: Unit breakdowns */}
+          {/* Row 2: Unit composition */}
           {isBrochureMode ? (
             <UnitCompositionCard
-              totalUnits={totalUnits}
-              freeMarket={totalFreeMarket}
-              targetPrice={totalTargetPrice}
-              tendersWithData={tenderIdsWithLots}
-              tendersTotal={filteredTenders.length}
+              total={brochureTotal}
+              segments={brochureSegments}
+              footnote={brochureFootnote}
             />
           ) : (
-            <div
-              className="relative rounded-xl border border-megido-border bg-megido-bg-card p-4 transition-shadow duration-200 hover:shadow-md"
-            >
-              {/* Blue right border accent */}
-              <div className="absolute bottom-3 end-0 top-3 w-[3px] rounded-full bg-megido-primary" />
-
-              <div className="flex items-start justify-between gap-4">
-                {/* Right (RTL start): value + label */}
-                <div className="shrink-0">
-                  <p className="mb-1 text-xs font-medium text-megido-text-muted">
-                    {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
-                  </p>
-                  <span className="ltr-nums text-2xl font-bold text-megido-text-heading">
-                    {totalUnits.toLocaleString("he-IL")}
-                  </span>
-                </div>
-
-                {/* Left (RTL end): scope description */}
-                <div className="text-xs leading-relaxed text-megido-text-muted">
-                  {allModeScopeLines.map((line, i) => {
-                    const [title, rest] = line.split(": ");
-                    return (
-                      <p key={i}>
-                        <span className="font-semibold text-megido-text-heading">{title}:</span>{" "}{rest}
-                      </p>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <UnitCompositionCard
+              total={allTotal}
+              segments={allSegments}
+            />
           )}
         </div>
       </div>
