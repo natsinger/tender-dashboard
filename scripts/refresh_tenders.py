@@ -160,7 +160,56 @@ def main() -> None:
             traceback.format_exc(),
         )
 
-    # 8. Final summary
+    # 8. Resolve GovMap TABA URLs for tenders with plan numbers
+    try:
+        logger.info("Step 8: Resolving GovMap TABA URLs...")
+        from db import TenderDB as _TenderDB_gm
+        from govmap_client import batch_resolve_govmap_urls
+
+        gm_db = _TenderDB_gm()
+        result = (
+            gm_db._client.table("tenders")
+            .select("tender_id, plan_number")
+            .not_.is_("plan_number", "null")
+            .is_("govmap_url", "null")
+            .execute()
+        )
+        pending = result.data if result.data else []
+
+        if pending:
+            plan_numbers = [row["plan_number"] for row in pending]
+            plan_to_tid = {
+                row["plan_number"]: row["tender_id"] for row in pending
+            }
+            logger.info(
+                "Found %d tenders with plan_number but no govmap_url",
+                len(pending),
+            )
+
+            resolved = batch_resolve_govmap_urls(plan_numbers)
+            updates: list[tuple[str, int]] = [
+                (url, plan_to_tid[pn])
+                for pn, url in resolved.items()
+                if url is not None
+            ]
+            failed = len(resolved) - len(updates)
+
+            if updates:
+                gm_db.update_govmap_urls(updates)
+
+            logger.info(
+                "GovMap resolve complete: %d resolved, %d failed",
+                len(updates), failed,
+            )
+        else:
+            logger.info("No tenders pending GovMap resolution")
+    except Exception as exc:
+        logger.warning(
+            "GovMap URL resolution failed (non-fatal): %s\n%s",
+            exc, traceback.format_exc(),
+        )
+
+    # 9. Final summary
     logger.info(
         "=== Daily refresh complete | watchlist_emails=%d new_tender_email=%d ===",
         watchlist_emails,
