@@ -1,86 +1,32 @@
 /**
  * UnitCompositionCard component.
  *
- * Displays total housing units with a stacked bar showing the breakdown
- * into free market, target price, and unclassified (no lot-level data).
- * Makes the part-whole relationship explicit so viewers understand why
- * FM + TP may not equal the total.
+ * Displays total housing units with a stacked bar and legend showing
+ * the breakdown into named segments. Used for both lot-level splits
+ * (FM / TP / unclassified) and tender-type splits.
  */
 "use client";
 
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Props
+// Types
 // ---------------------------------------------------------------------------
 
-interface UnitCompositionCardProps {
-  totalUnits: number;
-  freeMarket: number;
-  targetPrice: number;
-  /** Number of tenders that have lot-level breakdown data. */
-  tendersWithData: number;
-  /** Total number of tenders in the filtered set. */
-  tendersTotal: number;
-}
-
-// ---------------------------------------------------------------------------
-// Segment config
-// ---------------------------------------------------------------------------
-
-interface Segment {
+export interface CompositionSegment {
   label: string;
   value: number;
-  pct: number;
+  /** Tailwind bg class for the bar segment and legend dot. */
   color: string;
-  dotClass: string;
 }
 
-function buildSegments(
-  total: number,
-  fm: number,
-  tp: number,
-): Segment[] {
-  if (total <= 0) return [];
-
-  const unclassified = total - fm - tp;
-  const fmPct = Math.round((fm / total) * 100);
-  const tpPct = Math.round((tp / total) * 100);
-  const unclPct = 100 - fmPct - tpPct;
-
-  const segments: Segment[] = [];
-
-  if (fm > 0) {
-    segments.push({
-      label: "\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9",
-      value: fm,
-      pct: fmPct,
-      color: "bg-megido-primary",
-      dotClass: "bg-megido-primary",
-    });
-  }
-
-  if (tp > 0) {
-    segments.push({
-      label: "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4",
-      value: tp,
-      pct: tpPct,
-      color: "bg-emerald-500",
-      dotClass: "bg-emerald-500",
-    });
-  }
-
-  if (unclassified > 0) {
-    segments.push({
-      label: "\u05DC\u05DC\u05D0 \u05E4\u05D9\u05E8\u05D5\u05D8",
-      value: unclassified,
-      pct: unclPct,
-      color: "bg-neutral-300",
-      dotClass: "bg-neutral-300",
-    });
-  }
-
-  return segments;
+interface UnitCompositionCardProps {
+  /** Total value displayed as the headline number. */
+  total: number;
+  /** Ordered segments that compose the total. */
+  segments: CompositionSegment[];
+  /** Optional footnote below the legend. */
+  footnote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,13 +34,30 @@ function buildSegments(
 // ---------------------------------------------------------------------------
 
 export function UnitCompositionCard({
-  totalUnits,
-  freeMarket,
-  targetPrice,
-  tendersWithData,
-  tendersTotal,
+  total,
+  segments,
+  footnote,
 }: UnitCompositionCardProps) {
-  const segments = buildSegments(totalUnits, freeMarket, targetPrice);
+  // Compute percentages — use remainder trick on last segment to avoid drift
+  const withPct = segments
+    .filter((s) => s.value > 0)
+    .map((s, _i, arr) => {
+      const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+      return { ...s, pct };
+    });
+
+  // Adjust last segment so percentages sum to exactly 100
+  if (withPct.length > 0 && total > 0) {
+    const sum = withPct.reduce((acc, s) => acc + s.pct, 0);
+    withPct[withPct.length - 1].pct += 100 - sum;
+  }
+
+  const colsClass =
+    withPct.length <= 2
+      ? "grid-cols-2"
+      : withPct.length === 3
+        ? "grid-cols-3"
+        : "grid-cols-2 sm:grid-cols-4";
 
   return (
     <div
@@ -111,13 +74,13 @@ export function UnitCompositionCard({
         {'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
       </p>
       <span className="ltr-nums text-2xl font-bold text-megido-text-heading">
-        {totalUnits.toLocaleString("he-IL")}
+        {total.toLocaleString("he-IL")}
       </span>
 
       {/* Stacked bar */}
-      {segments.length > 0 && (
+      {withPct.length > 0 && (
         <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-neutral-100">
-          {segments.map((seg) => (
+          {withPct.map((seg) => (
             <div
               key={seg.label}
               className={cn(seg.color, "transition-all duration-300")}
@@ -131,18 +94,18 @@ export function UnitCompositionCard({
       )}
 
       {/* Legend */}
-      {segments.length > 0 && (
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {segments.map((seg) => (
+      {withPct.length > 0 && (
+        <div className={cn("mt-3 grid gap-x-3 gap-y-2", colsClass)}>
+          {withPct.map((seg) => (
             <div key={seg.label} className="flex items-start gap-1.5">
               <div
                 className={cn(
                   "mt-1 h-2 w-2 shrink-0 rounded-full",
-                  seg.dotClass,
+                  seg.color,
                 )}
               />
-              <div>
-                <p className="text-xs font-medium text-megido-text-heading">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-megido-text-heading">
                   {seg.label}
                 </p>
                 <p className="ltr-nums text-xs text-megido-text-muted">
@@ -156,19 +119,16 @@ export function UnitCompositionCard({
       )}
 
       {/* Empty state */}
-      {totalUnits === 0 && (
+      {total === 0 && (
         <p className="mt-3 text-xs text-megido-text-muted">
-          {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD"}
+          {"\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D6\u05DE\u05D9\u05E0\u05D9\u05DD"}
         </p>
       )}
 
       {/* Footnote */}
-      {tendersTotal > 0 && (
-        <p className="mt-3 text-[0.64rem] text-megido-text-muted">
-          {"\u05DE\u05D1\u05D5\u05E1\u05E1 \u05E2\u05DC "}
-          <span className="ltr-nums font-medium">{tendersWithData}</span>
-          {" \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD \u05E0\u05EA\u05D5\u05E0\u05D9 \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD \u05DE\u05EA\u05D5\u05DA "}
-          <span className="ltr-nums font-medium">{tendersTotal}</span>
+      {footnote && (
+        <p className="mt-3 text-[0.64rem] leading-relaxed text-megido-text-muted">
+          {footnote}
         </p>
       )}
     </div>
