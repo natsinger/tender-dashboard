@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _GOVMAP_BASE = "https://www.govmap.gov.il"
 _TABA_API = f"{_GOVMAP_BASE}/api/taba/taba/plan"
+_MISHASAVA_API = f"{_GOVMAP_BASE}/api/taba/taba/mishasava/exact"
 _VIEWER_URL = f"{_GOVMAP_BASE}/?app=app07&ma="
 _REQUEST_TIMEOUT = 10
 
@@ -37,24 +38,40 @@ def build_govmap_url(mishasava: int | str) -> str:
     return f"{_VIEWER_URL}{mishasava}"
 
 
-def resolve_govmap_url(plan_number: str) -> str | None:
-    """Resolve an RMI plan number to a GovMap viewer URL.
+def _is_pure_numeric(value: str) -> bool:
+    """Check if a string is a pure numeric ID (likely a mishasava)."""
+    return value.isdigit() and len(value) >= 4
 
-    Queries the GovMap TABA search API to find the mishasava ID
-    for the given plan number, then builds the viewer URL.
+
+def _verify_mishasava(mishasava: str) -> bool:
+    """Verify a mishasava ID exists in GovMap by calling the exact lookup.
 
     Args:
-        plan_number: The plan number as it appears in the tenders table
-            (e.g. "33/101/02/24", "307-0692160", "3050356").
+        mishasava: Numeric ID to verify.
 
     Returns:
-        GovMap viewer URL string, or None if the plan could not be
-        resolved (no match, network error, or missing mishasava).
+        True if GovMap recognises this ID.
     """
-    if not plan_number or not plan_number.strip():
-        logger.debug("resolve_govmap_url called with empty plan_number")
-        return None
+    url = f"{_MISHASAVA_API}/{mishasava}"
+    try:
+        resp = requests.get(url, timeout=_REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        plans = data.get("tabaPlans")
+        return bool(plans and isinstance(plans, list) and len(plans) > 0)
+    except (requests.exceptions.RequestException, ValueError):
+        return False
 
+
+def _search_by_plan_number(plan_number: str) -> str | None:
+    """Search GovMap TABA API by plan number text.
+
+    Args:
+        plan_number: Plan number string (e.g. "33/101/02/24").
+
+    Returns:
+        GovMap viewer URL, or None.
+    """
     encoded = quote(plan_number.strip(), safe="")
     url = f"{_TABA_API}/{encoded}"
 
@@ -82,24 +99,58 @@ def resolve_govmap_url(plan_number: str) -> str | None:
 
     taba_plans = data.get("tabaPlans")
     if not taba_plans or not isinstance(taba_plans, list):
-        logger.debug(
-            "No tabaPlans found for plan_number=%s", plan_number,
-        )
         return None
 
     for plan in taba_plans:
         mishasava = plan.get("mishasava")
         if mishasava:
-            govmap_url = build_govmap_url(mishasava)
-            logger.info(
-                "Resolved plan_number=%s → mishasava=%s",
-                plan_number, mishasava,
-            )
-            return govmap_url
+            return build_govmap_url(mishasava)
 
-    logger.debug(
-        "tabaPlans found but no mishasava for plan_number=%s", plan_number,
-    )
+    return None
+
+
+def resolve_govmap_url(plan_number: str) -> str | None:
+    """Resolve an RMI plan number to a GovMap viewer URL.
+
+    Strategy:
+    1. If the plan_number is a pure numeric string (4+ digits), treat it
+       as a potential mishasava ID — verify via the exact lookup endpoint.
+       If valid, build the URL directly (no search needed).
+    2. Otherwise, search the TABA API by plan number text.
+
+    Args:
+        plan_number: The plan number as it appears in the tenders table
+            (e.g. "33/101/02/24", "307-0692160", "3050356").
+
+    Returns:
+        GovMap viewer URL string, or None if the plan could not be
+        resolved (no match, network error, or missing mishasava).
+    """
+    if not plan_number or not plan_number.strip():
+        logger.debug("resolve_govmap_url called with empty plan_number")
+        return None
+
+    cleaned = plan_number.strip()
+
+    # Strategy 1: pure numeric → likely a mishasava ID already
+    if _is_pure_numeric(cleaned):
+        if _verify_mishasava(cleaned):
+            logger.info(
+                "plan_number=%s is a valid mishasava ID (direct)",
+                cleaned,
+            )
+            return build_govmap_url(cleaned)
+        logger.debug(
+            "plan_number=%s is numeric but not a valid mishasava", cleaned,
+        )
+
+    # Strategy 2: search by plan number text
+    result = _search_by_plan_number(cleaned)
+    if result:
+        logger.info("Resolved plan_number=%s via search", cleaned)
+        return result
+
+    logger.debug("Could not resolve plan_number=%s", cleaned)
     return None
 
 
