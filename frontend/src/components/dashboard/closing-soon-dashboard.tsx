@@ -158,7 +158,7 @@ export function ClosingSoonDashboard() {
     }));
   }, [closingSoonTenders, brochureFilter]);
 
-  const handleRowSelect = (row: ClosingRow | null) => {
+  const handleRowClick = (row: ClosingRow) => {
     if (row) {
       setSelectedTender(row._tender);
       setModalOpen(true);
@@ -207,8 +207,7 @@ export function ClosingSoonDashboard() {
             columns={columns}
             data={rows}
             isLoading={isLoading}
-            enableSelection
-            onRowSelect={handleRowSelect}
+            onRowClick={handleRowClick}
             pageSize={10}
             emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D9\u05DD \u05EA\u05D5\u05DA 14 \u05D9\u05D5\u05DD."}
           />
