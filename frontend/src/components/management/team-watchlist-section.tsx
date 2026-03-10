@@ -255,8 +255,8 @@ export function TeamWatchlistSection() {
   }, [watchlistItems, reviewMap, lotMap, brochureFilter]);
 
   // Row click handler
-  const handleRowSelect = (row: WatchlistRow | null) => {
-    if (row?.tender) {
+  const handleRowClick = (row: WatchlistRow) => {
+    if (row.tender) {
       setSelectedTender(row.tender);
       setModalOpen(true);
     }
@@ -279,8 +279,7 @@ export function TeamWatchlistSection() {
             columns={columns}
             data={rows}
             isLoading={watchlistLoading}
-            enableSelection
-            onRowSelect={handleRowSelect}
+            onRowClick={handleRowClick}
             pageSize={20}
             emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD."}
           />

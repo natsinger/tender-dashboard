@@ -52,6 +52,8 @@ interface DataTableProps<TData> {
   emptyMessage?: string;
   /** Callback when a row is selected (single mode). */
   onRowSelect?: (row: TData | null) => void;
+  /** Callback fired on every row click (always fires, no toggle). */
+  onRowClick?: (row: TData) => void;
   /** Enable row selection. Defaults to false. */
   enableSelection?: boolean;
   /** Additional CSS classes on the outer wrapper. */
@@ -86,6 +88,7 @@ export function DataTable<TData>({
   pageSize = 10,
   emptyMessage = "\u05D0\u05D9\u05DF \u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05DC\u05D4\u05E6\u05D2\u05D4",
   onRowSelect,
+  onRowClick,
   enableSelection = false,
   className,
 }: DataTableProps<TData>) {
@@ -235,13 +238,15 @@ export function DataTable<TData>({
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
                   className={cn(
-                    enableSelection && "cursor-pointer",
+                    (enableSelection || onRowClick) && "cursor-pointer",
                     row.getIsSelected() && "bg-megido-primary-50",
                   )}
                   onClick={
-                    enableSelection
-                      ? () => row.toggleSelected(!row.getIsSelected())
-                      : undefined
+                    onRowClick
+                      ? () => onRowClick(row.original)
+                      : enableSelection
+                        ? () => row.toggleSelected(!row.getIsSelected())
+                        : undefined
                   }
                 >
                   {row.getVisibleCells().map((cell) => (
