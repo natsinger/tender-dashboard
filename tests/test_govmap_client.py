@@ -69,6 +69,8 @@ class TestResolveGovmapUrl:
 
     @patch("govmap_client.requests.get")
     def test_multiple_taba_plans_returns_first(self, mock_get: MagicMock) -> None:
+        # Use a plan number that won't trigger dash-prefix stripping
+        # (prefix must be 1-3 digits, so "3070-0692160" won't match)
         mock_get.return_value = _mock_response({
             "tabaPlans": [
                 {"mishasava": 1111, "planName": "First"},
@@ -76,7 +78,7 @@ class TestResolveGovmapUrl:
             ],
         })
 
-        result = resolve_govmap_url("307-0692160")
+        result = resolve_govmap_url("3070-0692160")
         assert result == "https://www.govmap.gov.il/?app=app07&ma=1111"
 
     @patch("govmap_client.requests.get")
