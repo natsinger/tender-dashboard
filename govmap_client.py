@@ -12,6 +12,7 @@ Usage:
 """
 
 import logging
+import re
 import time
 from urllib.parse import quote
 
@@ -109,18 +110,52 @@ def _search_by_plan_number(plan_number: str) -> str | None:
     return None
 
 
+def _normalize_plan_number(plan_number: str) -> list[str]:
+    """Produce search candidates from a raw plan number.
+
+    Handles:
+    - Comma-separated plans: split and try each individually.
+    - תמ"ל prefix: strip the quote mark → תמל (GovMap expects no quotes).
+    - Leading junk (tabs, dashes): strip them.
+
+    Args:
+        plan_number: Raw plan_number value from the tenders table.
+
+    Returns:
+        List of cleaned candidate strings to try, in priority order.
+    """
+    candidates: list[str] = []
+    cleaned = plan_number.strip().lstrip("-\t ")
+
+    # Comma-separated: "420/4/7, 420/4/10" → try each part
+    if "," in cleaned:
+        for part in cleaned.split(","):
+            part = part.strip()
+            if part:
+                candidates.append(part)
+        return candidates
+
+    # תמ"ל → תמל (remove quote mark between מ and ל)
+    normalized = re.sub(r'["\u0022\u201c\u201d]', "", cleaned)
+    if normalized != cleaned:
+        candidates.append(normalized)
+
+    candidates.append(cleaned)
+    return candidates
+
+
 def resolve_govmap_url(plan_number: str) -> str | None:
     """Resolve an RMI plan number to a GovMap viewer URL.
 
     Strategy:
-    1. If the plan_number is a pure numeric string (4+ digits), treat it
-       as a potential mishasava ID — verify via the exact lookup endpoint.
-       If valid, build the URL directly (no search needed).
-    2. Otherwise, search the TABA API by plan number text.
+    1. Normalize the plan number (split commas, strip תמ"ל quotes, etc.)
+    2. For each candidate:
+       a. If pure numeric (4+ digits), try as mishasava ID directly.
+       b. Otherwise, search the TABA API by plan number text.
 
     Args:
         plan_number: The plan number as it appears in the tenders table
-            (e.g. "33/101/02/24", "307-0692160", "3050356").
+            (e.g. "33/101/02/24", "307-0692160", "3050356", 'תמ"ל/1082').
 
     Returns:
         GovMap viewer URL string, or None if the plan could not be
@@ -130,27 +165,32 @@ def resolve_govmap_url(plan_number: str) -> str | None:
         logger.debug("resolve_govmap_url called with empty plan_number")
         return None
 
-    cleaned = plan_number.strip()
+    candidates = _normalize_plan_number(plan_number)
 
-    # Strategy 1: pure numeric → likely a mishasava ID already
-    if _is_pure_numeric(cleaned):
-        if _verify_mishasava(cleaned):
-            logger.info(
-                "plan_number=%s is a valid mishasava ID (direct)",
-                cleaned,
+    for candidate in candidates:
+        # Strategy 1: pure numeric → likely a mishasava ID already
+        if _is_pure_numeric(candidate):
+            if _verify_mishasava(candidate):
+                logger.info(
+                    "plan_number=%s → candidate=%s is a valid mishasava ID",
+                    plan_number, candidate,
+                )
+                return build_govmap_url(candidate)
+            logger.debug(
+                "candidate=%s is numeric but not a valid mishasava",
+                candidate,
             )
-            return build_govmap_url(cleaned)
-        logger.debug(
-            "plan_number=%s is numeric but not a valid mishasava", cleaned,
-        )
 
-    # Strategy 2: search by plan number text
-    result = _search_by_plan_number(cleaned)
-    if result:
-        logger.info("Resolved plan_number=%s via search", cleaned)
-        return result
+        # Strategy 2: search by plan number text
+        result = _search_by_plan_number(candidate)
+        if result:
+            logger.info(
+                "Resolved plan_number=%s → candidate=%s via search",
+                plan_number, candidate,
+            )
+            return result
 
-    logger.debug("Could not resolve plan_number=%s", cleaned)
+    logger.debug("Could not resolve plan_number=%s", plan_number)
     return None
 
 
