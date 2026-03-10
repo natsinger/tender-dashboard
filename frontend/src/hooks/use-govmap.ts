@@ -14,18 +14,35 @@ import type { Tender } from "@/types/database";
 // useGovmapUrl
 // ---------------------------------------------------------------------------
 
+interface GovmapResult {
+  /** GovMap or Mavat URL (GovMap preferred, Mavat as fallback). */
+  url: string | null;
+  /** Whether the on-demand fetch is in progress. */
+  isLoading: boolean;
+  /** "govmap" if resolved via GovMap, "mavat" if fallback to Mavat search. */
+  source: "govmap" | "mavat" | null;
+}
+
 /**
- * Resolve a GovMap TABA URL for a tender.
+ * Build a Mavat search URL from a plan number.
+ *
+ * Opens the Mavat planning database search page with the plan number
+ * pre-filled. Used as fallback when GovMap resolution fails.
+ */
+function buildMavatSearchUrl(planNumber: string): string {
+  return `https://mavat.iplan.gov.il/SV1#/?search=${encodeURIComponent(planNumber)}`;
+}
+
+/**
+ * Resolve a TABA plan URL for a tender.
  *
  * Priority:
- * 1. Pre-computed `govmap_url` stored on the tender row.
- * 2. On-demand fetch via `/api/govmap?planNumber=...` when plan_number exists.
- * 3. `null` when neither field is available.
+ * 1. Pre-computed `govmap_url` stored on the tender row → GovMap.
+ * 2. On-demand fetch via `/api/govmap?planNumber=...` → GovMap.
+ * 3. Mavat search URL as fallback when GovMap can't resolve.
+ * 4. `null` when no plan_number exists.
  */
-export function useGovmapUrl(tender: Tender | null): {
-  url: string | null;
-  isLoading: boolean;
-} {
+export function useGovmapUrl(tender: Tender | null): GovmapResult {
   const precomputed = tender?.govmap_url ?? null;
   const planNumber = tender?.plan_number ?? null;
   const needsFetch = !!planNumber && !precomputed;
@@ -44,12 +61,22 @@ export function useGovmapUrl(tender: Tender | null): {
   });
 
   if (precomputed) {
-    return { url: precomputed, isLoading: false };
+    return { url: precomputed, isLoading: false, source: "govmap" };
   }
 
   if (!planNumber) {
-    return { url: null, isLoading: false };
+    return { url: null, isLoading: false, source: null };
   }
 
-  return { url: data?.url ?? null, isLoading };
+  // On-demand GovMap fetch succeeded
+  if (data?.url) {
+    return { url: data.url, isLoading: false, source: "govmap" };
+  }
+
+  // GovMap fetch done but no result → fallback to Mavat search
+  if (!isLoading && !data?.url) {
+    return { url: buildMavatSearchUrl(planNumber), isLoading: false, source: "mavat" };
+  }
+
+  return { url: null, isLoading, source: null };
 }
