@@ -13,6 +13,7 @@ import { MegidoPieChart } from "@/components/charts/pie-chart";
 import { corePalette } from "@/design-system/tokens/colors";
 import { MegidoBarChart } from "@/components/charts/bar-chart";
 import { MetricCard } from "@/components/metric-card";
+import { UnitCompositionCard } from "@/components/management/unit-composition-card";
 import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
 import type { LotAggregation } from "@/hooks/use-bulk-lots";
 import type { TenderWithComputed } from "@/types/database";
@@ -258,20 +259,13 @@ export function MarketKPISection({
 
           {/* Row 2: Unit breakdowns */}
           {isBrochureMode ? (
-            <div className="grid grid-cols-3 gap-3">
-              <MetricCard
-                label={'\u05E1\u05D4"\u05DB \u05D9\u05D7"\u05D3'}
-                value={totalUnits.toLocaleString("he-IL")}
-              />
-              <MetricCard
-                label={"\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9"}
-                value={totalFreeMarket.toLocaleString("he-IL")}
-              />
-              <MetricCard
-                label={"\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4"}
-                value={totalTargetPrice.toLocaleString("he-IL")}
-              />
-            </div>
+            <UnitCompositionCard
+              totalUnits={totalUnits}
+              freeMarket={totalFreeMarket}
+              targetPrice={totalTargetPrice}
+              tendersWithData={tenderIdsWithLots}
+              tendersTotal={filteredTenders.length}
+            />
           ) : (
             <div
               className="relative rounded-xl border border-megido-border bg-megido-bg-card p-4 transition-shadow duration-200 hover:shadow-md"
