@@ -14,6 +14,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table";
 import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
 import { DeadlineBadge } from "@/components/deadline-badge";
+import { GovMapLink } from "@/components/govmap-link";
 import { TenderDetailModal } from "@/components/tender-detail-modal";
 import { useTeamWatchlist } from "@/hooks/use-watchlist";
 import { useReviewStatuses } from "@/hooks/use-reviews";
@@ -184,6 +185,12 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
         {getValue<string>() || "\u2014"}
       </span>
     ),
+  },
+  {
+    id: "govmap",
+    header: "תב\"ע",
+    size: 50,
+    cell: ({ row }) => <GovMapLink tender={row.original.tender} />,
   },
 ];
 

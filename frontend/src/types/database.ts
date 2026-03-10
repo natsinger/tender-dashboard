@@ -51,6 +51,8 @@ export interface Tender {
   tender_duration_days: number | null;
   land_area_sqm: number | null;
   plan_number: string | null;
+  /** GovMap TABA viewer URL (pre-computed or on-demand). */
+  govmap_url: string | null;
   max_lots_per_bidder: number | null;
   lot_count: number | null;
   /** ISO datetime string set on each upsert. */

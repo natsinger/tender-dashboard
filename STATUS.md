@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-03-08 (Streamlit removal + status audit)
+**Last updated:** 2026-03-10 (GovMap TABA integration)
 
 ---
 
@@ -13,7 +13,7 @@ All 6 sprints are **complete**. The project is an Israeli land tender intelligen
 - **Auth** — deployed and working (magic link + password login).
 - **Lot extraction + building rights** — automated in daily cron.
 - **Streamlit fully removed** — all legacy files deleted (app.py, pages/, .streamlit/, dashboard_utils.py, test scripts).
-- **331 pytest tests passing**, zero regressions.
+- **351 pytest tests passing**, zero regressions.
 
 ### Deployment
 
@@ -38,6 +38,7 @@ Data pipeline scripts fetch from the Israeli Land Authority API, normalize and p
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-03-10 | **GovMap TABA link integration** — Resolve RMI plan numbers to GovMap viewer URLs via TABA API. Backend: `govmap_client.py` (resolve/batch/build), `db.py` (`govmap_url` column + `update_govmap_urls`), daily cron Step 8 resolves pending plans. Frontend: `/api/govmap` proxy route, `use-govmap` hook (cache-first, API-fallback), `GovMapLink` component (MapPin icon), column added to team watchlist section. **Migration needed:** `ALTER TABLE tenders ADD COLUMN IF NOT EXISTS govmap_url TEXT;` 351 tests pass, build clean. | `govmap_client.py` (new), `tests/test_govmap_client.py` (new), `frontend/src/app/api/govmap/route.ts` (new), `frontend/src/hooks/use-govmap.ts` (new), `frontend/src/components/govmap-link.tsx` (new), `db.py`, `scripts/refresh_tenders.py`, `frontend/src/types/database.ts`, `frontend/src/components/management/team-watchlist-section.tsx` |
 | 2026-03-08 | **Streamlit removal + status audit** — Removed all Streamlit files (app.py, pages/, .streamlit/, dashboard_utils.py, legacy test scripts). Cleaned config.py (removed st.secrets fallback), docstrings. Removed streamlit from requirements.txt. 331 tests pass, zero regressions. Full STATUS.md rewrite. | `app.py` (deleted), `pages/` (deleted), `.streamlit/` (deleted), `dashboard_utils.py` (deleted), `config.py`, `requirements.txt`, `STATUS.md` |
 | 2026-03-06 | **Fix mitcham/gush data pipeline (Issue #12)** — API MitchamName preserved in `mitcham_name` TEXT field; non-numeric values use positional fallback for lot_number; gush_helka_raw JSONB stores structured array. Delete-then-insert upsert pattern for partial unique indexes. 4-level merge fallback. Frontend lots table shows "מזהה רמ״י" column. 28 new tests. 329 tests pass. | `data_client.py`, `db.py`, `scripts/extract_lots_batch.py`, `scripts/sql/fix_mitcham_gush_schema.sql`, `frontend/src/types/database.ts`, `frontend/src/components/explorer/detail-viewer.tsx`, `tests/test_mitcham_gush_fix.py` |
 | 2026-03-05 | **Auth fix: dual login + SMTP template fix** — Fixed broken HTML in Supabase magic link template. Middleware getter pattern for response. Proxy lazy response access. Login page refactored to tabs (magic link + password). Dev-mode error debugging. | `frontend/src/lib/supabase/middleware.ts`, `frontend/src/proxy.ts`, `frontend/src/app/(auth)/login/page.tsx`, `frontend/src/stores/auth-store.ts` |
@@ -108,6 +109,7 @@ Gov tender projects/
 ├── brochure_analyzer.py            # Brochure document selection + on-demand analysis
 ├── analytics_engine.py             # Market analytics: regional, seasonal, price, competitive, scoring
 ├── analytics_enrichment.py         # Price extraction, taba analytics, detail field enrichment
+├── govmap_client.py                # GovMap TABA plan resolver (plan_number → viewer URL)
 ├── mavat_client.py                 # Playwright client: search plans on mavat.iplan.gov.il
 ├── mavat_plan_extractor.py         # Coordinator: download + extract from Mavat plan PDFs
 ├── tender_pdf_extractor.py         # PDF extraction: גוש, חלקה, תב"ע from brochure PDFs
@@ -138,6 +140,7 @@ Gov tender projects/
 │   │   │   │   └── callback/       # Supabase auth callback handler
 │   │   │   ├── api/
 │   │   │   │   ├── auth/           # Auth API routes (role check)
+│   │   │   │   ├── govmap/        # GovMap TABA URL proxy (on-demand)
 │   │   │   │   └── tender-details/ # Tender details API proxy
 │   │   │   ├── layout.tsx          # Root layout
 │   │   │   ├── page.tsx            # Landing / redirect
@@ -154,6 +157,7 @@ Gov tender projects/
 │   │   │   ├── filter-bar.tsx      # Shared filter bar
 │   │   │   ├── data-table.tsx      # Shared data table
 │   │   │   ├── metric-card.tsx     # KPI metric card
+│   │   │   ├── govmap-link.tsx     # GovMap TABA link (MapPin icon)
 │   │   │   ├── watchlist-manager.tsx
 │   │   │   ├── review-status-editor.tsx
 │   │   │   ├── tender-detail-modal.tsx
@@ -165,6 +169,7 @@ Gov tender projects/
 │   │   │   ├── use-bulk-lots.ts    # Bulk lot loading
 │   │   │   ├── use-watchlist.ts    # Watchlist CRUD
 │   │   │   ├── use-reviews.ts      # Review status mutations
+│   │   │   ├── use-govmap.ts       # GovMap URL resolution (cache-first, API-fallback)
 │   │   │   ├── use-documents.ts    # Document queries
 │   │   │   ├── use-analytics.ts    # Analytics data
 │   │   │   ├── use-prices.ts       # Price data
@@ -206,10 +211,11 @@ Gov tender projects/
 │       ├── lot_count_schema.sql             # lot_count + max_lots_per_bidder columns
 │       ├── enable_rls_all_tables.sql        # RLS policies on all tables
 │       └── fix_mitcham_gush_schema.sql      # mitcham_name + gush_helka_raw columns
-├── tests/                          # pytest test suite (331 tests)
+├── tests/                          # pytest test suite (351 tests)
 │   ├── test_analytics_engine.py    # Analytics engine tests (102 tests)
 │   ├── test_analytics_enrichment.py  # Analytics enrichment tests (23 tests)
 │   ├── test_lot_extractor.py       # Lot extractor tests (153 tests)
+│   ├── test_govmap_client.py       # GovMap TABA resolver tests
 │   └── test_mitcham_gush_fix.py    # Mitcham/gush fix tests (28 tests)
 ├── .github/
 │   └── workflows/

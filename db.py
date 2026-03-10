@@ -44,6 +44,8 @@ TENDER_COLUMNS = [
     "target_audience", "acquisition_form", "participation_fee",
     "tender_duration_days", "land_area_sqm", "plan_number",
     "max_lots_per_bidder", "lot_count",
+    # GovMap integration
+    "govmap_url",
 ]
 
 # Batch size for Supabase upsert operations.
@@ -630,6 +632,36 @@ class TenderDB:
                 "update_tender_fields failed for tender %d: %s", tender_id, exc,
             )
             return False
+
+    def update_govmap_urls(self, updates: list[tuple[str, int]]) -> int:
+        """Batch-update govmap_url for given (url, tender_id) pairs.
+
+        Args:
+            updates: List of (govmap_url, tender_id) tuples.
+
+        Returns:
+            Number of successfully updated rows.
+        """
+        if not updates or not self._client:
+            return 0
+
+        updated = 0
+        for govmap_url, tender_id in updates:
+            try:
+                self._client.table("tenders").update(
+                    {"govmap_url": govmap_url},
+                ).eq("tender_id", tender_id).execute()
+                updated += 1
+            except Exception as exc:
+                logger.error(
+                    "update_govmap_urls failed for tender %d: %s",
+                    tender_id, exc,
+                )
+
+        logger.info(
+            "update_govmap_urls: %d/%d rows updated", updated, len(updates),
+        )
+        return updated
 
     def get_snapshot_dates(self) -> list[str]:
         """List all unique snapshot dates in the history table.
