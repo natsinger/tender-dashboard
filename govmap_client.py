@@ -114,8 +114,14 @@ def _normalize_plan_number(plan_number: str) -> list[str]:
     """Produce search candidates from a raw plan number.
 
     Handles:
-    - Comma-separated plans: split and try each individually.
+    - Comma/space-separated plans: split and try each individually.
     - תמ"ל prefix: strip the quote mark → תמל (GovMap expects no quotes).
+    - למת reversal: 1086/למת → תמל/1086 (RMI stores reversed).
+    - בתמל prefix: strip leading ב → תמל.
+    - תוכנית/תכנית prefix: strip the "plan" label.
+    - תמל/תמא/תתל + space: replace space with slash.
+    - Trailing Hebrew letters: 15א → 15.
+    - Leading Hebrew letter on numbers: ג19636 → 19636.
     - Leading junk (tabs, dashes): strip them.
 
     Args:
@@ -135,12 +141,64 @@ def _normalize_plan_number(plan_number: str) -> list[str]:
                 candidates.append(part)
         return candidates
 
+    # Space-separated dual plans: "151-0380386 151-0727727" or "240/2/1431  240/2/11"
+    # (but not "תמל 1124" which is prefix + number — handled below)
+    space_parts = cleaned.split()
+    if len(space_parts) >= 2 and not re.match(
+        r"^(תמ[\"״]?ל|תמא|תתל|תוכנית|תכנית|בתמל)$", space_parts[0],
+    ):
+        for part in space_parts:
+            part = part.strip()
+            if part:
+                candidates.append(part)
+        return candidates
+
     # תמ"ל → תמל (remove quote mark between מ and ל)
-    normalized = re.sub(r'["\u0022\u201c\u201d]', "", cleaned)
+    normalized = re.sub(r'["\u0022\u201c\u201d\u05F4]', "", cleaned)
     if normalized != cleaned:
+        cleaned = normalized
         candidates.append(normalized)
 
-    candidates.append(cleaned)
+    # למת reversal: "1086/למת" → "תמל/1086"
+    if "למת" in cleaned:
+        parts = [p for p in cleaned.split("/") if p and p != "למת"]
+        if parts:
+            reversed_candidate = "תמל/" + "/".join(parts)
+            candidates.append(reversed_candidate)
+
+    # בתמל prefix: "בתמל/1114" → "תמל/1114"
+    if cleaned.startswith("בתמל"):
+        candidates.append(cleaned[1:])  # strip the ב
+
+    # תוכנית/תכנית prefix: "תוכנית תא/3000" → "תא/3000"
+    for prefix in ("תוכנית ", "תכנית "):
+        if cleaned.startswith(prefix):
+            candidates.append(cleaned[len(prefix):])
+
+    # תמל/תמא/תתל + space → replace with slash: "תמל 1124" → "תמל/1124"
+    space_slash = re.sub(r"^(תמל|תמא|תתל)\s+", r"\1/", cleaned)
+    if space_slash != cleaned:
+        candidates.append(space_slash)
+
+    # Trailing Hebrew letter: "17/101/02/15א" → "17/101/02/15"
+    stripped_trailing = re.sub(r"[\u0590-\u05FF]+$", "", cleaned)
+    if stripped_trailing and stripped_trailing != cleaned:
+        candidates.append(stripped_trailing)
+
+    # Leading Hebrew letter on numbers: "ג19636" → "19636"
+    leading_stripped = re.sub(r"^[\u0590-\u05FF](\d+)$", r"\1", cleaned)
+    if leading_stripped != cleaned:
+        candidates.append(leading_stripped)
+
+    # Dash/slash prefix stripping: "656/0612895" → "0612895", "601-1028372" → "1028372"
+    prefix_match = re.match(r"^\d{1,3}[-/](\d{5,})$", cleaned)
+    if prefix_match:
+        candidates.append(prefix_match.group(1))
+
+    # Always include the cleaned original as last resort
+    if cleaned not in candidates:
+        candidates.append(cleaned)
+
     return candidates
 
 
