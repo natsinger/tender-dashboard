@@ -104,12 +104,16 @@ export function DataTable<TData>({
         // Single selection: only keep one row
         const selectedKeys = Object.keys(next).filter((k) => next[k]);
         if (selectedKeys.length > 1) {
-          // Keep only the most recently added
-          const lastKey = selectedKeys[selectedKeys.length - 1];
-          const single: RowSelectionState = { [lastKey]: true };
+          // Find the newly added key (not present in prev).
+          // Object.keys sorts numeric strings ascending, so we cannot
+          // rely on array order to determine which key was just clicked.
+          const newKey =
+            selectedKeys.find((k) => !prev[k]) ??
+            selectedKeys[selectedKeys.length - 1];
+          const single: RowSelectionState = { [newKey]: true };
 
           if (onRowSelect) {
-            const idx = parseInt(lastKey, 10);
+            const idx = parseInt(newKey, 10);
             onRowSelect(data[idx] ?? null);
           }
           return single;
