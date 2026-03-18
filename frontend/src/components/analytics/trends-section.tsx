@@ -61,14 +61,22 @@ type YearRange = "2" | "3" | "all";
 /**
  * Aggregate regional volume data into per-year monthly totals.
  * Returns chart data with months (1-12) on the X-axis and one key per year.
+ * Excludes data beyond the current month to avoid showing future dates
+ * that the API sometimes returns.
  */
 function pivotByYear(
   data: RegionalVolumeRow[],
   yearRange: YearRange,
 ): { chartData: Record<string, string | number>[]; years: string[] } {
-  // Sum all regions per YYYY-MM bucket
+  const now = new Date();
+  const currentYear = String(now.getFullYear());
+  const currentMonth = now.getMonth() + 1; // 1-based
+  const cutoff = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
+
+  // Sum all regions per YYYY-MM bucket, ignoring anything after current month
   const monthlyTotals = new Map<string, number>();
   for (const row of data) {
+    if (row.date > cutoff) continue;
     monthlyTotals.set(row.date, (monthlyTotals.get(row.date) ?? 0) + row.count);
   }
 
@@ -80,12 +88,17 @@ function pivotByYear(
     years = allYears.slice(-n);
   }
 
-  // Pivot: one row per month (1-12), one column per year
+  // Pivot: one row per month (1-12), one column per year.
+  // For the current year, only show up to the current month.
+  const maxMonth = 12;
   const chartData: Record<string, string | number>[] = [];
-  for (let m = 1; m <= 12; m++) {
+  for (let m = 1; m <= maxMonth; m++) {
     const mm = String(m).padStart(2, "0");
     const point: Record<string, string | number> = { month: MONTH_NAMES_HE[m - 1] };
     for (const y of years) {
+      // For the current year, leave future months as undefined so
+      // the line simply stops instead of dropping to 0.
+      if (y === currentYear && m > currentMonth) continue;
       point[y] = monthlyTotals.get(`${y}-${mm}`) ?? 0;
     }
     chartData.push(point);
