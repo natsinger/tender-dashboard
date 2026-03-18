@@ -178,20 +178,29 @@ export function TrendsSection({
 
               <ChartWrapper
                 title="כמות מכרזים לפי חודש — השוואה שנתית"
-                height={350}
+                height={420}
               >
                 <LineChart
                   data={volChartData}
-                  margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} orientation="right" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11 }}
+                    tickMargin={8}
+                    padding={{ left: 15, right: 15 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    orientation="right"
+                    tickMargin={6}
+                  />
                   <Tooltip />
                   <Legend
                     verticalAlign="top"
                     align="right"
-                    wrapperStyle={{ fontSize: 11 }}
+                    wrapperStyle={{ fontSize: 11, paddingBottom: 12 }}
                   />
                   {years.map((year, i) => (
                     <Line
