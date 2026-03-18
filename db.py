@@ -40,7 +40,7 @@ TENDER_COLUMNS = [
     "committee_date", "published_booklet", "targeted",
     "area_sqm", "min_price", "gush", "helka",
     # Analytics enrichment columns (Sprint 7)
-    "rmi_region_code", "official_publish_date", "brochure_update_date",
+    "rmi_region_code", "opening_date", "brochure_update_date",
     "target_audience", "acquisition_form", "participation_fee",
     "tender_duration_days", "land_area_sqm", "plan_number",
     "max_lots_per_bidder", "lot_count",
@@ -246,7 +246,7 @@ class TenderDB:
                 "helka": _clean_val(row.get("helka")),
                 # Analytics enrichment fields from list API
                 "rmi_region_code": _clean_val(row.get("rmi_region_code")),
-                "official_publish_date": _clean_val(row.get("official_publish_date")),
+                "opening_date": _clean_val(row.get("opening_date")),
                 "brochure_update_date": _clean_val(row.get("brochure_update_date")),
                 "target_audience": _clean_val(row.get("target_audience")),
                 "tender_duration_days": _clean_val(row.get("tender_duration_days")),
@@ -280,7 +280,7 @@ class TenderDB:
             "status_code", "status", "units", "publish_date", "deadline",
             "committee_date", "published_booklet", "targeted",
             "area_sqm", "min_price", "gush", "helka",
-            "rmi_region_code", "official_publish_date", "brochure_update_date",
+            "rmi_region_code", "opening_date", "brochure_update_date",
             "target_audience", "acquisition_form", "participation_fee",
             "tender_duration_days", "land_area_sqm", "plan_number",
             "max_lots_per_bidder", "lot_count", "last_updated",

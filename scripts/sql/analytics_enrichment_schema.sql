@@ -6,7 +6,7 @@
 
 -- 1. Add enrichment columns to existing tenders table
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS rmi_region_code       INT;
-ALTER TABLE tenders ADD COLUMN IF NOT EXISTS official_publish_date  TIMESTAMPTZ;
+ALTER TABLE tenders ADD COLUMN IF NOT EXISTS opening_date           TIMESTAMPTZ;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS brochure_update_date   TIMESTAMPTZ;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS target_audience        INT;
 ALTER TABLE tenders ADD COLUMN IF NOT EXISTS acquisition_form       INT;

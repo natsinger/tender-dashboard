@@ -59,22 +59,18 @@ const MONTH_NAMES_HE = [
 /**
  * Aggregate regional volume data into per-year monthly totals.
  * Returns chart data with months (1-12) on the X-axis and one key per year.
- * Excludes data beyond the current month to avoid showing future dates
- * that the API sometimes returns.
+ *
+ * Future publish_date records are already filtered out at the source
+ * (analytics-engine.ts). For the current year, months beyond the latest
+ * data point are left undefined so the line simply stops.
  */
 function pivotByYear(
   data: RegionalVolumeRow[],
   selectedYears: Set<string>,
 ): { chartData: Record<string, string | number>[]; allYears: string[]; years: string[] } {
-  const now = new Date();
-  const currentYear = String(now.getFullYear());
-  const currentMonth = now.getMonth() + 1; // 1-based
-  const cutoff = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
-
-  // Sum all regions per YYYY-MM bucket, ignoring anything after current month
+  // Sum all regions per YYYY-MM bucket
   const monthlyTotals = new Map<string, number>();
   for (const row of data) {
-    if (row.date > cutoff) continue;
     monthlyTotals.set(row.date, (monthlyTotals.get(row.date) ?? 0) + row.count);
   }
 
@@ -82,14 +78,23 @@ function pivotByYear(
   const allYears = [...new Set([...monthlyTotals.keys()].map((d) => d.slice(0, 4)))].sort();
   const years = allYears.filter((y) => selectedYears.has(y));
 
+  // Find the latest month that has data (for the current year cutoff)
+  const currentYear = String(new Date().getFullYear());
+  const latestMonthForYear = new Map<string, number>();
+  for (const key of monthlyTotals.keys()) {
+    const y = key.slice(0, 4);
+    const m = Number(key.slice(5, 7));
+    latestMonthForYear.set(y, Math.max(latestMonthForYear.get(y) ?? 0, m));
+  }
+
   // Pivot: one row per month (1-12), one column per year.
-  // For the current year, only show up to the current month.
+  // For the current year, leave months past the latest data as undefined.
   const chartData: Record<string, string | number>[] = [];
   for (let m = 1; m <= 12; m++) {
     const mm = String(m).padStart(2, "0");
     const point: Record<string, string | number> = { month: MONTH_NAMES_HE[m - 1] };
     for (const y of years) {
-      if (y === currentYear && m > currentMonth) continue;
+      if (y === currentYear && m > (latestMonthForYear.get(y) ?? 0)) continue;
       point[y] = monthlyTotals.get(`${y}-${mm}`) ?? 0;
     }
     chartData.push(point);
@@ -120,13 +125,11 @@ export function TrendsSection({
   monthlyData,
   movingAvgData,
 }: TrendsSectionProps) {
-  // Derive all available years from data (stable across renders)
+  // Derive all available years from data (future dates already filtered at source)
   const allAvailableYears = useMemo(() => {
-    const now = new Date();
-    const cutoff = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const yearSet = new Set<string>();
     for (const row of regionalVolumeData) {
-      if (row.date <= cutoff) yearSet.add(row.date.slice(0, 4));
+      yearSet.add(row.date.slice(0, 4));
     }
     return [...yearSet].sort();
   }, [regionalVolumeData]);

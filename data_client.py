@@ -562,7 +562,7 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         "KodSugMichraz": "tender_type_code",
         "YechidotDiur": "units",
         "StatusMichraz": "status_code",
-        "PtichaDate": "publish_date",
+        "PirsumDate": "publish_date",
         "SgiraDate": "deadline",
         "VaadaDate": "committee_date",
         "KodYeudMichraz": "purpose_code",
@@ -570,7 +570,7 @@ def normalize_api_columns(df: pd.DataFrame) -> pd.DataFrame:
         "Mekuvan": "targeted",
         # Analytics enrichment fields
         "KodMerchav": "rmi_region_code",
-        "PirsumDate": "official_publish_date",
+        "PtichaDate": "opening_date",
         "ChoveretUpdateDate": "brochure_update_date",
         "KhalYaadRashi": "target_audience",
         "MaxToWin": "max_lots_per_bidder",
