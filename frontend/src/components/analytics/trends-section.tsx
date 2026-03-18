@@ -56,8 +56,6 @@ const MONTH_NAMES_HE = [
   "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
 ] as const;
 
-type YearRange = "2" | "3" | "all";
-
 /**
  * Aggregate regional volume data into per-year monthly totals.
  * Returns chart data with months (1-12) on the X-axis and one key per year.
@@ -66,8 +64,8 @@ type YearRange = "2" | "3" | "all";
  */
 function pivotByYear(
   data: RegionalVolumeRow[],
-  yearRange: YearRange,
-): { chartData: Record<string, string | number>[]; years: string[] } {
+  selectedYears: Set<string>,
+): { chartData: Record<string, string | number>[]; allYears: string[]; years: string[] } {
   const now = new Date();
   const currentYear = String(now.getFullYear());
   const currentMonth = now.getMonth() + 1; // 1-based
@@ -80,31 +78,24 @@ function pivotByYear(
     monthlyTotals.set(row.date, (monthlyTotals.get(row.date) ?? 0) + row.count);
   }
 
-  // Extract available years and filter by range
+  // All available years in the data
   const allYears = [...new Set([...monthlyTotals.keys()].map((d) => d.slice(0, 4)))].sort();
-  let years = allYears;
-  if (yearRange !== "all") {
-    const n = Number(yearRange);
-    years = allYears.slice(-n);
-  }
+  const years = allYears.filter((y) => selectedYears.has(y));
 
   // Pivot: one row per month (1-12), one column per year.
   // For the current year, only show up to the current month.
-  const maxMonth = 12;
   const chartData: Record<string, string | number>[] = [];
-  for (let m = 1; m <= maxMonth; m++) {
+  for (let m = 1; m <= 12; m++) {
     const mm = String(m).padStart(2, "0");
     const point: Record<string, string | number> = { month: MONTH_NAMES_HE[m - 1] };
     for (const y of years) {
-      // For the current year, leave future months as undefined so
-      // the line simply stops instead of dropping to 0.
       if (y === currentYear && m > currentMonth) continue;
       point[y] = monthlyTotals.get(`${y}-${mm}`) ?? 0;
     }
     chartData.push(point);
   }
 
-  return { chartData, years };
+  return { chartData, allYears, years };
 }
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -129,11 +120,39 @@ export function TrendsSection({
   monthlyData,
   movingAvgData,
 }: TrendsSectionProps) {
-  const [yearRange, setYearRange] = useState<YearRange>("3");
+  // Derive all available years from data (stable across renders)
+  const allAvailableYears = useMemo(() => {
+    const now = new Date();
+    const cutoff = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const yearSet = new Set<string>();
+    for (const row of regionalVolumeData) {
+      if (row.date <= cutoff) yearSet.add(row.date.slice(0, 4));
+    }
+    return [...yearSet].sort();
+  }, [regionalVolumeData]);
+
+  // Default to the 3 most recent years
+  const [selectedYears, setSelectedYears] = useState<Set<string>>(() => {
+    const now = new Date();
+    const cur = now.getFullYear();
+    return new Set([String(cur), String(cur - 1), String(cur - 2)]);
+  });
+
+  const toggleYear = (year: string) => {
+    setSelectedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(year)) {
+        next.delete(year);
+      } else {
+        next.add(year);
+      }
+      return next;
+    });
+  };
 
   const { chartData: volChartData, years } = useMemo(
-    () => pivotByYear(regionalVolumeData, yearRange),
-    [regionalVolumeData, yearRange],
+    () => pivotByYear(regionalVolumeData, selectedYears),
+    [regionalVolumeData, selectedYears],
   );
 
   return (
@@ -151,56 +170,50 @@ export function TrendsSection({
         {/* Tab 1: Monthly tender volume by year */}
         <TabsContent value="volume">
           {volChartData.length > 0 ? (
-            <div className="space-y-3">
-              {/* Year range toggle */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-megido-text-muted">הצג:</span>
-                {(
-                  [
-                    { value: "2", label: "שנתיים אחרונות" },
-                    { value: "3", label: "3 שנים" },
-                    { value: "all", label: "הכל" },
-                  ] as const
-                ).map((opt) => (
+            <div className="space-y-4">
+              {/* Year selector */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="ml-1 text-xs text-megido-text-muted">שנים:</span>
+                {allAvailableYears.map((year) => (
                   <button
-                    key={opt.value}
-                    onClick={() => setYearRange(opt.value)}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                      yearRange === opt.value
+                    key={year}
+                    onClick={() => toggleYear(year)}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                      selectedYears.has(year)
                         ? "bg-megido-primary text-white"
                         : "bg-megido-neutral-100 text-megido-text-muted hover:bg-megido-neutral-200"
                     }`}
                   >
-                    {opt.label}
+                    {year}
                   </button>
                 ))}
               </div>
 
               <ChartWrapper
                 title="כמות מכרזים לפי חודש — השוואה שנתית"
-                height={420}
+                height={440}
               >
                 <LineChart
                   data={volChartData}
-                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  margin={{ top: 24, right: 24, bottom: 24, left: 24 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
                   <XAxis
                     dataKey="month"
                     tick={{ fontSize: 11 }}
-                    tickMargin={8}
-                    padding={{ left: 15, right: 15 }}
+                    tickMargin={10}
+                    padding={{ left: 20, right: 20 }}
                   />
                   <YAxis
                     tick={{ fontSize: 11 }}
                     orientation="right"
-                    tickMargin={6}
+                    tickMargin={8}
                   />
                   <Tooltip />
                   <Legend
                     verticalAlign="top"
                     align="right"
-                    wrapperStyle={{ fontSize: 11, paddingBottom: 12 }}
+                    wrapperStyle={{ fontSize: 11, paddingBottom: 16 }}
                   />
                   {years.map((year, i) => (
                     <Line
