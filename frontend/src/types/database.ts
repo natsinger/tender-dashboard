@@ -41,8 +41,8 @@ export interface Tender {
   helka: string | null;
   // Analytics enrichment columns (Sprint 7)
   rmi_region_code: number | null;
-  /** ISO date string. */
-  official_publish_date: string | null;
+  /** ISO date string — tender opening date (PtichaDate). */
+  opening_date: string | null;
   /** ISO date string. */
   brochure_update_date: string | null;
   target_audience: string | null;
