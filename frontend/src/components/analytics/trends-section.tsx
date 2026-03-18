@@ -2,12 +2,14 @@
  * Trends section for the Analytics page.
  *
  * Tabbed layout with:
- *   1. Regional tender volume line chart
+ *   1. Monthly tender volume by year (overlay) — months on X-axis, one line per year
  *   2. Regional momentum table (direction arrows)
  *   3. Monthly publication distribution bar chart
  *   4. Volume moving averages line chart (30/60/90 day)
  */
 "use client";
+
+import { useState, useMemo } from "react";
 
 import {
   LineChart,
@@ -25,7 +27,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChartWrapper } from "@/components/charts/chart-wrapper";
 import { Badge } from "@/components/ui/badge";
-import { MEGIDO_CHART_COLORS } from "@/design-system/tokens/chart-colors";
+import { MEGIDO_CHART_COLORS, MEGIDO_CHART_COLORS_EXTENDED } from "@/design-system/tokens/chart-colors";
 import { corePalette } from "@/design-system/tokens/colors";
 import type {
   RegionalVolumeRow,
@@ -49,30 +51,47 @@ interface TrendsSectionProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build line chart data from regional volume. Pivot to one series per region. */
-function pivotRegionalVolume(
-  data: RegionalVolumeRow[],
-): { chartData: Record<string, string | number>[]; regions: string[] } {
-  const dateMap = new Map<string, Record<string, number>>();
-  const regionSet = new Set<string>();
+const MONTH_NAMES_HE = [
+  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
+] as const;
 
+type YearRange = "2" | "3" | "all";
+
+/**
+ * Aggregate regional volume data into per-year monthly totals.
+ * Returns chart data with months (1-12) on the X-axis and one key per year.
+ */
+function pivotByYear(
+  data: RegionalVolumeRow[],
+  yearRange: YearRange,
+): { chartData: Record<string, string | number>[]; years: string[] } {
+  // Sum all regions per YYYY-MM bucket
+  const monthlyTotals = new Map<string, number>();
   for (const row of data) {
-    regionSet.add(row.region);
-    if (!dateMap.has(row.date)) dateMap.set(row.date, {});
-    dateMap.get(row.date)![row.region] = row.count;
+    monthlyTotals.set(row.date, (monthlyTotals.get(row.date) ?? 0) + row.count);
   }
 
-  const regions = [...regionSet].sort();
+  // Extract available years and filter by range
+  const allYears = [...new Set([...monthlyTotals.keys()].map((d) => d.slice(0, 4)))].sort();
+  let years = allYears;
+  if (yearRange !== "all") {
+    const n = Number(yearRange);
+    years = allYears.slice(-n);
+  }
+
+  // Pivot: one row per month (1-12), one column per year
   const chartData: Record<string, string | number>[] = [];
-  for (const [date, regionCounts] of dateMap) {
-    const point: Record<string, string | number> = { date };
-    for (const r of regions) {
-      point[r] = regionCounts[r] ?? 0;
+  for (let m = 1; m <= 12; m++) {
+    const mm = String(m).padStart(2, "0");
+    const point: Record<string, string | number> = { month: MONTH_NAMES_HE[m - 1] };
+    for (const y of years) {
+      point[y] = monthlyTotals.get(`${y}-${mm}`) ?? 0;
     }
     chartData.push(point);
   }
-  chartData.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  return { chartData, regions };
+
+  return { chartData, years };
 }
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -97,8 +116,12 @@ export function TrendsSection({
   monthlyData,
   movingAvgData,
 }: TrendsSectionProps) {
-  const { chartData: volChartData, regions } =
-    pivotRegionalVolume(regionalVolumeData);
+  const [yearRange, setYearRange] = useState<YearRange>("3");
+
+  const { chartData: volChartData, years } = useMemo(
+    () => pivotByYear(regionalVolumeData, yearRange),
+    [regionalVolumeData, yearRange],
+  );
 
   return (
     <section className="space-y-4">
@@ -106,51 +129,77 @@ export function TrendsSection({
 
       <Tabs defaultValue="volume" dir="rtl">
         <TabsList>
-          <TabsTrigger value="volume">נפח אזורי</TabsTrigger>
+          <TabsTrigger value="volume">מכרזים לפי חודש</TabsTrigger>
           <TabsTrigger value="momentum">מומנטום אזורי</TabsTrigger>
           <TabsTrigger value="monthly">התפלגות חודשית</TabsTrigger>
           <TabsTrigger value="ma">ממוצעים נעים</TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Regional tender volume */}
+        {/* Tab 1: Monthly tender volume by year */}
         <TabsContent value="volume">
           {volChartData.length > 0 ? (
-            <ChartWrapper
-              title="נפח מכרזים לפי מחוז לאורך זמן"
-              height={350}
-            >
-              <LineChart
-                data={volChartData}
-                margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} orientation="right" />
-                <Tooltip />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  wrapperStyle={{ fontSize: 11 }}
-                />
-                {regions.map((region, i) => (
-                  <Line
-                    key={region}
-                    type="monotone"
-                    dataKey={region}
-                    name={region}
-                    stroke={
-                      MEGIDO_CHART_COLORS[i % MEGIDO_CHART_COLORS.length]
-                    }
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                  />
+            <div className="space-y-3">
+              {/* Year range toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-megido-text-muted">הצג:</span>
+                {(
+                  [
+                    { value: "2", label: "שנתיים אחרונות" },
+                    { value: "3", label: "3 שנים" },
+                    { value: "all", label: "הכל" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setYearRange(opt.value)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      yearRange === opt.value
+                        ? "bg-megido-primary text-white"
+                        : "bg-megido-neutral-100 text-megido-text-muted hover:bg-megido-neutral-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
                 ))}
-              </LineChart>
-            </ChartWrapper>
+              </div>
+
+              <ChartWrapper
+                title="כמות מכרזים לפי חודש — השוואה שנתית"
+                height={350}
+              >
+                <LineChart
+                  data={volChartData}
+                  margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={corePalette.border} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} orientation="right" />
+                  <Tooltip />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    wrapperStyle={{ fontSize: 11 }}
+                  />
+                  {years.map((year, i) => (
+                    <Line
+                      key={year}
+                      type="monotone"
+                      dataKey={year}
+                      name={year}
+                      stroke={
+                        MEGIDO_CHART_COLORS_EXTENDED[i % MEGIDO_CHART_COLORS_EXTENDED.length]
+                      }
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ))}
+                </LineChart>
+              </ChartWrapper>
+            </div>
           ) : (
             <p className="py-6 text-center text-sm text-megido-text-muted">
-              אין נתונים זמינים לנפח אזורי
+              אין נתונים זמינים
             </p>
           )}
         </TabsContent>
