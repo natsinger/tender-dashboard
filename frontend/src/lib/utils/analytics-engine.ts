@@ -947,6 +947,116 @@ export function getScoreDistribution(
 }
 
 // ---------------------------------------------------------------------------
+// 7. MULTI-LOT COMPARISON
+// ---------------------------------------------------------------------------
+
+export interface MultiLotTenderGroup {
+  tenderId: number;
+  tenderName: string;
+  city: string;
+  tenderType: string;
+  lots: MultiLotRow[];
+}
+
+export interface MultiLotRow {
+  tikId: number;
+  mitchamName: string | null;
+  winningBid: number | null;
+  devCosts: number | null;
+  capacityUnits: number | null;
+  sqmPerUnit: number | null;
+  valuePerUnit: number | null;
+  numBids: number | null;
+  winningRank: number | null;
+}
+
+/**
+ * Build comparison data for tenders that have more than one lot (tik).
+ *
+ * Groups tender_prices rows by tender_id, keeps only tenders with 2+
+ * lots, and joins with tender metadata for city/type. Computes derived
+ * fields (sqm per unit, value per unit) and winning rank (position
+ * among bidders based on winning_bid vs highest_bid).
+ */
+export function buildMultiLotComparison(
+  prices: TenderPrice[],
+  tenders: Tender[],
+): MultiLotTenderGroup[] {
+  if (prices.length === 0 || tenders.length === 0) return [];
+
+  // Build tender lookup
+  const tenderMap = new Map<number, Tender>();
+  for (const t of tenders) {
+    tenderMap.set(t.tender_id, t);
+  }
+
+  // Group prices by tender_id
+  const pricesByTender = new Map<number, TenderPrice[]>();
+  for (const p of prices) {
+    const existing = pricesByTender.get(p.tender_id);
+    if (existing) {
+      existing.push(p);
+    } else {
+      pricesByTender.set(p.tender_id, [p]);
+    }
+  }
+
+  const result: MultiLotTenderGroup[] = [];
+
+  for (const [tenderId, tenderPrices] of pricesByTender) {
+    // Only multi-lot tenders
+    if (tenderPrices.length < 2) continue;
+
+    const tender = tenderMap.get(tenderId);
+    if (!tender) continue;
+
+    const lots: MultiLotRow[] = tenderPrices.map((p) => {
+      const units = p.capacity_units;
+      const area = p.land_area;
+      const bid = p.winning_bid;
+
+      const sqmPerUnit =
+        area && units && units > 0 ? round(area / units, 1) : null;
+      const valuePerUnit =
+        bid && units && units > 0 ? round(bid / units, 0) : null;
+
+      // Winning rank: if we have highest_bid and winning_bid, we can
+      // approximate position. Rank 1 = winner had the highest bid.
+      let winningRank: number | null = null;
+      if (bid && p.num_bids && p.num_bids > 0) {
+        // If winning_bid equals highest_bid → rank 1
+        if (p.highest_bid && p.highest_bid > 0) {
+          winningRank = bid >= p.highest_bid ? 1 : null;
+        }
+      }
+
+      return {
+        tikId: p.tik_id,
+        mitchamName: p.mitcham_name,
+        winningBid: bid,
+        devCosts: p.dev_costs,
+        capacityUnits: units,
+        sqmPerUnit,
+        valuePerUnit,
+        numBids: p.num_bids,
+        winningRank,
+      };
+    });
+
+    result.push({
+      tenderId,
+      tenderName: tender.tender_name ?? `מכרז ${tenderId}`,
+      city: tender.city ?? "\u2014",
+      tenderType: tender.tender_type ?? "\u2014",
+      lots,
+    });
+  }
+
+  // Sort by tender_id descending (most recent first)
+  return result.sort((a, b) => b.tenderId - a.tenderId);
+}
+
+// ---------------------------------------------------------------------------
 // Radar data helper
 // ---------------------------------------------------------------------------
 
