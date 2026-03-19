@@ -28,6 +28,7 @@ import {
   pricePremiumAnalysis,
   getTopTenders,
   getScoreDistribution,
+  buildMultiLotComparison,
 } from "@/lib/utils/analytics-engine";
 import type { Tender, ScoredTender } from "@/types/database";
 
@@ -186,6 +187,11 @@ export function useAnalytics(filters: AnalyticsFilters) {
     [scoredTenders],
   );
 
+  const multiLotData = useMemo(
+    () => buildMultiLotComparison(allPrices ?? [], filteredTenders),
+    [allPrices, filteredTenders],
+  );
+
   // Step 5: Compute KPI values
   const kpis = useMemo(() => {
     const totalTenders = filteredTenders.length;
@@ -248,6 +254,7 @@ export function useAnalytics(filters: AnalyticsFilters) {
     premiumData,
     topTenders,
     scoreDist,
+    multiLotData,
     availableRegions,
     dateRange,
     totalRelevant: relevantTenders.length,

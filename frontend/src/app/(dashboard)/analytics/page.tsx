@@ -29,6 +29,7 @@ import { TrendsSection } from "@/components/analytics/trends-section";
 import { CompetitiveSection } from "@/components/analytics/competitive-section";
 import { PriceSection } from "@/components/analytics/price-section";
 import { ScoringSection } from "@/components/analytics/scoring-section";
+import { LotComparisonSection } from "@/components/analytics/lot-comparison-section";
 import { AnalyticsSidebar } from "@/components/analytics/analytics-sidebar";
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,12 @@ export default function AnalyticsPage() {
 
           <Separator />
 
-          {/* Section 5: Scoring */}
+          {/* Section 5: Multi-lot comparison */}
+          <LotComparisonSection multiLotData={analytics.multiLotData} />
+
+          <Separator />
+
+          {/* Section 6: Scoring */}
           <ScoringSection
             topTenders={analytics.topTenders}
             scoreDist={analytics.scoreDist}
