@@ -1,26 +1,23 @@
 /**
  * Analytics page -- market intelligence and competitive analysis (ניתוח שוק).
  *
- * Comprehensive market analytics dashboard with trends, competitive analysis,
- * price analytics, and a composite scoring system. All analytics are computed
- * via analytics-engine.ts functions, and data is loaded via React Query hooks.
+ * Top-level tab navigation replaces the long vertical scroll. Each tab
+ * renders one analysis section while the sidebar filters stay persistent.
  *
- * Sections:
- *   1. Header + Sidebar Filters (date range, region)
- *   2. Market Overview (KPIs + supply pipeline)
- *   3. Trends (regional volume, momentum, monthly distribution, moving averages)
- *   4. Competitive Intelligence (lifecycle, deadline overlap, saturation, docs)
- *   5. Price Analytics (price trends, taba summary, price premium)
- *   6. Scoring (top tenders, distribution, radar deep-dive)
- *
- * Branded for MEGIDO BY AURA.
+ * Tabs:
+ *   1. סקירה  — Market Overview (KPIs + supply pipeline)
+ *   2. מגמות  — Trends (regional volume, momentum, monthly, moving avg)
+ *   3. תחרות  — Competitive Intelligence (lifecycle, overlap, saturation, docs)
+ *   4. מחירים — Price Analytics (price trends, taba, premium)
+ *   5. מתחמים — Multi-lot comparison
+ *   6. ניקוד  — Scoring (top tenders, distribution, radar)
  */
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
-import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAnalytics } from "@/hooks/use-analytics";
 import type { AnalyticsFilters } from "@/hooks/use-analytics";
 
@@ -37,7 +34,6 @@ import { AnalyticsSidebar } from "@/components/analytics/analytics-sidebar";
 // ---------------------------------------------------------------------------
 
 export default function AnalyticsPage() {
-  // Filter state (local, not in Zustand since this is page-specific)
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
@@ -50,7 +46,6 @@ export default function AnalyticsPage() {
 
   const analytics = useAnalytics(filters);
 
-  // Loading state
   if (analytics.isLoading) {
     return (
       <div dir="rtl" className="space-y-6">
@@ -77,7 +72,7 @@ export default function AnalyticsPage() {
 
       {/* Main content + sidebar grid */}
       <div className="flex flex-col gap-6 lg:flex-row-reverse">
-        {/* Sidebar (right in RTL, rendered first for mobile-first) */}
+        {/* Sidebar */}
         <div className="w-full shrink-0 lg:w-64">
           <AnalyticsSidebar
             minDate={analytics.dateRange.min}
@@ -95,59 +90,66 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        {/* Main content area */}
-        <div className="min-w-0 flex-1 space-y-6">
-          {/* Section 1: Market Overview */}
-          <MarketOverviewSection
-            totalTenders={analytics.kpis.totalTenders}
-            avgScore={analytics.kpis.avgScore}
-            activeRegions={analytics.kpis.activeRegions}
-            totalUnits={analytics.kpis.totalUnits}
-            pipelineData={analytics.pipelineData}
-          />
+        {/* Main content — single tab visible at a time */}
+        <div className="min-w-0 flex-1">
+          <Tabs defaultValue="overview" dir="rtl">
+            <TabsList variant="line" className="mb-6 w-full justify-start border-b border-megido-border pb-0">
+              <TabsTrigger value="overview">{"\u05E1\u05E7\u05D9\u05E8\u05D4"}</TabsTrigger>
+              <TabsTrigger value="trends">{"\u05DE\u05D2\u05DE\u05D5\u05EA"}</TabsTrigger>
+              <TabsTrigger value="competitive">{"\u05EA\u05D7\u05E8\u05D5\u05EA"}</TabsTrigger>
+              <TabsTrigger value="pricing">{"\u05DE\u05D7\u05D9\u05E8\u05D9\u05DD"}</TabsTrigger>
+              <TabsTrigger value="lots">{"\u05DE\u05EA\u05D7\u05DE\u05D9\u05DD"}</TabsTrigger>
+              <TabsTrigger value="scoring">{"\u05E0\u05D9\u05E7\u05D5\u05D3"}</TabsTrigger>
+            </TabsList>
 
-          <Separator />
+            <TabsContent value="overview">
+              <MarketOverviewSection
+                totalTenders={analytics.kpis.totalTenders}
+                avgScore={analytics.kpis.avgScore}
+                activeRegions={analytics.kpis.activeRegions}
+                totalUnits={analytics.kpis.totalUnits}
+                pipelineData={analytics.pipelineData}
+              />
+            </TabsContent>
 
-          {/* Section 2: Trends */}
-          <TrendsSection
-            regionalVolumeData={analytics.regionalVolumeData}
-            momentumData={analytics.momentumData}
-            monthlyData={analytics.monthlyData}
-            movingAvgData={analytics.movingAvgData}
-          />
+            <TabsContent value="trends">
+              <TrendsSection
+                regionalVolumeData={analytics.regionalVolumeData}
+                momentumData={analytics.momentumData}
+                monthlyData={analytics.monthlyData}
+                movingAvgData={analytics.movingAvgData}
+              />
+            </TabsContent>
 
-          <Separator />
+            <TabsContent value="competitive">
+              <CompetitiveSection
+                lifecycleData={analytics.lifecycleData}
+                overlapData={analytics.overlapData}
+                saturationData={analytics.saturationData}
+                docIntelData={analytics.docIntelData}
+              />
+            </TabsContent>
 
-          {/* Section 3: Competitive Intelligence */}
-          <CompetitiveSection
-            lifecycleData={analytics.lifecycleData}
-            overlapData={analytics.overlapData}
-            saturationData={analytics.saturationData}
-            docIntelData={analytics.docIntelData}
-          />
+            <TabsContent value="pricing">
+              <PriceSection
+                priceTrends={analytics.priceTrends}
+                tabaSummary={analytics.tabaSummary}
+                premiumData={analytics.premiumData}
+              />
+            </TabsContent>
 
-          <Separator />
+            <TabsContent value="lots">
+              <LotComparisonSection multiLotData={analytics.multiLotData} />
+            </TabsContent>
 
-          {/* Section 4: Price Analytics */}
-          <PriceSection
-            priceTrends={analytics.priceTrends}
-            tabaSummary={analytics.tabaSummary}
-            premiumData={analytics.premiumData}
-          />
-
-          <Separator />
-
-          {/* Section 5: Multi-lot comparison */}
-          <LotComparisonSection multiLotData={analytics.multiLotData} />
-
-          <Separator />
-
-          {/* Section 6: Scoring */}
-          <ScoringSection
-            topTenders={analytics.topTenders}
-            scoreDist={analytics.scoreDist}
-            scoredTenders={analytics.scoredTenders}
-          />
+            <TabsContent value="scoring">
+              <ScoringSection
+                topTenders={analytics.topTenders}
+                scoreDist={analytics.scoreDist}
+                scoredTenders={analytics.scoredTenders}
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>

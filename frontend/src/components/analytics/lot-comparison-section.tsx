@@ -7,7 +7,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import type { MultiLotTenderGroup } from "@/lib/utils/analytics-engine";
 
@@ -59,9 +59,22 @@ const DEFERRED_COLUMNS = [
 export function LotComparisonSection({
   multiLotData,
 }: LotComparisonSectionProps) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [expandedTenders, setExpandedTenders] = useState<Set<number>>(
     () => new Set(),
   );
+
+  // Filter by city or tender ID
+  const filteredData = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return multiLotData;
+    return multiLotData.filter(
+      (g) =>
+        g.city.toLowerCase().includes(q) ||
+        String(g.tenderId).includes(q) ||
+        g.tenderName.toLowerCase().includes(q),
+    );
+  }, [multiLotData, searchQuery]);
 
   function toggleTender(tenderId: number): void {
     setExpandedTenders((prev) => {
@@ -76,7 +89,7 @@ export function LotComparisonSection({
   }
 
   function expandAll(): void {
-    setExpandedTenders(new Set(multiLotData.map((g) => g.tenderId)));
+    setExpandedTenders(new Set(filteredData.map((g) => g.tenderId)));
   }
 
   function collapseAll(): void {
@@ -121,8 +134,19 @@ export function LotComparisonSection({
         </div>
       </div>
 
+      {/* Search input */}
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={"\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E2\u05D9\u05E8 \u05D0\u05D5 \u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6..."}
+        className="w-full max-w-sm rounded-lg border border-megido-border bg-megido-bg-card px-3 py-2 text-sm text-megido-text-heading placeholder:text-megido-text-muted/50 focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
+      />
+
       <p className="text-xs text-megido-text-muted">
-        {`${multiLotData.length} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD 2+ \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD \u2014 \u05DC\u05D7\u05E5 \u05DC\u05D4\u05E8\u05D7\u05D1\u05D4`}
+        {`${filteredData.length} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD 2+ \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD`}
+        {searchQuery && ` (\u05DE\u05EA\u05D5\u05DA ${multiLotData.length})`}
+        {" \u2014 \u05DC\u05D7\u05E5 \u05DC\u05D4\u05E8\u05D7\u05D1\u05D4"}
       </p>
 
       {/* Table */}
@@ -154,7 +178,7 @@ export function LotComparisonSection({
             </tr>
           </thead>
           <tbody>
-            {multiLotData.map((group) => {
+            {filteredData.map((group) => {
               const isExpanded = expandedTenders.has(group.tenderId);
               return (
                 <TenderGroup
