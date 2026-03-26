@@ -10,8 +10,9 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useMemo, useState, useCallback } from "react";
+import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
 import { WatchlistManager } from "@/components/watchlist-manager";
@@ -120,6 +121,53 @@ export default function WatchlistPage() {
     [teamWatchlist],
   );
 
+  // ---- Export to Excel ----
+
+  const exportToExcel = useCallback(() => {
+    const rows = teamWatchlistWithTender.map((item) => {
+      const t = item.tender;
+      const review = reviewMap?.[item.tender_id];
+      return {
+        "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6": t.tender_id,
+        "\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6": t.tender_name ?? "",
+        "\u05E2\u05D9\u05E8": t.city ?? "",
+        "\u05DE\u05D7\u05D5\u05D6": t.region ?? "",
+        "\u05DE\u05D9\u05E7\u05D5\u05DD": t.location ?? "",
+        "\u05E1\u05D5\u05D2 \u05DE\u05DB\u05E8\u05D6": t.tender_type ?? "",
+        "\u05D9\u05D9\u05E2\u05D5\u05D3": t.purpose ?? "",
+        "\u05E1\u05D8\u05D8\u05D5\u05E1": t.status ?? "",
+        '\u05D9\u05D7"\u05D3': t.units ?? "",
+        '\u05E9\u05D8\u05D7 (מ"ר)': t.area_sqm ?? "",
+        '\u05E9\u05D8\u05D7 \u05E7\u05E8\u05E7\u05E2 (מ"ר)': t.land_area_sqm ?? "",
+        "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD": t.min_price ?? "",
+        "\u05EA\u05D0\u05E8\u05D9\u05DA \u05E4\u05E8\u05E1\u05D5\u05DD": t.publish_date ?? "",
+        "\u05DE\u05D5\u05E2\u05D3 \u05D0\u05D7\u05E8\u05D5\u05DF": t.deadline ?? "",
+        "\u05EA\u05D0\u05E8\u05D9\u05DA \u05D5\u05E2\u05D3\u05D4": t.committee_date ?? "",
+        "\u05EA\u05D0\u05E8\u05D9\u05DA \u05E4\u05EA\u05D9\u05D7\u05D4": t.opening_date ?? "",
+        "\u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6": t.published_booklet ? "\u05DB\u05DF" : "\u05DC\u05D0",
+        "\u05DE\u05DE\u05D5\u05E7\u05D3": t.targeted ? "\u05DB\u05DF" : "\u05DC\u05D0",
+        "\u05D2\u05D5\u05E9": t.gush ?? "",
+        "\u05D7\u05DC\u05E7\u05D4": t.helka ?? "",
+        "\u05EA\u05DB\u05E0\u05D9\u05EA": t.plan_number ?? "",
+        "\u05E7\u05D4\u05DC \u05D9\u05E2\u05D3": t.target_audience ?? "",
+        "\u05E6\u05D5\u05E8\u05EA \u05E8\u05DB\u05D9\u05E9\u05D4": t.acquisition_form ?? "",
+        "\u05D3\u05DE\u05D9 \u05D4\u05E9\u05EA\u05EA\u05E4\u05D5\u05EA": t.participation_fee ?? "",
+        "\u05DE\u05E1\' \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD": t.lot_count ?? "",
+        "\u05DE\u05E7\u05E1\u05D9\u05DE\u05D5\u05DD \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD \u05DC\u05DE\u05E6\u05D9\u05E2": t.max_lots_per_bidder ?? "",
+        "\u05DE\u05E9\u05DA \u05DE\u05DB\u05E8\u05D6 (\u05D9\u05DE\u05D9\u05DD)": t.tender_duration_days ?? "",
+        "\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4": review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
+        "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E1\u05E7\u05D9\u05E8\u05D4": review?.notes ?? "",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD");
+
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `watchlist_${today}.xls`, { bookType: "xls" });
+  }, [teamWatchlistWithTender, reviewMap]);
+
   // ---- Loading state ----
 
   const isWatchlistLoading = tendersLoading || teamLoading;
@@ -168,23 +216,36 @@ export default function WatchlistPage() {
 
       {/* Card 2: Team Watched Tenders Table + Review Editor */}
       <section className="rounded-xl border border-megido-border bg-megido-bg-card shadow-sm">
-        <button
-          type="button"
-          onClick={() => setFavoritesOpen((prev) => !prev)}
-          className="flex w-full items-center justify-between p-4 transition-colors hover:bg-megido-neutral-50/50 md:p-6"
-        >
-          <h3 className="text-lg font-semibold text-megido-text-heading">
-            {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"}
-            <span className="mr-2 text-base font-normal text-megido-text-muted">
-              ({teamWatchlistWithTender.length})
-            </span>
-          </h3>
-          {favoritesOpen ? (
-            <ChevronUp className="h-5 w-5 text-megido-text-muted" />
-          ) : (
-            <ChevronDown className="h-5 w-5 text-megido-text-muted" />
-          )}
-        </button>
+        <div className="flex items-center justify-between p-4 md:p-6">
+          <button
+            type="button"
+            onClick={() => setFavoritesOpen((prev) => !prev)}
+            className="flex items-center gap-2 transition-colors hover:text-megido-primary"
+          >
+            <h3 className="text-lg font-semibold text-megido-text-heading">
+              {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"}
+              <span className="mr-2 text-base font-normal text-megido-text-muted">
+                ({teamWatchlistWithTender.length})
+              </span>
+            </h3>
+            {favoritesOpen ? (
+              <ChevronUp className="h-5 w-5 text-megido-text-muted" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-megido-text-muted" />
+            )}
+          </button>
+
+          {/* Export button — top left (RTL end) */}
+          <button
+            type="button"
+            onClick={exportToExcel}
+            disabled={teamWatchlistWithTender.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-megido-border px-3 py-1.5 text-xs font-medium text-megido-text-heading transition-colors hover:bg-megido-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {"\u05D9\u05D9\u05E6\u05D5\u05D0 \u05DC\u05D0\u05E7\u05E1\u05DC"}
+          </button>
+        </div>
 
         {favoritesOpen && (
           <div className="px-4 pb-4 md:px-6 md:pb-6">
