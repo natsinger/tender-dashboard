@@ -8,8 +8,10 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
+import { Download } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import { DataTable } from "@/components/data-table";
 import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggle";
@@ -269,11 +271,59 @@ export function TeamWatchlistSection() {
     }
   };
 
+  // Export to Excel
+  const exportToExcel = useCallback(() => {
+    const xlsRows = rows.map((r) => {
+      const t = r.tender;
+      return {
+        "\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4": r.review_status,
+        "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA": r.review_notes || "",
+        "\u05D7\u05D5\u05D1\u05E8\u05EA": t?.published_booklet ? "\u05DB\u05DF" : "\u05DC\u05D0",
+        "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6": t?.tender_name ?? r.tender_id,
+        "\u05E2\u05D9\u05E8": t?.city ?? "",
+        "\u05E1\u05D5\u05D2 \u05DE\u05DB\u05E8\u05D6": t?.tender_type ?? "",
+        "\u05D9\u05D9\u05E2\u05D5\u05D3": t?.purpose ?? "",
+        '\u05D9\u05D7"\u05D3': t?.units ?? "",
+        "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4": t?.deadline ?? "",
+        "\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9": r.lot_agg.free_market || "",
+        "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4": r.lot_agg.target_price || "",
+        '\u05E1\u05D4"\u05DB \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD': r.lot_agg.total || "",
+        "% \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4": r.lot_agg.pct,
+        "\u05D4\u05E2\u05E8\u05D5\u05EA": r.watchlist_notes || "",
+        "\u05DE\u05D7\u05D5\u05D6": t?.region ?? "",
+        "\u05DE\u05D9\u05E7\u05D5\u05DD": t?.location ?? "",
+        '\u05E9\u05D8\u05D7 (\u05DE"\u05E8)': t?.area_sqm ?? "",
+        "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD": t?.min_price ?? "",
+        "\u05EA\u05D0\u05E8\u05D9\u05DA \u05E4\u05E8\u05E1\u05D5\u05DD": t?.publish_date ?? "",
+        "\u05EA\u05DB\u05E0\u05D9\u05EA": t?.plan_number ?? "",
+        "\u05DE\u05E1\u05F3 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD": t?.lot_count ?? "",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(xlsRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA");
+
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `watchlist_${today}.xls`, { bookType: "xls" });
+  }, [rows]);
+
   return (
     <section>
-      <h4 className="mb-3 text-lg font-semibold text-megido-text-heading">
-        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA"}
-      </h4>
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-lg font-semibold text-megido-text-heading">
+          {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA"}
+        </h4>
+        <button
+          type="button"
+          onClick={exportToExcel}
+          disabled={rows.length === 0}
+          className="flex items-center gap-1.5 rounded-lg border border-megido-border px-3 py-1.5 text-xs font-medium text-megido-text-heading transition-colors hover:bg-megido-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Download className="h-3.5 w-3.5" />
+          {"\u05D9\u05D9\u05E6\u05D5\u05D0 \u05DC\u05D0\u05E7\u05E1\u05DC"}
+        </button>
+      </div>
 
       {(watchlistItems ?? []).length > 0 ? (
         <>
