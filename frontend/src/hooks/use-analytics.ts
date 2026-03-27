@@ -11,6 +11,7 @@ import { useMemo } from "react";
 
 import { useTenders } from "@/hooks/use-tenders";
 import { useTenderPrices, useTabaAnalytics } from "@/hooks/use-prices";
+import { useBuildingRightsForPlans } from "@/hooks/use-lots";
 import { RELEVANT_TENDER_TYPES } from "@/lib/constants";
 import { scoreAllTenders } from "@/lib/utils/tenders";
 import {
@@ -60,7 +61,23 @@ export function useAnalytics(filters: AnalyticsFilters) {
   const { data: allPrices, isLoading: pricesLoading } = useTenderPrices();
   const { data: allTaba, isLoading: tabaLoading } = useTabaAnalytics();
 
-  const isLoading = tendersLoading || pricesLoading || tabaLoading;
+  // Collect plan numbers from all tenders that have prices (potential multi-lot)
+  const planNumbers = useMemo(() => {
+    if (!allTenders || !allPrices) return [];
+    const tenderIdsWithPrices = new Set(allPrices.map((p) => p.tender_id));
+    const plans = new Set<string>();
+    for (const t of allTenders) {
+      if (t.plan_number && tenderIdsWithPrices.has(t.tender_id)) {
+        plans.add(t.plan_number);
+      }
+    }
+    return [...plans];
+  }, [allTenders, allPrices]);
+
+  const { data: buildingRightsMap, isLoading: rightsLoading } =
+    useBuildingRightsForPlans(planNumbers);
+
+  const isLoading = tendersLoading || pricesLoading || tabaLoading || rightsLoading;
 
   // Step 1: Filter to relevant tender types
   const relevantTenders: Tender[] = useMemo(() => {
@@ -188,8 +205,13 @@ export function useAnalytics(filters: AnalyticsFilters) {
   );
 
   const multiLotData = useMemo(
-    () => buildMultiLotComparison(allPrices ?? [], filteredTenders),
-    [allPrices, filteredTenders],
+    () =>
+      buildMultiLotComparison(
+        allPrices ?? [],
+        filteredTenders,
+        buildingRightsMap ?? undefined,
+      ),
+    [allPrices, filteredTenders, buildingRightsMap],
   );
 
   // Step 5: Compute KPI values
