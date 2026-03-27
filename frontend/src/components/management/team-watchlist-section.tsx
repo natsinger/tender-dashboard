@@ -73,39 +73,25 @@ const EMPTY_LOT: LotAggregation = {
 
 const columns: ColumnDef<WatchlistRow, unknown>[] = [
   {
-    accessorKey: "review_status",
-    header: "\u05E1\u05D8\u05D8\u05D5\u05E1",
-    size: 80,
-    cell: ({ getValue }) => (
-      <span className="text-sm">{getValue<string>()}</span>
-    ),
-  },
-  {
-    accessorKey: "review_notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA",
-    size: 110,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-megido-text-muted line-clamp-2">
-        {getValue<string>() || "\u2014"}
-      </span>
-    ),
-  },
-  {
-    id: "booklet",
-    header: "\u05D7\u05D5\u05D1\u05E8\u05EA",
-    size: 55,
-    cell: ({ row }) =>
-      row.original.tender?.published_booklet ? "\u2705" : "\u274C",
-  },
-  {
-    id: "tender_name",
-    header: "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6",
-    size: 120,
-    cell: ({ row }) => (
-      <span className="text-sm font-medium truncate block max-w-[120px]">
-        {row.original.tender?.tender_name ?? row.original.tender_id}
-      </span>
-    ),
+    id: "deadline",
+    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
+    accessorFn: (row) => row.days_to_deadline ?? Infinity,
+    sortingFn: "basic",
+    size: 100,
+    cell: ({ row }) => {
+      const t = row.original.tender;
+      return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <DeadlineBadge
+            daysRemaining={row.original.days_to_deadline}
+            compact
+          />
+          <span className="text-sm">
+            {formatDeadline(t?.deadline ?? null)}
+          </span>
+        </div>
+      );
+    },
   },
   {
     id: "city",
@@ -128,47 +114,15 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     ),
   },
   {
+    id: "booklet",
+    header: "\u05D7\u05D5\u05D1\u05E8\u05EA",
+    size: 55,
+    cell: ({ row }) =>
+      row.original.tender?.published_booklet ? "\u2705" : "\u274C",
+  },
+  {
     id: "units",
     header: '\u05D9\u05D7"\u05D3',
-    size: 55,
-    cell: ({ row }) => row.original.tender?.units ?? "\u2014",
-  },
-  {
-    id: "deadline",
-    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
-    accessorFn: (row) => row.days_to_deadline ?? Infinity,
-    sortingFn: "basic",
-    size: 100,
-    cell: ({ row }) => {
-      const t = row.original.tender;
-      return (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <DeadlineBadge
-            daysRemaining={row.original.days_to_deadline}
-            compact
-          />
-          <span className="text-sm">
-            {formatDeadline(t?.deadline ?? null)}
-          </span>
-        </div>
-      );
-    },
-  },
-  {
-    id: "free_market",
-    header: "\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9",
-    size: 70,
-    cell: ({ row }) => row.original.lot_agg.free_market || "\u2014",
-  },
-  {
-    id: "target_price",
-    header: "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4",
-    size: 70,
-    cell: ({ row }) => row.original.lot_agg.target_price || "\u2014",
-  },
-  {
-    id: "total_lot_units",
-    header: '\u05E1\u05D4"\u05DB',
     size: 60,
     cell: ({ row }) => row.original.lot_agg.total || "\u2014",
   },
@@ -177,6 +131,24 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     header: "% \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4",
     size: 70,
     cell: ({ row }) => row.original.lot_agg.pct,
+  },
+  {
+    accessorKey: "review_status",
+    header: "\u05E1\u05D8\u05D8\u05D5\u05E1",
+    size: 80,
+    cell: ({ getValue }) => (
+      <span className="text-sm">{getValue<string>()}</span>
+    ),
+  },
+  {
+    accessorKey: "review_notes",
+    header: "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA",
+    size: 110,
+    cell: ({ getValue }) => (
+      <span className="text-xs text-megido-text-muted line-clamp-2">
+        {getValue<string>() || "\u2014"}
+      </span>
+    ),
   },
   {
     accessorKey: "watchlist_notes",
