@@ -24,9 +24,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install system dependencies (Tesseract OCR for scanned PDFs)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-heb
+
       - name: Install dependencies
         run: |
-          pip install requests pandas python-dotenv supabase pdfplumber playwright
+          pip install requests pandas python-dotenv supabase pdfplumber playwright pytesseract pypdfium2 opencv-python-headless
 
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps
@@ -41,6 +46,8 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP2GO_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
+          TEAM_EMAIL: ${{ secrets.TEAM_EMAIL }}
         run: python scripts/refresh_tenders.py
 
       - name: Extract lot data from brochures
