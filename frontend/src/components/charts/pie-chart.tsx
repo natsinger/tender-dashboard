@@ -39,6 +39,10 @@ interface MegidoPieChartProps {
   height?: number;
   /** Custom color palette. Defaults to categoricalColors. */
   colors?: readonly string[];
+  /** Optional secondary data key shown in tooltip (e.g. tender count). */
+  secondaryKey?: string;
+  /** Label for the secondary value in tooltip. */
+  secondaryLabel?: string;
   /** Additional CSS classes. */
   className?: string;
 }
@@ -79,7 +83,7 @@ function renderInsideLabel(props: PieLabelRenderProps) {
       fontSize={14}
       fontWeight={600}
     >
-      {value}
+      {typeof value === "number" ? value.toLocaleString("he-IL") : value}
     </text>
   );
 }
@@ -95,6 +99,8 @@ export function MegidoPieChart({
   title,
   height = 264,
   colors = categoricalColors,
+  secondaryKey,
+  secondaryLabel,
   className,
 }: MegidoPieChartProps) {
   return (
@@ -118,7 +124,14 @@ export function MegidoPieChart({
             />
           ))}
         </Pie>
-        <Tooltip content={<HebrewTooltip />} />
+        <Tooltip
+          content={
+            <HebrewTooltip
+              secondaryKey={secondaryKey}
+              secondaryLabel={secondaryLabel}
+            />
+          }
+        />
         <Legend
           layout="horizontal"
           verticalAlign="bottom"
