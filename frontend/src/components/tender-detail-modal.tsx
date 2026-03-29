@@ -124,6 +124,15 @@ export function TenderDetailModal({
           </DialogTitle>
           <DialogDescription>
             {"\u05DE\u05E1' \u05DE\u05DB\u05E8\u05D6"}: {tender.tender_id}
+            {" \u00B7 "}
+            <a
+              href={`https://apps.land.gov.il/MichrazimSite/#/michraz/${tender.tender_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-megido-primary hover:underline"
+            >
+              {'\u05D0\u05EA\u05E8 \u05E8\u05DE"\u05D9'}
+            </a>
           </DialogDescription>
         </DialogHeader>
 
