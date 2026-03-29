@@ -73,6 +73,45 @@ export function useBuildingRights(
 }
 
 // ---------------------------------------------------------------------------
+// useBuildingRightsForPlans — batch-fetch for multiple plans
+// ---------------------------------------------------------------------------
+
+/**
+ * Batch-fetch building rights for multiple plan numbers at once.
+ *
+ * Returns a Map keyed by plan_number for efficient lookup.
+ * Used by the analytics engine to enrich multi-lot comparison data.
+ */
+export function useBuildingRightsForPlans(planNumbers: string[]) {
+  const sorted = [...planNumbers].sort();
+  return useQuery<Map<string, BuildingRight[]>>({
+    queryKey: ["building-rights-batch", sorted],
+    queryFn: async () => {
+      const result = new Map<string, BuildingRight[]>();
+      if (sorted.length === 0) return result;
+
+      const rows = await paginatedFetch<BuildingRight>("building_rights", {
+        filters: [{ column: "plan_number", op: "in", value: sorted }],
+        orderBy: "row_index",
+        ascending: true,
+      });
+
+      for (const row of rows) {
+        const existing = result.get(row.plan_number);
+        if (existing) {
+          existing.push(row);
+        } else {
+          result.set(row.plan_number, [row]);
+        }
+      }
+      return result;
+    },
+    enabled: sorted.length > 0,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // useTenderBuildingRights — convenience: fetch plan_number from tender, then rights
 // ---------------------------------------------------------------------------
 

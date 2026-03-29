@@ -14,5 +14,10 @@ supabase==2.15.2
 pdfplumber==0.11.9
 Pillow==12.1.0
 
+# OCR for scanned PDFs (optional — graceful degradation if not installed)
+pytesseract==0.3.13
+pypdfium2==4.36.0
+opencv-python==4.13.0.92
+
 # Mavat client (browser automation)
 playwright==1.58.0

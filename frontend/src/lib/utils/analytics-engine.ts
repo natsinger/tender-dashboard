@@ -23,6 +23,7 @@ import type {
   TenderWithComputed,
   ScoredTender,
   TabaAnalytics,
+  BuildingRight,
 } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -956,6 +957,8 @@ export interface MultiLotTenderGroup {
   city: string;
   tenderType: string;
   lots: MultiLotRow[];
+  /** Building rights rows from section 5 of the Taba, per תא שטח. */
+  buildingRights: BuildingRight[];
 }
 
 export interface MultiLotRow {
@@ -977,10 +980,15 @@ export interface MultiLotRow {
  * lots, and joins with tender metadata for city/type. Computes derived
  * fields (sqm per unit, value per unit) and winning rank (position
  * among bidders based on winning_bid vs highest_bid).
+ *
+ * When a buildingRightsMap is provided, enriches each tender group with
+ * aggregated designation areas (commercial, employment, public institutions)
+ * from section 5 of the Taba document.
  */
 export function buildMultiLotComparison(
   prices: TenderPrice[],
   tenders: Tender[],
+  buildingRightsMap?: Map<string, BuildingRight[]>,
 ): MultiLotTenderGroup[] {
   if (prices.length === 0 || tenders.length === 0) return [];
 
@@ -1043,12 +1051,19 @@ export function buildMultiLotComparison(
       };
     });
 
+    // Attach building rights for this tender's plan
+    const planNumber = tender.plan_number;
+    const rights = planNumber
+      ? buildingRightsMap?.get(planNumber) ?? []
+      : [];
+
     result.push({
       tenderId,
       tenderName: tender.tender_name ?? `מכרז ${tenderId}`,
       city: tender.city ?? "\u2014",
       tenderType: tender.tender_type ?? "\u2014",
       lots,
+      buildingRights: rights,
     });
   }
 

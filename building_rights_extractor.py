@@ -8,6 +8,7 @@ Handles:
     - Reversed Hebrew text from pdfplumber RTL extraction
     - Tables spanning multiple pages
     - Column variations across different plan documents
+    - Scanned/image-only PDFs via OCR (pytesseract + pypdfium2)
 
 Usage:
     from building_rights_extractor import extract_building_rights
@@ -21,6 +22,23 @@ from pathlib import Path
 from typing import Optional
 
 import pdfplumber
+
+# Optional OCR dependencies — graceful degradation if not installed.
+try:
+    import pypdfium2 as pdfium
+    import pytesseract
+    from PIL import Image
+
+    _OCR_AVAILABLE = True
+except ImportError:
+    _OCR_AVAILABLE = False
+
+# Tesseract binary path (Windows default from winget/UB-Mannheim install).
+_TESSERACT_PATHS = [
+    Path(r"C:\Users\nathanaels\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"),
+    Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+    Path("/usr/bin/tesseract"),  # Linux (CI)
+]
 
 logger = logging.getLogger(__name__)
 
@@ -535,6 +553,462 @@ def _parse_table(
     return parsed_rows, merged_headers, column_map
 
 
+# ─── OCR support for scanned PDFs ────────────────────────────────────────────
+
+# Minimum page count for a plan to contain Section 5.
+MIN_PAGES_FOR_SECTION5 = 3
+
+# Maximum pages to OCR when searching for Section 5 in scanned PDFs.
+MAX_OCR_PAGES_TO_SCAN = 50
+
+
+def _configure_tesseract() -> bool:
+    """Find and configure the Tesseract binary path.
+
+    Returns:
+        True if Tesseract was found and configured, False otherwise.
+    """
+    if not _OCR_AVAILABLE:
+        return False
+
+    for tess_path in _TESSERACT_PATHS:
+        if tess_path.exists():
+            pytesseract.pytesseract.tesseract_cmd = str(tess_path)
+            logger.debug("Tesseract configured: %s", tess_path)
+            return True
+
+    # Check if tesseract is on PATH
+    import shutil
+    tess_on_path = shutil.which("tesseract")
+    if tess_on_path:
+        pytesseract.pytesseract.tesseract_cmd = tess_on_path
+        logger.debug("Tesseract found on PATH: %s", tess_on_path)
+        return True
+
+    logger.warning("Tesseract binary not found — OCR path disabled")
+    return False
+
+
+def _is_scanned_pdf(pdf: pdfplumber.PDF) -> bool:
+    """Detect if a PDF is scanned (image-only, no extractable text).
+
+    Checks the first N pages. If >80% have fewer than 10 characters,
+    the PDF is considered scanned.
+
+    Args:
+        pdf: Open pdfplumber PDF object.
+
+    Returns:
+        True if the PDF is scanned/image-only.
+    """
+    pages_to_check = min(5, len(pdf.pages))
+    text_pages = sum(
+        1 for i in range(pages_to_check) if len(pdf.pages[i].chars) > 10
+    )
+    is_scanned = text_pages < pages_to_check * 0.2
+    if is_scanned:
+        logger.info(
+            "PDF detected as scanned (%d/%d pages have text)",
+            text_pages, pages_to_check,
+        )
+    return is_scanned
+
+
+def _ocr_page_to_image(pdf_path: Path, page_idx: int) -> "Image.Image":
+    """Render a PDF page as a PIL Image at 300 DPI.
+
+    Args:
+        pdf_path: Path to the PDF file.
+        page_idx: Zero-based page index.
+
+    Returns:
+        PIL Image of the rendered page.
+    """
+    doc = pdfium.PdfDocument(str(pdf_path))
+    page = doc[page_idx]
+    bitmap = page.render(scale=300 / 72)
+    pil_image = bitmap.to_pil()
+    doc.close()
+    return pil_image
+
+
+def _ocr_page_text(pdf_path: Path, page_idx: int) -> str:
+    """OCR a single PDF page and return the extracted text.
+
+    Args:
+        pdf_path: Path to the PDF file.
+        page_idx: Zero-based page index.
+
+    Returns:
+        OCR'd text from the page.
+    """
+    image = _ocr_page_to_image(pdf_path, page_idx)
+    text = pytesseract.image_to_string(image, lang="heb", config="--psm 6")
+    return text
+
+
+def _ocr_find_section5(pdf_path: Path, total_pages: int) -> Optional[dict]:
+    """Find Section 5 in a scanned PDF by OCR-ing each page.
+
+    Args:
+        pdf_path: Path to the scanned PDF.
+        total_pages: Total number of pages in the PDF.
+
+    Returns:
+        Dict with 'page_idx' and 'status', or None if not found.
+    """
+    pages_to_scan = min(total_pages, MAX_OCR_PAGES_TO_SCAN)
+    logger.info(
+        "OCR scanning %d/%d pages for Section 5 in %s",
+        pages_to_scan, total_pages, pdf_path.name,
+    )
+
+    # Only forward (non-reversed) keywords needed for OCR text.
+    ocr_section_keywords = [
+        "טבלת זכויות",
+        "זכויות והוראות בנייה",
+        "זכויות והוראות בניה",
+    ]
+
+    for page_idx in range(pages_to_scan):
+        text = _ocr_page_text(pdf_path, page_idx)
+        if any(kw in text for kw in ocr_section_keywords):
+            # Extract status
+            status = None
+            for kw, normalized in STATUS_KEYWORDS.items():
+                if kw in text:
+                    status = normalized
+                    break
+
+            logger.info(
+                "OCR found Section 5 on page %d (status: %s)",
+                page_idx + 1, status,
+            )
+            return {"page_idx": page_idx, "status": status}
+
+    logger.warning("OCR: Section 5 not found in first %d pages", pages_to_scan)
+    return None
+
+
+def _detect_table_grid(image: "Image.Image") -> tuple[list[int], list[int]]:
+    """Detect table grid lines in an image using OpenCV morphological operations.
+
+    Strategy:
+    1. Detect horizontal lines to find the table's Y region
+    2. Within that region, detect short vertical lines (column dividers)
+    3. Cluster nearby line positions into clean boundaries
+
+    Args:
+        image: PIL Image of the page (rendered at 300 DPI).
+
+    Returns:
+        Tuple of (column_boundaries, row_boundaries) as sorted pixel positions.
+    """
+    import cv2
+    import numpy as np
+
+    img_array = np.array(image.convert("L"))
+    _, binary = cv2.threshold(img_array, 180, 255, cv2.THRESH_BINARY_INV)
+
+    def cluster_positions(positions: list[int], tolerance: int = 10) -> list[int]:
+        if not positions:
+            return []
+        clusters: list[list[int]] = [[positions[0]]]
+        for pos in positions[1:]:
+            if pos - clusters[-1][-1] <= tolerance:
+                clusters[-1].append(pos)
+            else:
+                clusters.append([pos])
+        return [int(sum(c) / len(c)) for c in clusters]
+
+    # Step 1: Detect horizontal lines (table row borders)
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (80, 1))
+    h_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
+    h_coords = np.where(h_lines > 0)
+    if len(h_coords[0]) == 0:
+        return [], []
+
+    row_boundaries = cluster_positions(
+        sorted(set(h_coords[0].tolist())),
+    )
+
+    # Step 2: Find the table Y region from horizontal lines
+    table_y_min = int(h_coords[0].min())
+    table_y_max = int(h_coords[0].max())
+
+    # Step 3: Detect vertical lines within the table region.
+    # Government PDFs often have short column dividers (30-50px),
+    # so use a small kernel to catch them.
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 30))
+    v_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, v_kernel)
+
+    # Only count vertical lines within the table Y region
+    v_in_table = v_lines[table_y_min:table_y_max, :]
+    v_coords = np.where(v_in_table > 0)
+    if len(v_coords[1]) == 0:
+        return [], row_boundaries
+
+    col_boundaries = cluster_positions(
+        sorted(set(v_coords[1].tolist())),
+        tolerance=30,  # Wider tolerance for column clustering
+    )
+
+    return col_boundaries, row_boundaries
+
+
+def _ocr_extract_table_from_page(
+    pdf_path: Path,
+    page_idx: int,
+) -> Optional[list[list[Optional[str]]]]:
+    """Extract a table from a scanned page using OpenCV grid detection + Tesseract OCR.
+
+    Strategy:
+    1. Render page as high-res image
+    2. Detect table grid lines with OpenCV morphological operations
+    3. Identify cell boundaries from line intersections
+    4. OCR each cell individually with Tesseract
+    5. Return structured table (same format as pdfplumber)
+
+    Args:
+        pdf_path: Path to the scanned PDF.
+        page_idx: Zero-based page index.
+
+    Returns:
+        Table as list of rows (same format as pdfplumber), or None.
+    """
+    image = _ocr_page_to_image(pdf_path, page_idx)
+
+    # Step 1: Detect table grid
+    col_bounds, row_bounds = _detect_table_grid(image)
+
+    if len(col_bounds) < 3 or len(row_bounds) < 3:
+        logger.debug(
+            "OCR page %d: insufficient grid lines (cols=%d, rows=%d)",
+            page_idx + 1, len(col_bounds), len(row_bounds),
+        )
+        # Fallback: try word-position-based extraction
+        return _ocr_extract_table_fallback(pdf_path, page_idx, image)
+
+    logger.info(
+        "OCR page %d: detected grid %d cols × %d rows",
+        page_idx + 1, len(col_bounds) - 1, len(row_bounds) - 1,
+    )
+
+    # Step 2: OCR each cell
+    table: list[list[Optional[str]]] = []
+    num_cols = len(col_bounds) - 1
+    num_rows = len(row_bounds) - 1
+
+    for row_idx in range(num_rows):
+        y1 = row_bounds[row_idx]
+        y2 = row_bounds[row_idx + 1]
+
+        # Skip very thin rows (likely grid line artifacts)
+        if y2 - y1 < 15:
+            continue
+
+        row_cells: list[Optional[str]] = []
+        for col_idx in range(num_cols):
+            x1 = col_bounds[col_idx]
+            x2 = col_bounds[col_idx + 1]
+
+            # Skip very narrow columns
+            if x2 - x1 < 15:
+                row_cells.append(None)
+                continue
+
+            # Crop cell with small padding
+            pad = 3
+            cell_img = image.crop((
+                max(0, x1 + pad),
+                max(0, y1 + pad),
+                min(image.width, x2 - pad),
+                min(image.height, y2 - pad),
+            ))
+
+            # OCR the individual cell
+            try:
+                cell_text = pytesseract.image_to_string(
+                    cell_img, lang="heb", config="--psm 6",
+                ).strip()
+                row_cells.append(cell_text if cell_text else None)
+            except Exception:
+                row_cells.append(None)
+
+        table.append(row_cells)
+
+    if not table or len(table) < 2:
+        return None
+
+    return table
+
+
+def _ocr_extract_table_fallback(
+    pdf_path: Path,
+    page_idx: int,
+    image: "Image.Image",
+) -> Optional[list[list[Optional[str]]]]:
+    """Fallback table extraction when grid lines aren't detected.
+
+    Uses word-level bounding boxes from Tesseract to reconstruct rows.
+
+    Args:
+        pdf_path: Path to the scanned PDF.
+        page_idx: Zero-based page index.
+        image: Pre-rendered PIL Image of the page.
+
+    Returns:
+        Table as list of rows, or None.
+    """
+    tsv_df = pytesseract.image_to_data(
+        image, lang="heb", config="--psm 6",
+        output_type=pytesseract.Output.DATAFRAME,
+    )
+
+    words = tsv_df[tsv_df["conf"] > 0].copy()
+    if words.empty:
+        return None
+
+    # Group by block_num + line_num → logical lines
+    words["line_key"] = (
+        words["block_num"].astype(str) + "_" +
+        words["par_num"].astype(str) + "_" +
+        words["line_num"].astype(str)
+    )
+
+    table: list[list[Optional[str]]] = []
+    for _, group in words.groupby("line_key", sort=False):
+        sorted_words = group.sort_values("left")
+        line_text = " ".join(str(w) for w in sorted_words["text"].tolist())
+        if line_text.strip():
+            table.append([line_text])
+
+    return table if len(table) >= 2 else None
+
+
+def _extract_building_rights_ocr(
+    pdf_path: Path,
+    plan_number: str,
+) -> dict:
+    """Extract building rights from a scanned PDF using OCR.
+
+    This is the OCR counterpart of the main pdfplumber extraction path.
+    It OCRs pages to find Section 5, extracts the table using bounding-box
+    based column reconstruction, then parses it through the same
+    _parse_table logic as the pdfplumber path.
+
+    Args:
+        pdf_path: Path to the scanned PDF.
+        plan_number: Plan number for metadata.
+
+    Returns:
+        Same dict schema as extract_building_rights().
+    """
+    result: dict[str, object] = {
+        "plan_number": plan_number,
+        "status": None,
+        "rows": [],
+        "source_page": None,
+        "raw_headers": [],
+        "column_map": {},
+        "extraction_method": "ocr_tesseract",
+        "success": False,
+        "errors": [],
+    }
+
+    doc = pdfium.PdfDocument(str(pdf_path))
+    total_pages = len(doc)
+    doc.close()
+
+    # Skip very short PDFs (old format, unlikely to have Section 5)
+    if total_pages < MIN_PAGES_FOR_SECTION5:
+        result["errors"] = [
+            f"PDF too short ({total_pages} pages) — "
+            f"minimum {MIN_PAGES_FOR_SECTION5} pages required for Section 5"
+        ]
+        logger.info(
+            "Skipping %s: only %d pages (min %d)",
+            pdf_path.name, total_pages, MIN_PAGES_FOR_SECTION5,
+        )
+        return result
+
+    # Step 1: Find Section 5 via OCR
+    section = _ocr_find_section5(pdf_path, total_pages)
+    if not section:
+        result["errors"] = ["Section 5 not found via OCR"]
+        return result
+
+    result["status"] = section["status"]
+    result["source_page"] = section["page_idx"] + 1
+
+    # Step 2: Extract table from the Section 5 page
+    raw_table = _ocr_extract_table_from_page(pdf_path, section["page_idx"])
+    if not raw_table:
+        result["errors"] = ["OCR: no table detected on Section 5 page"]
+        return result
+
+    # Step 3: Check continuation pages (up to 15 pages after Section 5)
+    combined_table = list(raw_table)
+    for next_idx in range(section["page_idx"] + 1, min(total_pages, section["page_idx"] + 15)):
+        next_text = _ocr_page_text(pdf_path, next_idx)
+
+        # Stop if we hit a new section header
+        if any(kw in next_text for kw in ["טבלת זכויות", "זכויות והוראות בנייה"]):
+            break
+
+        next_table = _ocr_extract_table_from_page(pdf_path, next_idx)
+        if not next_table or len(next_table) < 2:
+            break
+
+        # Check column count matches
+        main_cols = max(len(r) for r in raw_table)
+        next_cols = max(len(r) for r in next_table)
+        if abs(next_cols - main_cols) > 2:
+            break
+
+        # Skip header rows on continuation pages
+        data_start = 0
+        for row_idx, row in enumerate(next_table):
+            if not _is_header_row(row):
+                data_start = row_idx
+                break
+
+        continuation_rows = next_table[data_start:]
+        if continuation_rows:
+            logger.info(
+                "OCR continuation page %d: %d rows",
+                next_idx + 1, len(continuation_rows),
+            )
+            combined_table.extend(continuation_rows)
+
+    # Step 4: Parse through the same column-mapping logic
+    rows, headers, col_map = _parse_table(combined_table)
+
+    if rows:
+        # Filter out subtotal rows
+        rows = [
+            r for r in rows
+            if not any(
+                "סך הכל" in str(r.get(f, ""))
+                for f in ("designation", "use")
+            )
+        ]
+        result["rows"] = rows
+        result["raw_headers"] = headers
+        result["column_map"] = {str(k): v for k, v in col_map.items()}
+        result["success"] = True
+        logger.info(
+            "OCR extracted %d rows with %d columns from %s (page %d)",
+            len(rows), len(col_map), pdf_path.name,
+            section["page_idx"] + 1,
+        )
+    else:
+        result["errors"] = ["OCR: table found but no data rows parsed"]
+        logger.warning("OCR: no data rows parsed from %s", pdf_path.name)
+
+    return result
+
+
 def extract_building_rights(
     pdf_path: Path | str,
     plan_number: Optional[str] = None,
@@ -574,6 +1048,25 @@ def extract_building_rights(
 
     try:
         with pdfplumber.open(pdf_path) as pdf:
+            # Check if this is a scanned PDF → route to OCR path
+            if _is_scanned_pdf(pdf):
+                if _OCR_AVAILABLE and _configure_tesseract():
+                    logger.info("Routing %s to OCR extraction path", pdf_path.name)
+                    return _extract_building_rights_ocr(
+                        pdf_path, plan_number or pdf_path.stem,
+                    )
+                else:
+                    result["errors"] = [
+                        "Scanned PDF detected but OCR dependencies not available. "
+                        "Install: pip install pytesseract pypdfium2 pillow "
+                        "and ensure tesseract-ocr is on the system."
+                    ]
+                    logger.warning(
+                        "Scanned PDF %s but OCR not available", pdf_path.name,
+                    )
+                    return result
+
+            # ── Text-based PDF: use existing pdfplumber path ──
             # Step 1: Find Section 5
             section_pages = _find_section5_pages(pdf)
             if not section_pages:

@@ -1,19 +1,18 @@
-"""Batch extraction of building rights from Mavat plan PDFs.
+"""Batch extraction of building rights from Taba plan PDFs.
 
 Full pipeline for active tenders with a published brochure:
     1. Query Supabase for eligible tenders (published_booklet=1, active status,
        extraction not yet complete)
     2. For each tender (that doesn't already have building rights):
-        a. Download brochure PDF from the Land Authority API
-        b. Extract plan number (תב"ע) from the brochure
-        c. Store the plan number on the tender record
-        d. Search Mavat for the plan → download הוראות PDF
-        e. Extract Section 5 building rights table
-        f. Store results in Supabase
+        a. Look up plan ID from the RMI tender details API
+        b. Query TabaSearch API for the plan's takanon (תקנון) PDF path
+        c. Download the takanon PDF directly (no Playwright needed)
+        d. Extract Section 5 building rights table
+        e. Store results in Supabase
 
 Requires:
     - pdfplumber (text extraction)
-    - playwright (Mavat browser automation)
+    - requests (HTTP API calls — replaces Playwright browser automation)
     - Supabase credentials (env vars)
 
 Usage:
@@ -54,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from building_rights_extractor import extract_building_rights
 from data_client import LandTendersClient
 from db import TenderDB
+from taba_client import TabaClient
 from tender_pdf_extractor import TenderPDFExtractor
 
 logging.basicConfig(
@@ -134,8 +134,39 @@ def _extract_plan_number(pdf_path: Path) -> Optional[str]:
     return result.get("taba")
 
 
+def _download_takanon(
+    taba_client: TabaClient,
+    plan_id: str,
+    plan_number: Optional[str] = None,
+) -> Optional[Path]:
+    """Download the takanon (תקנון) PDF via the TabaSearch API.
+
+    Args:
+        taba_client: TabaClient instance.
+        plan_id: The plan ID from the MichrazLinks URL.
+        plan_number: Optional Taba plan number for naming the file.
+
+    Returns:
+        Path to the downloaded PDF, or None if failed.
+    """
+    result = taba_client.download_takanon_by_plan_id(
+        plan_id, plan_number=plan_number,
+    )
+    if result["status"] == "success":
+        return Path(result["file_path"])
+
+    logger.warning(
+        "Takanon download failed for plan %s (id=%s): %s",
+        plan_number or "?", plan_id, result.get("error") or result["status"],
+    )
+    return None
+
+
 def _download_mavat_plan(plan_number: str) -> Optional[Path]:
-    """Download the הוראות PDF from Mavat for a plan number.
+    """Legacy fallback: download via Playwright if TabaClient fails.
+
+    Only used for --plan-numbers mode where we have a Taba plan number
+    but no plan_id. Falls back to Playwright-based Mavat client.
 
     Args:
         plan_number: The תב"ע plan number.
@@ -145,7 +176,6 @@ def _download_mavat_plan(plan_number: str) -> Optional[Path]:
     """
     MAVAT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Check cache
     safe_name = plan_number.replace("/", "_").replace("\\", "_")
     cached = MAVAT_DIR / f"{safe_name}.pdf"
     if cached.exists() and cached.stat().st_size > 0:
@@ -174,15 +204,23 @@ def _download_mavat_plan(plan_number: str) -> Optional[Path]:
 def process_tender(
     tender_id: int,
     db: TenderDB,
-    client: LandTendersClient,
+    taba_client: TabaClient,
+    client: Optional[LandTendersClient] = None,
     dry_run: bool = False,
 ) -> dict:
     """Run the full pipeline for a single tender.
 
+    Uses the TabaClient (REST API) to look up the plan and download
+    the takanon PDF directly — no Playwright browser automation needed.
+
+    Falls back to the brochure→Mavat Playwright flow only if the
+    TabaClient path fails (e.g., no MichrazLinks URL).
+
     Args:
         tender_id: The tender's MichrazID.
         db: Database instance.
-        client: API client instance.
+        taba_client: TabaClient instance for API-based plan lookup.
+        client: Optional LandTendersClient for brochure fallback.
         dry_run: If True, don't write to Supabase.
 
     Returns:
@@ -200,67 +238,86 @@ def process_tender(
     if not dry_run:
         db.set_extraction_status(tender_id, "extracting")
 
-    # Check if tender already has a plan_number
-    tender = db.get_tender_by_id(tender_id)
-    if not tender:
-        result["status"] = "tender_not_found"
-        if not dry_run:
-            db.set_extraction_status(tender_id, "failed", error="Tender not found")
-        return result
+    # Step 1: Use TabaClient to get plan info from the RMI API
+    plans = taba_client.get_tender_plan_ids(tender_id)
 
-    plan_number = tender.get("plan_number")
+    plan_id = None
+    plan_number = None
+    if plans:
+        plan_id = plans[0].get("plan_id")
+        plan_number = plans[0].get("plan_number")
 
-    # Step 1: Extract plan number from brochure (if not already known)
+    # Fallback: check if tender already has a plan_number in DB
     if not plan_number:
-        logger.info("Tender %d: extracting plan number from brochure...", tender_id)
-        brochure_path = _download_brochure(client, tender_id)
-        if not brochure_path:
-            result["status"] = "no_brochure"
-            if not dry_run:
-                db.set_extraction_status(tender_id, "failed", error="No brochure found")
-            return result
+        tender = db.get_tender_by_id(tender_id)
+        if tender:
+            plan_number = tender.get("plan_number")
 
-        plan_number = _extract_plan_number(brochure_path)
+    if not plan_id and not plan_number:
+        # Last resort: try brochure extraction
+        if client:
+            logger.info("Tender %d: no plan from API, trying brochure...", tender_id)
+            brochure_path = _download_brochure(client, tender_id)
+            if brochure_path:
+                plan_number = _extract_plan_number(brochure_path)
+
         if not plan_number:
-            result["status"] = "no_plan_number"
-            result["error"] = "Could not extract plan number from brochure"
+            result["status"] = "no_plan"
+            result["error"] = "No plan linked to tender (no API link, no brochure)"
             if not dry_run:
                 db.set_extraction_status(tender_id, "failed", error=result["error"])
             return result
 
-        # Persist the plan number
-        if not dry_run:
-            db.update_plan_number(tender_id, plan_number)
-        logger.info("Tender %d: plan_number = %s", tender_id, plan_number)
-
     result["plan_number"] = plan_number
 
-    # Step 2: Check if building rights already exist
-    existing = db.load_building_rights(plan_number)
-    if existing:
-        logger.info(
-            "Tender %d: building rights already exist (%d rows) for plan %s",
-            tender_id, len(existing), plan_number,
-        )
-        result["status"] = "already_extracted"
-        result["building_rights_rows"] = len(existing)
-        if not dry_run:
-            db.set_extraction_status(tender_id, "complete")
-        return result
+    # Persist the plan number (use Taba plan number, not planId)
+    if plan_number and not dry_run:
+        db.update_plan_number(tender_id, plan_number)
 
-    # Step 3: Download Mavat הוראות PDF
-    logger.info("Tender %d: downloading Mavat plan %s...", tender_id, plan_number)
-    mavat_pdf = _download_mavat_plan(plan_number)
-    if not mavat_pdf:
-        result["status"] = "mavat_download_failed"
-        result["error"] = f"Could not download plan {plan_number} from Mavat"
+    # Step 2: Check if building rights already exist
+    if plan_number:
+        existing = db.load_building_rights(plan_number)
+        if existing:
+            logger.info(
+                "Tender %d: building rights already exist (%d rows) for plan %s",
+                tender_id, len(existing), plan_number,
+            )
+            result["status"] = "already_extracted"
+            result["building_rights_rows"] = len(existing)
+            if not dry_run:
+                db.set_extraction_status(tender_id, "complete")
+            return result
+
+    # Step 3: Download takanon PDF via TabaSearch API
+    takanon_pdf = None
+    if plan_id:
+        logger.info(
+            "Tender %d: downloading takanon via API (plan_id=%s)...",
+            tender_id, plan_id,
+        )
+        takanon_pdf = _download_takanon(taba_client, plan_id, plan_number)
+
+    # Fallback to Playwright-based Mavat if API download failed
+    if not takanon_pdf and plan_number:
+        logger.info(
+            "Tender %d: API download failed, trying Mavat fallback for %s...",
+            tender_id, plan_number,
+        )
+        takanon_pdf = _download_mavat_plan(plan_number)
+
+    if not takanon_pdf:
+        result["status"] = "download_failed"
+        result["error"] = f"Could not download takanon for plan {plan_number or plan_id}"
         if not dry_run:
             db.set_extraction_status(tender_id, "failed", error=result["error"])
         return result
 
     # Step 4: Extract building rights
-    logger.info("Tender %d: extracting building rights from %s...", tender_id, mavat_pdf.name)
-    rights = extract_building_rights(mavat_pdf, plan_number=plan_number)
+    logger.info(
+        "Tender %d: extracting building rights from %s...",
+        tender_id, takanon_pdf.name,
+    )
+    rights = extract_building_rights(takanon_pdf, plan_number=plan_number)
 
     if not rights["success"]:
         result["status"] = "extraction_failed"
@@ -272,7 +329,6 @@ def process_tender(
     # Step 5: Store in Supabase
     rows = rights["rows"]
     if not dry_run:
-        # Strip internal _raw data before storing
         clean_rows = [{k: v for k, v in r.items() if k != "_raw"} for r in rows]
         db.upsert_building_rights(plan_number, clean_rows, rights.get("status"))
         db.set_extraction_status(tender_id, "complete")
@@ -492,16 +548,20 @@ def main() -> None:
             )
             tender_ids = tender_ids[:args.max_per_run]
 
+        taba_client = TabaClient(output_dir=MAVAT_DIR)
         client = LandTendersClient()
 
         for tender_id in tender_ids:
-            res = process_tender(tender_id, db, client, dry_run=args.dry_run)
+            res = process_tender(
+                tender_id, db, taba_client,
+                client=client, dry_run=args.dry_run,
+            )
             results.append(res)
             logger.info("Tender %d: %s", tender_id, res["status"])
 
-            # Rate limit between Mavat requests
-            if res["status"] not in ("already_extracted", "tender_not_found", "no_brochure"):
-                time.sleep(MAVAT_DELAY)
+            # Rate limit between API requests (lighter than Playwright)
+            if res["status"] not in ("already_extracted", "tender_not_found", "no_plan"):
+                time.sleep(2)
 
     # Summary
     statuses = {}
