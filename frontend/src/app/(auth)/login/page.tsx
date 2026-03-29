@@ -246,6 +246,42 @@ function PasswordForm() {
     return "";
   }
 
+  const [forgotSent, setForgotSent] = useState(false);
+
+  async function handleForgotPassword() {
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailError = validateEmail(trimmedEmail);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        trimmedEmail,
+        { redirectTo: `${siteUrl}/auth/callback` },
+      );
+
+      if (resetError) {
+        console.error("[Login] Reset password error:", resetError.message);
+        setError("שליחת קישור האיפוס נכשלה. נסה שוב.");
+        return;
+      }
+
+      setForgotSent(true);
+    } catch {
+      setError("אירעה שגיאה. נסה שוב.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -494,6 +530,36 @@ function PasswordForm() {
     );
   }
 
+  // ---- Forgot password email sent state ----
+  if (forgotSent) {
+    return (
+      <div className="space-y-4 text-center" dir="rtl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+          <Mail className="h-8 w-8 text-green-600" />
+        </div>
+        <h3 className="text-lg font-semibold text-megido-text-heading">
+          {"בדוק את תיבת הדואר שלך"}
+        </h3>
+        <p className="text-sm text-megido-text-muted">
+          {"שלחנו קישור לאיפוס סיסמה ל-"}
+          <span className="font-medium text-megido-text-body" dir="ltr">
+            {email}
+          </span>
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4"
+          onClick={() => {
+            setForgotSent(false);
+            setEmail("");
+          }}
+        >
+          {"חזרה להתחברות"}
+        </Button>
+      </div>
+    );
+  }
+
   // ---- Password login form ----
   return (
     <form onSubmit={handleLogin} className="space-y-4">
@@ -518,12 +584,21 @@ function PasswordForm() {
       </div>
 
       <div className="space-y-2">
-        <label
-          htmlFor="password-input"
-          className="text-sm font-medium text-megido-text-body"
-        >
-          {"\u05E1\u05D9\u05E1\u05DE\u05D4"}
-        </label>
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor="password-input"
+            className="text-sm font-medium text-megido-text-body"
+          >
+            {"\u05E1\u05D9\u05E1\u05DE\u05D4"}
+          </label>
+          <button
+            type="button"
+            className="text-xs text-megido-primary hover:underline"
+            onClick={handleForgotPassword}
+          >
+            {"שכחת סיסמה?"}
+          </button>
+        </div>
         <Input
           id="password-input"
           type="password"
