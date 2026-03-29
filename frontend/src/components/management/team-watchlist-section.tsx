@@ -60,6 +60,16 @@ function formatDeadline(deadline: string | null): string {
 // Empty lot aggregation constant
 // ---------------------------------------------------------------------------
 
+/** Derive a short category label from purpose + tender_type_code. */
+function getCategoryLabel(tender: Tender | null): string {
+  if (!tender) return "\u2014";
+  const purpose = tender.purpose ?? "";
+  if (tender.tender_type_code === 9) return "ייזום";
+  if (purpose.includes("דיור מוגן")) return "דיור מוגן";
+  if (purpose.includes("דיור להשכרה") || tender.tender_type_code === 6) return "דיור להשכרה";
+  return "שוק חופשי";
+}
+
 const EMPTY_LOT: LotAggregation = {
   free_market: 0,
   target_price: 0,
@@ -109,7 +119,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     size: 90,
     cell: ({ row }) => (
       <span className="truncate block max-w-[90px]">
-        {row.original.tender?.tender_type ?? "\u2014"}
+        {getCategoryLabel(row.original.tender)}
       </span>
     ),
   },
@@ -124,7 +134,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     id: "units",
     header: '\u05D9\u05D7"\u05D3',
     size: 60,
-    cell: ({ row }) => row.original.lot_agg.total || "\u2014",
+    cell: ({ row }) => row.original.lot_agg.total || row.original.tender?.units || "\u2014",
   },
   {
     id: "pct_target",
