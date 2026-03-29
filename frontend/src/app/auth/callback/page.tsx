@@ -28,7 +28,7 @@ function CallbackHandler() {
       const rawType = searchParams.get("type");
 
       // Validate OTP type against allowlist
-      const VALID_OTP_TYPES: EmailOtpType[] = ["magiclink", "email"];
+      const VALID_OTP_TYPES: EmailOtpType[] = ["magiclink", "email", "recovery"];
       const type: EmailOtpType | null =
         rawType && VALID_OTP_TYPES.includes(rawType as EmailOtpType)
           ? (rawType as EmailOtpType)
@@ -61,8 +61,8 @@ function CallbackHandler() {
           return;
         }
 
-        // Session established — redirect
-        window.location.href = "/management";
+        // Session established — redirect (recovery goes to reset-password page)
+        window.location.href = rawType === "recovery" ? "/reset-password" : "/management";
       } catch {
         setErrorMsg("\u05D0\u05D9\u05E8\u05E2\u05D4 \u05E9\u05D2\u05D9\u05D0\u05D4 \u05D1\u05EA\u05D4\u05DC\u05D9\u05DA \u05D4\u05D0\u05D9\u05DE\u05D5\u05EA. \u05E0\u05E1\u05D4/\u05D9 \u05E9\u05E0\u05D9\u05EA.");
       }

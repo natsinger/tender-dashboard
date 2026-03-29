@@ -43,7 +43,7 @@ function resolveRole(email: string): Role {
 const TEAM_ONLY_PATHS = ["/dashboard", "/explorer", "/analytics", "/watchlist"];
 
 /** Routes that do NOT require authentication. */
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/reset-password"];
 
 // ---------------------------------------------------------------------------
 // Proxy (renamed from middleware for Next.js 16)
