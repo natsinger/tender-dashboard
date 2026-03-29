@@ -288,3 +288,24 @@ export interface AlertHistory {
   /** ISO date string. */
   sent_at: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// tender_outcomes table (post-deadline bidding outcome tracking)
+// ---------------------------------------------------------------------------
+
+export interface TenderOutcome {
+  id?: number;
+  tender_id: number;
+  /** Whether our team submitted a bid. */
+  did_bid: boolean;
+  /** Our submitted offer amount. */
+  our_offer: number | null;
+  /** Our ranking position among bidders. */
+  our_position: number | null;
+  /** Free-text outcome notes. */
+  outcome_notes: string | null;
+  /** Who last updated this record. */
+  updated_by: string | null;
+  /** ISO datetime string. */
+  updated_at: string | null;
+}

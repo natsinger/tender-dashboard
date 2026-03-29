@@ -62,21 +62,49 @@ export function LotComparisonSection({
   multiLotData,
 }: LotComparisonSectionProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [excludedTypes, setExcludedTypes] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [expandedTenders, setExpandedTenders] = useState<Set<number>>(
     () => new Set(),
   );
 
-  // Filter by city or tender ID
+  // Unique tender types in the data
+  const tenderTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const g of multiLotData) {
+      if (g.tenderType) types.add(g.tenderType);
+    }
+    return Array.from(types).sort();
+  }, [multiLotData]);
+
+  function toggleType(type: string): void {
+    setExcludedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }
+
+  // Filter by tender type, then by search query
   const filteredData = useMemo(() => {
+    let data = multiLotData;
+    if (excludedTypes.size > 0) {
+      data = data.filter((g) => !excludedTypes.has(g.tenderType));
+    }
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return multiLotData;
-    return multiLotData.filter(
+    if (!q) return data;
+    return data.filter(
       (g) =>
         g.city.toLowerCase().includes(q) ||
         String(g.tenderId).includes(q) ||
         g.tenderName.toLowerCase().includes(q),
     );
-  }, [multiLotData, searchQuery]);
+  }, [multiLotData, excludedTypes, searchQuery]);
 
   function toggleTender(tenderId: number): void {
     setExpandedTenders((prev) => {
@@ -136,14 +164,38 @@ export function LotComparisonSection({
         </div>
       </div>
 
-      {/* Search input */}
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder={"\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E2\u05D9\u05E8 \u05D0\u05D5 \u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6..."}
-        className="w-full max-w-sm rounded-lg border border-megido-border bg-megido-bg-card px-3 py-2 text-sm text-megido-text-heading placeholder:text-megido-text-muted/50 focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
-      />
+      {/* Search + tender type filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={"\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E2\u05D9\u05E8 \u05D0\u05D5 \u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6..."}
+          className="w-full max-w-sm rounded-lg border border-megido-border bg-megido-bg-card px-3 py-2 text-sm text-megido-text-heading placeholder:text-megido-text-muted/50 focus:border-megido-primary focus:outline-none focus:ring-1 focus:ring-megido-primary"
+        />
+        {tenderTypes.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tenderTypes.map((type) => {
+              const isActive = !excludedTypes.has(type);
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleType(type)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    isActive
+                      ? "border-megido-primary bg-megido-primary/10 text-megido-primary"
+                      : "border-megido-border bg-megido-bg-card text-megido-text-muted line-through",
+                  )}
+                >
+                  {type}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <p className="text-xs text-megido-text-muted">
         {`${filteredData.length} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E2\u05DD 2+ \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD`}
@@ -152,9 +204,9 @@ export function LotComparisonSection({
       </p>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
+      <div className="max-h-[75vh] overflow-auto rounded-lg border border-megido-border bg-megido-bg-card">
         <table className="w-full text-sm" dir="rtl">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="border-b-2 border-megido-border bg-megido-neutral-50">
               {LOT_COLUMNS.map((col) => (
                 <th

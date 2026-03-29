@@ -51,49 +51,57 @@ interface MarketKPISectionProps {
 
 function buildBrochureData(
   tenders: TenderWithComputed[],
-): { name: string; value: number }[] {
-  let withBrochure = 0;
-  let withoutBrochure = 0;
+): { name: string; value: number; count: number }[] {
+  let withBrochureUnits = 0;
+  let withoutBrochureUnits = 0;
+  let withBrochureCount = 0;
+  let withoutBrochureCount = 0;
 
   for (const t of tenders) {
     if (t.published_booklet) {
-      withBrochure++;
+      withBrochureUnits += t.units ?? 0;
+      withBrochureCount++;
     } else {
-      withoutBrochure++;
+      withoutBrochureUnits += t.units ?? 0;
+      withoutBrochureCount++;
     }
   }
 
   return [
-    { name: "\u05D9\u05E9 \u05D7\u05D5\u05D1\u05E8\u05EA", value: withBrochure },
-    { name: "\u05D1\u05DC\u05D9 \u05D7\u05D5\u05D1\u05E8\u05EA", value: withoutBrochure },
+    { name: "\u05D9\u05E9 \u05D7\u05D5\u05D1\u05E8\u05EA", value: withBrochureUnits, count: withBrochureCount },
+    { name: "\u05D1\u05DC\u05D9 \u05D7\u05D5\u05D1\u05E8\u05EA", value: withoutBrochureUnits, count: withoutBrochureCount },
   ];
 }
 
 function buildRegionData(
   tenders: TenderWithComputed[],
-): { name: string; value: number }[] {
-  const counts: Record<string, number> = {};
+): { name: string; value: number; count: number }[] {
+  const map: Record<string, { units: number; count: number }> = {};
   for (const t of tenders) {
     const region = t.region ?? "\u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2";
-    counts[region] = (counts[region] ?? 0) + 1;
+    if (!map[region]) map[region] = { units: 0, count: 0 };
+    map[region].units += t.units ?? 0;
+    map[region].count++;
   }
 
-  return Object.entries(counts)
-    .map(([name, value]) => ({ name, value }))
+  return Object.entries(map)
+    .map(([name, d]) => ({ name, value: d.units, count: d.count }))
     .sort((a, b) => b.value - a.value);
 }
 
 function buildTenderTypeData(
   tenders: TenderWithComputed[],
-): { name: string; value: number }[] {
-  const counts: Record<string, number> = {};
+): { name: string; value: number; count: number }[] {
+  const map: Record<string, { units: number; count: number }> = {};
   for (const t of tenders) {
     const type = t.tender_type ?? "\u05DC\u05D0 \u05D9\u05D3\u05D5\u05E2";
-    counts[type] = (counts[type] ?? 0) + 1;
+    if (!map[type]) map[type] = { units: 0, count: 0 };
+    map[type].units += t.units ?? 0;
+    map[type].count++;
   }
 
-  return Object.entries(counts)
-    .map(([name, value]) => ({ name, value }))
+  return Object.entries(map)
+    .map(([name, d]) => ({ name, value: d.units, count: d.count }))
     .sort((a, b) => b.value - a.value);
 }
 
@@ -115,9 +123,9 @@ function buildCityBarData(tenders: TenderWithComputed[]): CityBarItem[] {
       city,
       count: data.count,
       units: data.units,
-      annotation: `\u05E1\u05D4"\u05DB ${data.units.toLocaleString("he-IL")} \u05D9\u05D7"\u05D3`,
+      annotation: `\u200F${data.count} \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD`,
     }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.units - a.units)
     .slice(0, 10);
 }
 
@@ -229,51 +237,42 @@ export function MarketKPISection({
         />
       </div>
 
-      {/* 2x2 chart grid + KPI cards */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Charts column (3/5 width) */}
-        <div className="space-y-6 lg:col-span-3">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <MegidoPieChart
-              data={brochureData}
-              nameKey="name"
-              valueKey="value"
-              title={"\u05D7\u05D5\u05D1\u05E8\u05EA \u05DE\u05DB\u05E8\u05D6"}
-              height={264}
-              colors={[corePalette.primary, corePalette.border]}
-            />
-            <MegidoPieChart
-              data={regionData}
-              nameKey="name"
-              valueKey="value"
-              title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05E4\u05D9 \u05DE\u05D7\u05D5\u05D6"}
-              height={264}
-            />
-          </div>
-
-          {/* Top 10 cities bar chart */}
-          <MegidoBarChart
-            data={cityBarData}
-            xKey="city"
-            yKey="count"
-            annotationKey="annotation"
-            title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)"}
-            height={420}
+      {/* Pies (3/4) + KPI stack (1/4) in one row */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        {/* 3 pie charts */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:col-span-3">
+          <MegidoPieChart
+            data={brochureData}
+            nameKey="name"
+            valueKey="value"
+            title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05D7\u05D5\u05D1\u05E8\u05EA'}
+            height={264}
+            colors={[corePalette.primary, corePalette.border]}
+            secondaryKey="count"
+            secondaryLabel={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
           />
-
-          {/* Tender type pie chart */}
+          <MegidoPieChart
+            data={regionData}
+            nameKey="name"
+            valueKey="value"
+            title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05DE\u05D7\u05D5\u05D6'}
+            height={264}
+            secondaryKey="count"
+            secondaryLabel={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
+          />
           <MegidoPieChart
             data={tenderTypeData}
             nameKey="name"
             valueKey="value"
-            title={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2"}
+            title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05E1\u05D5\u05D2 \u05DE\u05DB\u05E8\u05D6'}
             height={264}
+            secondaryKey="count"
+            secondaryLabel={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
           />
         </div>
 
-        {/* KPI column (2/5 width) */}
-        <div className="space-y-4 lg:col-span-2">
-          {/* Row 1: Active + closing */}
+        {/* KPI column: 2 small cards on top, סה"כ below */}
+        <div className="flex flex-col gap-3 lg:col-span-1">
           <div className="grid grid-cols-2 gap-3">
             <MetricCard
               label={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD"}
@@ -284,8 +283,6 @@ export function MarketKPISection({
               value={closingSoonCount}
             />
           </div>
-
-          {/* Row 2: Unit composition */}
           {isBrochureMode ? (
             <UnitCompositionCard
               total={brochureTotal}
@@ -300,6 +297,16 @@ export function MarketKPISection({
           )}
         </div>
       </div>
+
+      {/* Top 10 cities bar chart — full width */}
+      <MegidoBarChart
+        data={cityBarData}
+        xKey="city"
+        yKey="units"
+        annotationKey="annotation"
+        title={'\u05D9\u05D7"\u05D3 \u05D1\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E4\u05E2\u05D9\u05DC\u05D9\u05DD \u05DC\u05E4\u05D9 \u05E2\u05D9\u05E8 (\u05D8\u05D5\u05E4 10)'}
+        height={420}
+      />
     </section>
   );
 }

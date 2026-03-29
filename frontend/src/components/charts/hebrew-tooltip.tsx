@@ -42,6 +42,10 @@ interface HebrewTooltipProps {
   label?: string | number;
   /** Optional override map for data key → Hebrew label. */
   labelMap?: Record<string, string>;
+  /** Optional secondary data key to show from payload data (e.g. "count"). */
+  secondaryKey?: string;
+  /** Label for the secondary value (e.g. "מכרזים"). */
+  secondaryLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +76,8 @@ export function HebrewTooltip({
   payload,
   label,
   labelMap,
+  secondaryKey,
+  secondaryLabel,
 }: HebrewTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -105,6 +111,10 @@ export function HebrewTooltip({
       {payload.map((entry, idx) => {
         const key = String(entry.dataKey ?? entry.name ?? idx);
         const hebrewLabel = resolveLabel(entry.dataKey ?? entry.name, labelMap);
+        const secondaryValue =
+          secondaryKey && entry.payload
+            ? entry.payload[secondaryKey]
+            : undefined;
 
         return (
           <p key={key + idx} style={{ margin: 0 }}>
@@ -119,6 +129,11 @@ export function HebrewTooltip({
               }}
             />
             {hebrewLabel}: {formatValue(entry.value)}
+            {secondaryValue != null && (
+              <span style={{ color: neutralScale[500], marginRight: 6 }}>
+                ({formatValue(secondaryValue)} {secondaryLabel ?? ""})
+              </span>
+            )}
           </p>
         );
       })}

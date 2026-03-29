@@ -1015,6 +1015,12 @@ export function buildMultiLotComparison(
     // Only multi-lot tenders
     if (tenderPrices.length < 2) continue;
 
+    // Skip tenders with no actual results (all bids null, 0 bidders)
+    const hasResults = tenderPrices.some(
+      (p) => p.winning_bid != null || (p.num_bids != null && p.num_bids > 0),
+    );
+    if (!hasResults) continue;
+
     const tender = tenderMap.get(tenderId);
     if (!tender) continue;
 

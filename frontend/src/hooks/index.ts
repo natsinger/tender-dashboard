@@ -34,3 +34,6 @@ export {
 
 // Reviews
 export { useReviewStatuses, useSetReviewStatus } from "./use-reviews";
+
+// Tender outcomes (post-deadline tracking)
+export { useTenderOutcomes, useSetTenderOutcome } from "./use-outcomes";
