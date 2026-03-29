@@ -17,6 +17,7 @@ import * as XLSX from "xlsx";
 import { PageHeader } from "@/components/page-header";
 import { WatchlistManager } from "@/components/watchlist-manager";
 import { ReviewStatusEditor } from "@/components/review-status-editor";
+import { ExpiredTendersTable } from "@/components/watchlist/expired-tenders-table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -120,6 +121,24 @@ export default function WatchlistPage() {
       ),
     [teamWatchlist],
   );
+
+  // Split into active (deadline in future or no deadline) vs expired
+  const { activeWatchlist, expiredWatchlist } = useMemo(() => {
+    const now = new Date();
+    const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
+    const expired: (WatchlistItemWithTender & { tender: Tender })[] = [];
+
+    for (const item of teamWatchlistWithTender) {
+      const deadline = item.tender.deadline;
+      if (deadline && new Date(deadline) <= now) {
+        expired.push(item);
+      } else {
+        active.push(item);
+      }
+    }
+
+    return { activeWatchlist: active, expiredWatchlist: expired };
+  }, [teamWatchlistWithTender]);
 
   // ---- Export to Excel ----
 
@@ -225,7 +244,7 @@ export default function WatchlistPage() {
             <h3 className="text-lg font-semibold text-megido-text-heading">
               {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"}
               <span className="mr-2 text-base font-normal text-megido-text-muted">
-                ({teamWatchlistWithTender.length})
+                ({activeWatchlist.length})
               </span>
             </h3>
             {favoritesOpen ? (
@@ -272,7 +291,7 @@ export default function WatchlistPage() {
                   />
                 ))}
               </div>
-            ) : teamWatchlistWithTender.length === 0 ? (
+            ) : activeWatchlist.length === 0 ? (
               <p className="py-4 text-sm text-megido-text-muted">
                 {"אין מכרזים מועדפים"}
               </p>
@@ -282,32 +301,32 @@ export default function WatchlistPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" dir="rtl">
                     <thead>
-                      <tr className="border-b border-megido-border text-end text-xs font-medium text-megido-text-muted">
-                        <th className="px-2 py-2">
+                      <tr className="border-b border-megido-border text-xs font-medium text-megido-text-muted">
+                        <th className="px-2 py-2 text-right">
                           {"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {"\u05D4\u05E2\u05E8\u05D5\u05EA"}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {"\u05DE\u05D5\u05E2\u05D3 \u05D0\u05D7\u05E8\u05D5\u05DF"}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {"\u05E1\u05D5\u05D2"}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {'\u05D9\u05D7"\u05D3'}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {"\u05E2\u05D9\u05E8"}
                         </th>
-                        <th className="px-2 py-2">
+                        <th className="px-2 py-2 text-right">
                           {"\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6"}
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {teamWatchlistWithTender.map((item) => {
+                      {activeWatchlist.map((item) => {
                         const tender = item.tender;
                         const review = reviewMap?.[item.tender_id];
                         const statusText =
@@ -386,6 +405,17 @@ export default function WatchlistPage() {
           </div>
         )}
       </section>
+
+      {/* Card 3: Expired Tenders */}
+      {expiredWatchlist.length > 0 && (
+        <section className="rounded-xl border border-megido-border bg-megido-bg-card p-4 shadow-sm md:p-6">
+          <ExpiredTendersTable
+            items={expiredWatchlist}
+            reviewMap={reviewMap}
+            userEmail={userEmail}
+          />
+        </section>
+      )}
     </div>
   );
 }
