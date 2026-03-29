@@ -179,7 +179,7 @@ export function ExpiredTendersTable({
   const { data: allPrices } = useTenderPrices();
   const setOutcome = useSetTenderOutcome();
   const [savedTenderId, setSavedTenderId] = useState<number | null>(null);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Group prices by tender_id
   const pricesByTender = useMemo(() => {
