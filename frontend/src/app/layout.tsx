@@ -4,6 +4,7 @@
  * and wraps the app in QueryClientProvider + TooltipProvider.
  */
 import type { Metadata } from "next";
+import { Agentation } from "agentation";
 import { Inter, Heebo } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryProvider } from "@/providers/query-provider";
@@ -40,6 +41,7 @@ export default function RootLayout({
         <QueryProvider>
           <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
         </QueryProvider>
+        {process.env.NODE_ENV === "development" && <Agentation endpoint="http://localhost:4747" />}
       </body>
     </html>
   );
