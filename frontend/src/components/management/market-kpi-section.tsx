@@ -247,7 +247,7 @@ export function MarketKPISection({
             valueKey="value"
             title={'\u05D9\u05D7"\u05D3 \u05DC\u05E4\u05D9 \u05D7\u05D5\u05D1\u05E8\u05EA'}
             height={264}
-            colors={[corePalette.primary, corePalette.border]}
+            colors={[corePalette.primary, "#94A3B8"]}
             secondaryKey="count"
             secondaryLabel={"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD"}
           />

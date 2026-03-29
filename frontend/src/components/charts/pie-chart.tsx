@@ -53,6 +53,12 @@ interface MegidoPieChartProps {
 
 import type { PieLabelRenderProps } from "recharts";
 
+/** Format large numbers compactly for slice labels. */
+function compactNumber(val: number): string {
+  if (val >= 1000) return `${(val / 1000).toLocaleString("he-IL", { maximumFractionDigits: 1 })}K`;
+  return val.toLocaleString("he-IL");
+}
+
 function renderInsideLabel(props: PieLabelRenderProps) {
   const {
     cx = 0,
@@ -73,6 +79,8 @@ function renderInsideLabel(props: PieLabelRenderProps) {
   const x = cxNum + radius * Math.cos(-midAngle * RADIAN);
   const y = cyNum + radius * Math.sin(-midAngle * RADIAN);
 
+  const label = typeof value === "number" ? compactNumber(value) : String(value);
+
   return (
     <text
       x={x}
@@ -80,10 +88,10 @@ function renderInsideLabel(props: PieLabelRenderProps) {
       fill="white"
       textAnchor="middle"
       dominantBaseline="central"
-      fontSize={14}
+      fontSize={11}
       fontWeight={600}
     >
-      {typeof value === "number" ? value.toLocaleString("he-IL") : value}
+      {label}
     </text>
   );
 }
