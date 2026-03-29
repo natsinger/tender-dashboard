@@ -366,17 +366,17 @@ def build_taba_analytics(db: TenderDB) -> list[dict]:
         region_codes = sorted({
             int(t["rmi_region_code"])
             for t in tender_list
-            if t.get("rmi_region_code") is not None
+            if t.get("rmi_region_code") is not None and t["rmi_region_code"] == t["rmi_region_code"]
         })
         city_codes = sorted({
             int(t["city_code"])
             for t in tender_list
-            if t.get("city_code") is not None
+            if t.get("city_code") is not None and t["city_code"] == t["city_code"]
         })
         purpose_codes = sorted({
             int(t["purpose_code"])
             for t in tender_list
-            if t.get("purpose_code") is not None
+            if t.get("purpose_code") is not None and t["purpose_code"] == t["purpose_code"]
         })
 
         # Parse publish dates for first_seen/last_seen
