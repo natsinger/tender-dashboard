@@ -240,6 +240,21 @@ def _get_empty_extracted_tender_ids(
         return []
 
 
+def _get_watchlist_tender_ids() -> list[int]:
+    """Get all tender IDs from the team watchlist for priority extraction.
+
+    Returns:
+        List of tender_id integers from all active watchlists.
+    """
+    try:
+        from user_db import UserDB
+        entries = UserDB().get_all_active_watchlists()
+        return [entry["tender_id"] for entry in entries]
+    except Exception as exc:
+        logger.error("Failed to query watchlist tenders: %s", exc)
+        return []
+
+
 def _overlay_pdf_onto_api(
     api_lot: dict,
     pdf_lot: dict,
@@ -689,6 +704,11 @@ def main() -> None:
         action="store_true",
         help="Re-extract ALL tenders with published_booklet=1 (full pipeline, regardless of status)",
     )
+    parser.add_argument(
+        "--watchlist",
+        action="store_true",
+        help="Extract lots for all watchlisted tenders (force re-extraction, regardless of status)",
+    )
     args = parser.parse_args()
 
     db = TenderDB()
@@ -702,6 +722,12 @@ def main() -> None:
     if args.tender_id:
         tender_ids = [args.tender_id]
         logger.info("Processing single tender: %d", args.tender_id)
+    elif args.watchlist:
+        tender_ids = _get_watchlist_tender_ids()
+        logger.info(
+            "Watchlist mode: found %d watchlisted tenders for extraction",
+            len(tender_ids),
+        )
     elif args.reextract_all:
         tender_ids = _get_all_booklet_tender_ids(db, limit=args.limit)
         logger.info(

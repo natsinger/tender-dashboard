@@ -50,7 +50,14 @@ jobs:
           TEAM_EMAIL: ${{ secrets.TEAM_EMAIL }}
         run: python scripts/refresh_tenders.py
 
-      - name: Extract lot data from brochures
+      - name: Extract lots for watchlisted tenders (priority)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/extract_lots_batch.py --watchlist
+        continue-on-error: true
+
+      - name: Extract lot data from brochures (general batch)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

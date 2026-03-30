@@ -67,6 +67,7 @@ function getCategoryLabel(tender: Tender | null): string {
   if (tender.tender_type_code === 9) return "ייזום";
   if (purpose.includes("דיור מוגן")) return "דיור מוגן";
   if (purpose.includes("דיור להשכרה") || tender.tender_type_code === 6) return "דיור להשכרה";
+  if (tender.tender_type_code === 5 || tender.tender_type_code === 8) return "מחיר מטרה";
   return "שוק חופשי";
 }
 
