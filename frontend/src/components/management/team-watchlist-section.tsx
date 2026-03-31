@@ -105,6 +105,19 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
     },
   },
   {
+    id: "publish_date",
+    header: "תאריך פרסום",
+    size: 80,
+    cell: ({ row }) => {
+      const t = row.original.tender;
+      return (
+        <span className="text-sm whitespace-nowrap">
+          {formatDeadline(t?.publish_date ?? null)}
+        </span>
+      );
+    },
+  },
+  {
     id: "city",
     header: "\u05E2\u05D9\u05E8",
     size: 80,
