@@ -46,6 +46,7 @@ function fmtArea(value: number | null): string {
 const LOT_COLUMNS = [
   { key: "mitcham", label: "\u05DE\u05EA\u05D7\u05DD", align: "text-start" as const },
   { key: "units", label: '\u05DE\u05E1\' \u05D9\u05D7"\u05D3', align: "text-center" as const },
+  { key: "appraisal", label: "\u05E9\u05D5\u05DE\u05D4", align: "text-center" as const },
   { key: "winBid", label: "\u05DE\u05D7\u05D9\u05E8 \u05D6\u05DB\u05D9\u05D9\u05D4", align: "text-center" as const },
   { key: "devCosts", label: "\u05E1\u05DB\u05D5\u05DD \u05E4\u05D9\u05EA\u05D5\u05D7", align: "text-center" as const },
   { key: "sqmPerUnit", label: '\u05DE"\u05E8 \u05E2\u05D9\u05E7\u05E8\u05D9 \u05DC\u05D9\u05D7"\u05D3', align: "text-center" as const },
@@ -301,7 +302,10 @@ function TenderGroup({ group, isExpanded, onToggle }: TenderGroupProps) {
             <td className="px-3 py-2 text-center text-xs tabular-nums">
               {fmtNumber(lot.capacityUnits)}
             </td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
+            <td className="px-3 py-2 text-center text-xs tabular-nums text-megido-text-muted">
+              {fmtCurrency(lot.appraisalPrice)}
+            </td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums font-semibold text-emerald-600">
               {fmtCurrency(lot.winningBid)}
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
