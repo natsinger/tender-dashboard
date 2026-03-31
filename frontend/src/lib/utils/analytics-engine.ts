@@ -964,6 +964,7 @@ export interface MultiLotTenderGroup {
 export interface MultiLotRow {
   tikId: number;
   mitchamName: string | null;
+  appraisalPrice: number | null;
   winningBid: number | null;
   devCosts: number | null;
   capacityUnits: number | null;
@@ -1047,6 +1048,7 @@ export function buildMultiLotComparison(
       return {
         tikId: p.tik_id,
         mitchamName: p.mitcham_name,
+        appraisalPrice: p.appraisal_price,
         winningBid: bid,
         devCosts: p.dev_costs,
         capacityUnits: units,
