@@ -147,7 +147,7 @@ ALERT_RECIPIENTS: list[str] = [
 # These users see only the management page — no dashboard, explorer, or analytics.
 MANAGEMENT_ALLOWED_EMAILS: list[str] = [
     e.strip().lower()
-    for e in _get("MANAGEMENT_ALLOWED_EMAILS", "").split(",")
+    for e in _get("MANAGEMENT_EMAILS", "").split(",")
     if e.strip()
 ]
 

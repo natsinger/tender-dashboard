@@ -27,17 +27,36 @@ import pdfplumber
 try:
     import pypdfium2 as pdfium
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageOps
 
     _OCR_AVAILABLE = True
 except ImportError:
     _OCR_AVAILABLE = False
+
+# Optional ocrmypdf — converts scanned PDFs to searchable text-layer PDFs.
+# Requires Ghostscript on the system. When available, this produces much better
+# results than raw Tesseract because it deskews, denoises, and creates a proper
+# text layer that pdfplumber can read natively.
+try:
+    import ocrmypdf
+
+    _OCRMYPDF_AVAILABLE = True
+except ImportError:
+    _OCRMYPDF_AVAILABLE = False
 
 # Tesseract binary path (Windows default from winget/UB-Mannheim install).
 _TESSERACT_PATHS = [
     Path(r"C:\Users\nathanaels\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"),
     Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
     Path("/usr/bin/tesseract"),  # Linux (CI)
+]
+
+# Ghostscript binary paths (needed by ocrmypdf).
+_GHOSTSCRIPT_PATHS = [
+    Path(r"C:\Program Files\gs\gs10.04.0\bin\gswin64c.exe"),
+    Path(r"C:\Program Files\gs\gs10.05.0\bin\gswin64c.exe"),
+    Path(r"C:\Program Files (x86)\gs\gs10.04.0\bin\gswin32c.exe"),
+    Path("/usr/bin/gs"),  # Linux (CI)
 ]
 
 logger = logging.getLogger(__name__)
@@ -87,6 +106,49 @@ COLUMN_KEYWORDS: dict[str, list[str]] = {
     "setback_side": ["צידי"],
     "balcony_area": ["מרפסות", "תוספרמ"],
 }
+
+# Known designation values (יעוד) from Israeli zoning standards.
+# Used to fuzzy-correct garbled OCR text in the designation column.
+KNOWN_DESIGNATIONS: list[str] = [
+    "מגורים",
+    "מגורים א'",
+    "מגורים ב'",
+    "מגורים ג'",
+    "מגורים ד'",
+    "מגורים מיוחד",
+    "מסחר",
+    "מסחר ומשרדים",
+    "מסחר ושירותים",
+    "תעשייה",
+    "תעשיה",
+    "תעסוקה",
+    "מלונאות",
+    "תיירות ונופש",
+    "תיירות",
+    "מבנים ומוסדות ציבור",
+    'מוסדות ציבור',
+    "מו\"צ",
+    "שטח ציבורי פתוח",
+    'שצ"פ',
+    "שטח פרטי פתוח",
+    'שפ"פ',
+    "דרך",
+    "דרכים",
+    "חניה",
+    "חניון",
+    "שטח לתשתיות",
+    "תשתיות",
+    "ספורט",
+    "נופש",
+    "חקלאות",
+    "שטח חקלאי",
+    "מעורב",
+    "שימור",
+    "יער",
+    "פארק",
+    "שטח פתוח",
+    "אזור תעשייה",
+]
 
 # Fields that should be parsed as numeric values.
 NUMERIC_FIELDS = {
@@ -297,13 +359,114 @@ def _merge_header_rows(
     return merged_headers
 
 
+def _fuzzy_match_designation(value: str) -> str:
+    """Match a (possibly garbled) designation value to the closest known one.
+
+    Uses character bigram similarity against KNOWN_DESIGNATIONS.
+
+    Args:
+        value: Raw designation text from OCR or extraction.
+
+    Returns:
+        The closest known designation if similarity > threshold,
+        otherwise the original value unchanged.
+    """
+    if not value or len(value) < 2:
+        return value
+
+    clean_val = _strip_to_hebrew(value)
+    if len(clean_val) < 2:
+        return value
+
+    best_score = 0.0
+    best_match = value
+
+    val_bigrams = {clean_val[i:i + 2] for i in range(len(clean_val) - 1)}
+    if not val_bigrams:
+        return value
+
+    for known in KNOWN_DESIGNATIONS:
+        known_clean = _strip_to_hebrew(known)
+        if len(known_clean) < 2:
+            continue
+        known_bigrams = {known_clean[i:i + 2] for i in range(len(known_clean) - 1)}
+        intersection = len(val_bigrams & known_bigrams)
+        union = len(val_bigrams | known_bigrams)
+        score = intersection / union if union else 0.0
+        if score > best_score:
+            best_score = score
+            best_match = known
+
+    if best_score >= 0.4:
+        if best_match != value:
+            logger.debug(
+                "Designation corrected: '%s' -> '%s' (score=%.2f)",
+                value, best_match, best_score,
+            )
+        return best_match
+
+    return value
+
+
+def _strip_to_hebrew(text: str) -> str:
+    """Keep only Hebrew characters (\\u0590-\\u05FF) from text.
+
+    Args:
+        text: Input string with mixed characters.
+
+    Returns:
+        String containing only Hebrew letters.
+    """
+    return re.sub(r"[^\u0590-\u05FF]", "", text)
+
+
+def _fuzzy_keyword_score(keyword: str, header: str) -> float:
+    """Score how well a Hebrew keyword matches a (possibly garbled) header.
+
+    Uses character bigram overlap — robust to OCR noise that drops, swaps,
+    or inserts characters.
+
+    Args:
+        keyword: Clean Hebrew keyword (e.g. "יעוד").
+        header: OCR'd header text (may be noisy).
+
+    Returns:
+        Similarity score between 0.0 and 1.0.
+    """
+    # Strip to Hebrew-only characters for comparison
+    kw = _strip_to_hebrew(keyword)
+    hd = _strip_to_hebrew(header)
+
+    if len(kw) < 2 or len(hd) < 2:
+        return 0.0
+
+    # Character bigram Jaccard similarity
+    kw_bigrams = {kw[i:i + 2] for i in range(len(kw) - 1)}
+    hd_bigrams = {hd[i:i + 2] for i in range(len(hd) - 1)}
+
+    if not kw_bigrams:
+        return 0.0
+
+    intersection = len(kw_bigrams & hd_bigrams)
+    # Use keyword bigrams as denominator (not union) — we care that the
+    # keyword is present in the header, not the other way around.
+    return intersection / len(kw_bigrams)
+
+
+# Minimum fuzzy score to accept a column match.
+_FUZZY_THRESHOLD = 0.45
+
+
 def _map_columns(
     merged_headers: list[str],
+    fuzzy: bool = False,
 ) -> dict[int, str]:
     """Map column indices to canonical field names using keyword matching.
 
     Args:
         merged_headers: Flat column header strings (in normal Hebrew).
+        fuzzy: If True, use fuzzy bigram matching in addition to exact
+            regex. Useful for OCR'd headers with garbled text.
 
     Returns:
         Dict mapping column index → canonical field name.
@@ -319,17 +482,38 @@ def _map_columns(
             if field_name in used_fields:
                 continue
 
+            matched = False
             for keyword in keywords:
+                # Exact regex match (primary — works for clean text)
                 if re.search(keyword, header):
-                    column_map[col_idx] = field_name
-                    used_fields.add(field_name)
-                    logger.debug(
-                        "Mapped col %d → %s (header: %s, keyword: %s)",
-                        col_idx, field_name, header, keyword,
-                    )
+                    matched = True
                     break
 
-            if field_name in used_fields:
+            # Fuzzy match (fallback for OCR noise)
+            if not matched and fuzzy:
+                for keyword in keywords:
+                    # Strip regex syntax for fuzzy comparison
+                    clean_kw = re.sub(r"[.*?+\[\]()\\]", "", keyword)
+                    if len(clean_kw) < 2:
+                        continue
+                    score = _fuzzy_keyword_score(clean_kw, header)
+                    if score >= _FUZZY_THRESHOLD:
+                        matched = True
+                        logger.debug(
+                            "Fuzzy matched col %d -> %s (score=%.2f, "
+                            "keyword=%s, header=%s)",
+                            col_idx, field_name, score, clean_kw, header,
+                        )
+                        break
+
+            if matched:
+                column_map[col_idx] = field_name
+                used_fields.add(field_name)
+                if not fuzzy:
+                    logger.debug(
+                        "Mapped col %d -> %s (header: %s)",
+                        col_idx, field_name, header,
+                    )
                 break
 
     return column_map
@@ -472,6 +656,7 @@ def _extract_table_from_pages(
 
 def _parse_table(
     raw_table: list[list[Optional[str]]],
+    fuzzy: bool = False,
 ) -> tuple[list[dict], list[str], dict[int, str]]:
     """Parse a raw table into structured row dicts.
 
@@ -479,14 +664,22 @@ def _parse_table(
 
     Args:
         raw_table: Raw table from pdfplumber (list of rows).
+        fuzzy: If True, use fuzzy keyword matching for column mapping.
+            Enable for OCR'd tables where headers may be garbled.
 
     Returns:
         Tuple of (parsed_rows, merged_headers, column_map).
     """
-    # Detect header rows
+    # Detect header rows.
+    # Real building rights tables have 2-3 header rows (rarely 4).
+    # OCR noise can make data rows look like headers, so cap at 4
+    # when fuzzy mode is on.
+    max_header_rows = 4 if fuzzy else 20
     header_rows = []
     data_start = 0
     for row_idx, row in enumerate(raw_table):
+        if len(header_rows) >= max_header_rows:
+            break
         if _is_header_row(row):
             header_rows.append(row)
             data_start = row_idx + 1
@@ -502,6 +695,11 @@ def _parse_table(
     # Merge headers and map columns
     merged_headers = _merge_header_rows(header_rows)
     column_map = _map_columns(merged_headers)
+
+    # If exact matching found nothing, retry with fuzzy matching
+    if not column_map and fuzzy:
+        logger.info("Exact matching failed, retrying with fuzzy matching")
+        column_map = _map_columns(merged_headers, fuzzy=True)
 
     if not column_map:
         logger.warning(
@@ -540,6 +738,11 @@ def _parse_table(
 
             if field_name in NUMERIC_FIELDS:
                 row_data[field_name] = _parse_numeric(raw_val)
+            elif field_name == "designation" and fuzzy and raw_val_reversed:
+                # Fuzzy-correct designation against known values
+                row_data[field_name] = _fuzzy_match_designation(
+                    raw_val_reversed,
+                )
             elif field_name in TEXT_FIELDS:
                 row_data[field_name] = raw_val_reversed
             else:
@@ -589,6 +792,120 @@ def _configure_tesseract() -> bool:
     return False
 
 
+def _find_ghostscript() -> Optional[str]:
+    """Find the Ghostscript binary path.
+
+    Returns:
+        Absolute path to the Ghostscript binary, or None if not found.
+    """
+    import shutil
+
+    for gs_path in _GHOSTSCRIPT_PATHS:
+        if gs_path.exists():
+            logger.debug("Ghostscript found: %s", gs_path)
+            return str(gs_path)
+
+    # Check common names on PATH
+    for name in ("gswin64c", "gswin32c", "gs"):
+        gs_on_path = shutil.which(name)
+        if gs_on_path:
+            logger.debug("Ghostscript found on PATH: %s", gs_on_path)
+            return gs_on_path
+
+    logger.debug("Ghostscript binary not found")
+    return None
+
+
+def _preprocess_scanned_pdf(pdf_path: Path) -> Optional[Path]:
+    """Pre-process a scanned PDF with ocrmypdf to add a searchable text layer.
+
+    Uses Ghostscript + Tesseract (via ocrmypdf) to deskew, denoise, and embed
+    an OCR text layer. The resulting PDF can then be read by pdfplumber's normal
+    text-extraction path, which is far more reliable than cell-by-cell Tesseract.
+
+    Args:
+        pdf_path: Path to the scanned PDF.
+
+    Returns:
+        Path to the searchable PDF (in tmp/), or None if pre-processing failed.
+    """
+    if not _OCRMYPDF_AVAILABLE:
+        logger.debug("ocrmypdf not installed — skipping pre-processing")
+        return None
+
+    gs_path = _find_ghostscript()
+    if not gs_path:
+        logger.warning("Ghostscript not found — ocrmypdf requires it")
+        return None
+
+    # Output path: same name with _ocr suffix in the same directory
+    output_path = pdf_path.parent / f"{pdf_path.stem}_ocr.pdf"
+
+    # Skip if already pre-processed and cache is valid
+    if output_path.exists() and output_path.stat().st_size > 1000:
+        logger.info("Using cached OCR'd PDF: %s", output_path.name)
+        return output_path
+
+    logger.info(
+        "Pre-processing scanned PDF with ocrmypdf: %s -> %s",
+        pdf_path.name, output_path.name,
+    )
+
+    # Ensure Ghostscript and Tesseract directories are on PATH for
+    # ocrmypdf subprocess calls (it spawns gs + tesseract as child processes).
+    import os
+    import shutil
+
+    gs_dir = str(Path(gs_path).parent)
+    if gs_dir not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = gs_dir + os.pathsep + os.environ.get("PATH", "")
+        logger.debug("Added Ghostscript to PATH: %s", gs_dir)
+
+    if not shutil.which("tesseract"):
+        for tess_path in _TESSERACT_PATHS:
+            if tess_path.exists():
+                tess_dir = str(tess_path.parent)
+                os.environ["PATH"] = tess_dir + os.pathsep + os.environ.get("PATH", "")
+                logger.debug("Added Tesseract to PATH: %s", tess_dir)
+                break
+
+    try:
+        exit_code = ocrmypdf.ocr(
+            str(pdf_path),
+            str(output_path),
+            language=["heb", "eng"],
+            deskew=True,
+            optimize=0,          # Skip PDF optimization — we only need the text layer
+            skip_text=True,      # Don't re-OCR pages that already have text
+            jobs=2,              # Limit parallelism
+            progress_bar=False,
+        )
+
+        if output_path.exists() and output_path.stat().st_size > 1000:
+            logger.info(
+                "ocrmypdf succeeded: %s (%d KB)",
+                output_path.name, output_path.stat().st_size // 1024,
+            )
+            return output_path
+
+        logger.warning("ocrmypdf produced empty/tiny output for %s", pdf_path.name)
+        return None
+
+    except ocrmypdf.exceptions.PriorOcrFoundError:
+        # PDF already has OCR text — copy as-is
+        logger.info("PDF already has OCR layer: %s", pdf_path.name)
+        return pdf_path
+
+    except Exception as exc:
+        logger.warning(
+            "ocrmypdf failed for %s: %s", pdf_path.name, exc,
+        )
+        # Clean up partial output
+        if output_path.exists():
+            output_path.unlink()
+        return None
+
+
 def _is_scanned_pdf(pdf: pdfplumber.PDF) -> bool:
     """Detect if a PDF is scanned (image-only, no extractable text).
 
@@ -614,8 +931,12 @@ def _is_scanned_pdf(pdf: pdfplumber.PDF) -> bool:
     return is_scanned
 
 
+# OCR render DPI — higher = better Tesseract accuracy but slower.
+_OCR_DPI = 400
+
+
 def _ocr_page_to_image(pdf_path: Path, page_idx: int) -> "Image.Image":
-    """Render a PDF page as a PIL Image at 300 DPI.
+    """Render a PDF page as a PIL Image at high DPI for OCR.
 
     Args:
         pdf_path: Path to the PDF file.
@@ -626,7 +947,7 @@ def _ocr_page_to_image(pdf_path: Path, page_idx: int) -> "Image.Image":
     """
     doc = pdfium.PdfDocument(str(pdf_path))
     page = doc[page_idx]
-    bitmap = page.render(scale=300 / 72)
+    bitmap = page.render(scale=_OCR_DPI / 72)
     pil_image = bitmap.to_pil()
     doc.close()
     return pil_image
@@ -826,10 +1147,20 @@ def _ocr_extract_table_from_page(
                 min(image.height, y2 - pad),
             ))
 
-            # OCR the individual cell
+            # Preprocess: convert to grayscale, enhance contrast, binarize.
+            # This helps Tesseract on low-contrast scans.
+            cell_gray = cell_img.convert("L")
+            cell_gray = ImageOps.autocontrast(cell_gray, cutoff=5)
+            cell_gray = cell_gray.point(lambda px: 255 if px > 160 else 0)
+
+            # OCR the individual cell — use psm 7 (single line) for
+            # small cells, psm 6 (block) for taller ones.
+            cell_height = y2 - y1
+            psm = "7" if cell_height < 60 else "6"
             try:
                 cell_text = pytesseract.image_to_string(
-                    cell_img, lang="heb", config="--psm 6",
+                    cell_gray, lang="heb",
+                    config=f"--psm {psm}",
                 ).strip()
                 row_cells.append(cell_text if cell_text else None)
             except Exception:
@@ -889,6 +1220,7 @@ def _ocr_extract_table_fallback(
 def _extract_building_rights_ocr(
     pdf_path: Path,
     plan_number: str,
+    known_section_page: Optional[dict] = None,
 ) -> dict:
     """Extract building rights from a scanned PDF using OCR.
 
@@ -900,6 +1232,9 @@ def _extract_building_rights_ocr(
     Args:
         pdf_path: Path to the scanned PDF.
         plan_number: Plan number for metadata.
+        known_section_page: If Section 5 was already found (e.g. via ocrmypdf
+            text layer), pass {"page_idx": int, "status": str|None} to skip
+            the expensive per-page OCR scanning step.
 
     Returns:
         Same dict schema as extract_building_rights().
@@ -923,7 +1258,7 @@ def _extract_building_rights_ocr(
     # Skip very short PDFs (old format, unlikely to have Section 5)
     if total_pages < MIN_PAGES_FOR_SECTION5:
         result["errors"] = [
-            f"PDF too short ({total_pages} pages) — "
+            f"PDF too short ({total_pages} pages) -- "
             f"minimum {MIN_PAGES_FOR_SECTION5} pages required for Section 5"
         ]
         logger.info(
@@ -932,8 +1267,15 @@ def _extract_building_rights_ocr(
         )
         return result
 
-    # Step 1: Find Section 5 via OCR
-    section = _ocr_find_section5(pdf_path, total_pages)
+    # Step 1: Find Section 5 via OCR (skip if page already known)
+    section = known_section_page
+    if section is None:
+        section = _ocr_find_section5(pdf_path, total_pages)
+    else:
+        logger.info(
+            "Using pre-detected Section 5 page %d (skipping OCR scan)",
+            section["page_idx"] + 1,
+        )
     if not section:
         result["errors"] = ["Section 5 not found via OCR"]
         return result
@@ -981,8 +1323,8 @@ def _extract_building_rights_ocr(
             )
             combined_table.extend(continuation_rows)
 
-    # Step 4: Parse through the same column-mapping logic
-    rows, headers, col_map = _parse_table(combined_table)
+    # Step 4: Parse through the same column-mapping logic (fuzzy for OCR)
+    rows, headers, col_map = _parse_table(combined_table, fuzzy=True)
 
     if rows:
         # Filter out subtotal rows
@@ -1050,21 +1392,86 @@ def extract_building_rights(
         with pdfplumber.open(pdf_path) as pdf:
             # Check if this is a scanned PDF → route to OCR path
             if _is_scanned_pdf(pdf):
+                logger.info("Scanned PDF detected: %s", pdf_path.name)
+
+                # Strategy 1: ocrmypdf pre-processing (best quality).
+                # Deskews, denoises, and adds an OCR text layer. Benefits:
+                # a) Fast Section 5 detection via text search (no per-page OCR)
+                # b) Cleaner images for the OpenCV grid + cell OCR fallback
+                ocr_pdf = _preprocess_scanned_pdf(pdf_path)
+                ocr_section_page: Optional[int] = None
+
+                if ocr_pdf is not None:
+                    # Step A: Use text layer for fast Section 5 detection.
+                    with pdfplumber.open(ocr_pdf) as ocr_opened:
+                        section_pages = _find_section5_pages(ocr_opened)
+                        if section_pages:
+                            ocr_section_page = section_pages[0]["page_idx"]
+                            result["status"] = section_pages[0]["status"]
+                            result["source_page"] = ocr_section_page + 1
+                            logger.info(
+                                "ocrmypdf text layer: found Section 5 on "
+                                "page %d", ocr_section_page + 1,
+                            )
+
+                            # Step B: Try pdfplumber lattice tables (works
+                            # when the PDF has vector lines in the scan).
+                            for section in section_pages:
+                                raw_table = _extract_table_from_pages(
+                                    ocr_opened, section["page_idx"],
+                                )
+                                if not raw_table:
+                                    continue
+                                rows, headers, col_map = _parse_table(raw_table)
+                                if rows and len(col_map) >= 3:
+                                    result["rows"] = rows
+                                    result["raw_headers"] = headers
+                                    result["column_map"] = {
+                                        str(k): v for k, v in col_map.items()
+                                    }
+                                    result["extraction_method"] = "ocrmypdf_pdfplumber"
+                                    result["success"] = True
+                                    logger.info(
+                                        "ocrmypdf+pdfplumber extracted %d rows "
+                                        "with %d columns from %s (page %d)",
+                                        len(rows), len(col_map),
+                                        pdf_path.name, section["page_idx"] + 1,
+                                    )
+                                    return result
+
+                        if not section_pages:
+                            logger.info(
+                                "ocrmypdf text layer: Section 5 not found"
+                            )
+
+                # Strategy 2: Tesseract OCR (fallback).
+                # Uses OpenCV grid detection + cell-by-cell Tesseract.
+                # If ocrmypdf ran, use its deskewed output for better images.
+                # Pass the known Section 5 page to skip expensive re-scanning.
                 if _OCR_AVAILABLE and _configure_tesseract():
-                    logger.info("Routing %s to OCR extraction path", pdf_path.name)
+                    ocr_target = ocr_pdf if ocr_pdf is not None else pdf_path
+                    known_page = (
+                        {"page_idx": ocr_section_page, "status": result["status"]}
+                        if ocr_section_page is not None
+                        else None
+                    )
+                    logger.info(
+                        "Falling back to Tesseract OCR on %s", ocr_target.name,
+                    )
                     return _extract_building_rights_ocr(
-                        pdf_path, plan_number or pdf_path.stem,
+                        ocr_target, plan_number or pdf_path.stem,
+                        known_section_page=known_page,
                     )
-                else:
-                    result["errors"] = [
-                        "Scanned PDF detected but OCR dependencies not available. "
-                        "Install: pip install pytesseract pypdfium2 pillow "
-                        "and ensure tesseract-ocr is on the system."
-                    ]
-                    logger.warning(
-                        "Scanned PDF %s but OCR not available", pdf_path.name,
-                    )
-                    return result
+
+                result["errors"] = [
+                    "Scanned PDF detected but OCR dependencies not available. "
+                    "Install: pip install ocrmypdf pytesseract pypdfium2 pillow "
+                    "and ensure Ghostscript + tesseract-ocr are on the system."
+                ]
+                logger.warning(
+                    "Scanned PDF %s but no OCR path available", pdf_path.name,
+                )
+                return result
 
             # ── Text-based PDF: use existing pdfplumber path ──
             # Step 1: Find Section 5

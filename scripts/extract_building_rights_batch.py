@@ -424,7 +424,7 @@ def get_tenders_needing_building_rights(
             db._client.table("tenders")
             .select("tender_id, extraction_status, published_booklet, status_code")
             .eq("published_booklet", 1)
-            .order("tender_id")
+            .order("tender_id", desc=True)
             .limit(limit * 3)  # Over-fetch to account for filtering
             .execute()
         )

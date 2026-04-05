@@ -722,8 +722,8 @@ class TenderDB:
                 self._client.table("tender_documents")
                 .select("row_id, doc_name, description, file_type, size, pirsum_type, update_date, first_seen")
                 .eq("tender_id", tender_id)
-                .gt("first_seen", since_date)
-                .order("first_seen", desc=True)
+                .gt("update_date", since_date)
+                .order("update_date", desc=True)
                 .execute()
             )
             rows = result.data or []

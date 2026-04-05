@@ -18,6 +18,7 @@ Pillow==12.1.0
 pytesseract==0.3.13
 pypdfium2==4.36.0
 opencv-python==4.13.0.92
+ocrmypdf==17.4.0  # Requires Ghostscript on the system
 
 # Mavat client (browser automation)
 playwright==1.58.0

@@ -99,7 +99,7 @@ class TabaClient:
                     plans.append({
                         "plan_number": tochnit,
                         "plan_id": None,
-                        "migrash_name": tm.get("MigrashName", "").strip(),
+                        "migrash_name": (tm.get("MigrashName") or "").strip(),
                     })
 
         # Source 2: MichrazLinks URL → extract planId

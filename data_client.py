@@ -545,6 +545,15 @@ def apply_code_mappings(df: pd.DataFrame) -> pd.DataFrame:
             drop=True,
         )
 
+    # Exclude quarry/mining tenders (כרייה וחציבה) — not relevant to the product.
+    EXCLUDED_PURPOSES = {10, 25}
+    if "purpose_code" in df.columns:
+        before = len(df)
+        df = df[~df["purpose_code"].isin(EXCLUDED_PURPOSES)].reset_index(drop=True)
+        excluded = before - len(df)
+        if excluded:
+            logger.info("Excluded %d quarry/mining tenders (purpose codes %s)", excluded, EXCLUDED_PURPOSES)
+
     return df
 
 

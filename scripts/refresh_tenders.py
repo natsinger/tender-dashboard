@@ -160,9 +160,79 @@ def main() -> None:
             traceback.format_exc(),
         )
 
-    # 8. Resolve GovMap TABA URLs for tenders with plan numbers
+    # 8. Enrich new tenders: fetch details + extract building rights from Taba
+    if new_ids:
+        try:
+            logger.info(
+                "Step 8: Enriching %d new tender(s) — details + taba extraction",
+                len(new_ids),
+            )
+            new_id_list = sorted(new_ids, reverse=True)
+
+            # 8a. Fetch details from RMI API and sync documents
+            new_docs = client.sync_documents_to_db(new_id_list)
+            logger.info("New tender doc sync: %d documents found", new_docs)
+
+            # 8b. Extract building rights for new tenders with brochures
+            from building_rights_extractor import extract_building_rights
+            from db import TenderDB as _TDB_br
+            from taba_client import TabaClient
+
+            br_db = _TDB_br()
+            taba = TabaClient()
+
+            for tid in new_id_list:
+                try:
+                    # Get plan IDs from the tender details
+                    plan_ids = taba.get_tender_plan_ids(tid)
+                    if not plan_ids:
+                        logger.debug("Tender %d: no plan IDs found", tid)
+                        continue
+
+                    for plan_id in plan_ids[:3]:  # Cap at 3 plans per tender
+                        dl_result = taba.download_takanon_by_plan_id(plan_id)
+                        if dl_result.get("status") != "success":
+                            continue
+
+                        pdf_path = Path(dl_result["file_path"])
+                        plan_number = dl_result.get("plan_number", plan_id)
+                        rights = extract_building_rights(pdf_path, plan_number)
+
+                        if rights.get("success") and rights.get("rows"):
+                            clean_rows = [
+                                {k: v for k, v in r.items() if k != "_raw"}
+                                for r in rights["rows"]
+                            ]
+                            br_db.upsert_building_rights(
+                                plan_number, clean_rows, rights.get("status"),
+                            )
+                            # Link plan number to tender
+                            br_db.update_plan_number(tid, plan_number)
+                            logger.info(
+                                "Tender %d / plan %s: extracted %d building rights rows",
+                                tid, plan_number, len(clean_rows),
+                            )
+                            break  # Got rights from one plan — done with this tender
+
+                        time.sleep(2)  # Rate limit between plan downloads
+
+                except Exception as plan_exc:
+                    logger.warning(
+                        "Tender %d taba extraction failed (non-fatal): %s",
+                        tid, plan_exc,
+                    )
+
+        except Exception as exc:
+            logger.warning(
+                "New tender enrichment failed (non-fatal): %s\n%s",
+                exc, traceback.format_exc(),
+            )
+    else:
+        logger.info("Step 8: No new tenders — skipping enrichment")
+
+    # 9. Resolve GovMap TABA URLs for tenders with plan numbers
     try:
-        logger.info("Step 8: Resolving GovMap TABA URLs...")
+        logger.info("Step 9: Resolving GovMap TABA URLs...")
         from db import TenderDB as _TenderDB_gm
         from govmap_client import batch_resolve_govmap_urls
 
@@ -209,7 +279,7 @@ def main() -> None:
             exc, traceback.format_exc(),
         )
 
-    # 9. Final summary
+    # 10. Final summary
     logger.info(
         "=== Daily refresh complete | watchlist_emails=%d new_tender_email=%d ===",
         watchlist_emails,

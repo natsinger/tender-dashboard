@@ -54,12 +54,12 @@ export function useTenderDocuments(tenderId: number | null | undefined) {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch documents first seen in the last `sinceDays` days, joined with
- * tender name, city, and region.
+ * Fetch documents published (update_date) in the last `sinceDays` days,
+ * joined with tender name, city, and region.
  *
- * Mirrors the Python `get_new_documents()` method in db.py which fetches
- * documents, then tenders separately, and merges in application code
- * (Supabase REST API does not support JOINs natively for this case).
+ * Uses `update_date` (the Land Authority publication date) rather than
+ * `first_seen` (when our system discovered it) so that old documents
+ * synced late don't appear as "new".
  */
 export function useNewDocuments(sinceDays: number = 7) {
   return useQuery<TenderDocumentWithInfo[]>({
@@ -69,7 +69,7 @@ export function useNewDocuments(sinceDays: number = 7) {
       sinceDate.setDate(sinceDate.getDate() - sinceDays);
       const sinceDateStr = sinceDate.toISOString().slice(0, 10);
 
-      // Step 1: Fetch new documents (paginated)
+      // Step 1: Fetch recently published documents (paginated)
       const allDocs: TenderDocument[] = [];
       let offset = 0;
 
@@ -77,8 +77,8 @@ export function useNewDocuments(sinceDays: number = 7) {
         const { data, error } = await supabase
           .from("tender_documents")
           .select("*")
-          .gt("first_seen", sinceDateStr)
-          .order("first_seen", { ascending: false })
+          .gt("update_date", sinceDateStr)
+          .order("update_date", { ascending: false })
           .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
 
         if (error) throw new Error(`Fetch new documents failed: ${error.message}`);

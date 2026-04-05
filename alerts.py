@@ -288,7 +288,8 @@ class AlertEngine:
                 doc_desc = _html.escape(
                     doc.get("description", "") or doc.get("doc_name", "מסמך")
                 )
-                doc_date = _html.escape(doc.get("first_seen", ""))
+                raw_date = doc.get("update_date") or doc.get("first_seen") or ""
+                doc_date = _html.escape(raw_date[:10])
                 safe_url = _html.escape(doc_url, quote=True)
 
                 doc_items.append(
@@ -301,7 +302,16 @@ class AlertEngine:
                     f'</li>'
                 )
 
-            deadline_str = _html.escape(ta.deadline or "לא צוין")
+            # Format deadline: "2026-06-01T09:00:00+00:00" → "01/06/2026"
+            raw_deadline = ta.deadline or ""
+            try:
+                deadline_str = (
+                    raw_deadline[:10].split("-")[2]
+                    + "/" + raw_deadline[:10].split("-")[1]
+                    + "/" + raw_deadline[:10].split("-")[0]
+                ) if len(raw_deadline) >= 10 else "לא צוין"
+            except (IndexError, ValueError):
+                deadline_str = "לא צוין"
             docs_html = "\n".join(doc_items)
 
             tender_blocks.append(f"""
@@ -434,7 +444,15 @@ class AlertEngine:
             purpose = _html.escape(str(t.get("purpose", "—")))
             units = t.get("units")
             units_str = str(units) if units else "—"
-            deadline = _html.escape(str(t.get("deadline", "לא צוין")))
+            raw_dl = str(t.get("deadline", ""))
+            try:
+                deadline = (
+                    raw_dl[:10].split("-")[2]
+                    + "/" + raw_dl[:10].split("-")[1]
+                    + "/" + raw_dl[:10].split("-")[0]
+                ) if len(raw_dl) >= 10 else "לא צוין"
+            except (IndexError, ValueError):
+                deadline = "לא צוין"
 
             tender_blocks.append(f"""
             <div style="margin:16px 0;padding:12px;background:#f8f9fc;
