@@ -304,6 +304,8 @@ export interface TenderOutcome {
   our_position: number | null;
   /** Free-text outcome notes. */
   outcome_notes: string | null;
+  /** Manually moved to expired (regardless of deadline). */
+  forced_expired: boolean;
   /** Who last updated this record. */
   updated_by: string | null;
   /** ISO datetime string. */

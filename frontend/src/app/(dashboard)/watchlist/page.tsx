@@ -24,6 +24,8 @@ import {
   useActiveTenders,
   useReviewStatuses,
   useTeamWatchlist,
+  useTenderOutcomes,
+  useSetTenderOutcome,
 } from "@/hooks";
 import { RELEVANT_TENDER_TYPES, TEAM_EMAIL } from "@/lib/constants";
 import { useAuthStore } from "@/stores/auth-store";
@@ -110,6 +112,8 @@ export default function WatchlistPage() {
   );
 
   const { data: reviewMap } = useReviewStatuses(teamTenderIds);
+  const { data: outcomeMap } = useTenderOutcomes(teamTenderIds);
+  const setOutcome = useSetTenderOutcome();
 
   // ---- Derived data for Card 2 table ----
 
@@ -122,7 +126,7 @@ export default function WatchlistPage() {
     [teamWatchlist],
   );
 
-  // Split into active (deadline in future or no deadline) vs expired
+  // Split into active vs expired (deadline passed OR manually forced)
   const { activeWatchlist, expiredWatchlist } = useMemo(() => {
     const now = new Date();
     const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
@@ -130,7 +134,8 @@ export default function WatchlistPage() {
 
     for (const item of teamWatchlistWithTender) {
       const deadline = item.tender.deadline;
-      if (deadline && new Date(deadline) <= now) {
+      const forcedExpired = outcomeMap?.[item.tender_id]?.forced_expired;
+      if (forcedExpired || (deadline && new Date(deadline) <= now)) {
         expired.push(item);
       } else {
         active.push(item);
@@ -138,7 +143,50 @@ export default function WatchlistPage() {
     }
 
     return { activeWatchlist: active, expiredWatchlist: expired };
-  }, [teamWatchlistWithTender]);
+  }, [teamWatchlistWithTender, outcomeMap]);
+
+  // ---- Drag-and-drop handlers ----
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, tenderId: number) => {
+      e.dataTransfer.setData("text/plain", String(tenderId));
+      e.dataTransfer.effectAllowed = "move";
+    },
+    [],
+  );
+
+  const handleDropToExpired = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const tenderId = Number(e.dataTransfer.getData("text/plain"));
+      if (!tenderId) return;
+      setOutcome.mutate({
+        tenderId,
+        forcedExpired: true,
+        updatedBy: userEmail,
+      });
+    },
+    [setOutcome, userEmail],
+  );
+
+  const handleDropToActive = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const tenderId = Number(e.dataTransfer.getData("text/plain"));
+      if (!tenderId) return;
+      setOutcome.mutate({
+        tenderId,
+        forcedExpired: false,
+        updatedBy: userEmail,
+      });
+    },
+    [setOutcome, userEmail],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
 
   // ---- Export to Excel ----
 
@@ -297,8 +345,12 @@ export default function WatchlistPage() {
               </p>
             ) : (
               <>
-                {/* Team watchlist table */}
-                <div className="overflow-x-auto">
+                {/* Team watchlist table — drop zone for restoring from expired */}
+                <div
+                  className="overflow-x-auto"
+                  onDragOver={handleDragOver}
+                  onDrop={handleDropToActive}
+                >
                   <table className="w-full text-sm" dir="rtl">
                     <thead>
                       <tr className="border-b border-megido-border text-xs font-medium text-megido-text-muted">
@@ -336,7 +388,9 @@ export default function WatchlistPage() {
                         return (
                           <tr
                             key={item.tender_id}
-                            className="border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, item.tender_id)}
+                            className="cursor-grab border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50 active:cursor-grabbing"
                           >
                             {/* Review status */}
                             <td className="px-2 py-2">
@@ -406,16 +460,41 @@ export default function WatchlistPage() {
         )}
       </section>
 
-      {/* Card 3: Expired Tenders */}
-      {expiredWatchlist.length > 0 && (
-        <section className="rounded-xl border border-megido-border bg-megido-bg-card p-4 shadow-sm md:p-6">
+      {/* Card 3: Expired Tenders — drop zone */}
+      <section
+        className="rounded-xl border-2 border-dashed border-megido-border bg-megido-bg-card p-4 shadow-sm transition-colors md:p-6 [&.drag-over]:border-megido-primary [&.drag-over]:bg-megido-primary/5"
+        onDragOver={(e) => {
+          handleDragOver(e);
+          e.currentTarget.classList.add("drag-over");
+        }}
+        onDragLeave={(e) => {
+          e.currentTarget.classList.remove("drag-over");
+        }}
+        onDrop={(e) => {
+          e.currentTarget.classList.remove("drag-over");
+          handleDropToExpired(e);
+        }}
+      >
+        {expiredWatchlist.length > 0 ? (
           <ExpiredTendersTable
             items={expiredWatchlist}
             reviewMap={reviewMap}
             userEmail={userEmail}
+            onDragStart={handleDragStart}
+            onRestore={(tenderId) =>
+              setOutcome.mutate({
+                tenderId,
+                forcedExpired: false,
+                updatedBy: userEmail,
+              })
+            }
           />
-        </section>
-      )}
+        ) : (
+          <p className="py-6 text-center text-sm text-megido-text-muted">
+            {"\u05D2\u05E8\u05D5\u05E8 \u05DE\u05DB\u05E8\u05D6 \u05DC\u05DB\u05D0\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D4\u05E2\u05D1\u05D9\u05E8 \u05DC\u05E0\u05E1\u05D2\u05E8\u05D5"}
+          </p>
+        )}
+      </section>
     </div>
   );
 }

@@ -19,3 +19,6 @@ CREATE INDEX IF NOT EXISTS idx_tender_outcomes_tender ON tender_outcomes(tender_
 -- RLS: allow all for anon (matches existing policy pattern)
 ALTER TABLE tender_outcomes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all for anon" ON tender_outcomes FOR ALL USING (true);
+
+-- Migration: add forced_expired column for manual drag-to-expired
+ALTER TABLE tender_outcomes ADD COLUMN IF NOT EXISTS forced_expired BOOLEAN DEFAULT FALSE;

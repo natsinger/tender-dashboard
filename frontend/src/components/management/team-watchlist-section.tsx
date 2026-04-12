@@ -56,6 +56,13 @@ function formatDeadline(deadline: string | null): string {
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 }
 
+function formatDateWithYear(date: string | null): string {
+  if (!date) return "\u2014";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "\u2014";
+  return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 // ---------------------------------------------------------------------------
 // Empty lot aggregation constant
 // ---------------------------------------------------------------------------
@@ -98,7 +105,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
             compact
           />
           <span className="text-sm">
-            {formatDeadline(t?.deadline ?? null)}
+            {formatDateWithYear(t?.deadline ?? null)}
           </span>
         </div>
       );
@@ -112,7 +119,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
       const t = row.original.tender;
       return (
         <span className="text-sm whitespace-nowrap">
-          {formatDeadline(t?.publish_date ?? null)}
+          {formatDateWithYear(t?.publish_date ?? null)}
         </span>
       );
     },
@@ -242,21 +249,31 @@ export function TeamWatchlistSection() {
       items = items.filter((item) => Boolean(item.tender.published_booklet));
     }
 
-    return items.map((item) => {
-      const tid = item.tender_id;
-      const review = reviewMap?.[tid];
-      const days = computeDays(item.tender.deadline);
+    return items
+      .map((item) => {
+        const tid = item.tender_id;
+        const review = reviewMap?.[tid];
+        const days = computeDays(item.tender.deadline);
 
-      return {
-        tender_id: tid,
-        tender: item.tender,
-        review_status: review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
-        review_notes: review?.notes ?? "",
-        watchlist_notes: item.notes ?? "",
-        days_to_deadline: days,
-        lot_agg: lotMap?.[tid] ?? EMPTY_LOT,
-      };
-    });
+        return {
+          tender_id: tid,
+          tender: item.tender,
+          review_status: review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
+          review_notes: review?.notes ?? "",
+          watchlist_notes: item.notes ?? "",
+          days_to_deadline: days,
+          lot_agg: lotMap?.[tid] ?? EMPTY_LOT,
+        };
+      })
+      // Default sort: brochure first, then closest deadline
+      .sort((a, b) => {
+        const aBook = a.tender.published_booklet ? 0 : 1;
+        const bBook = b.tender.published_booklet ? 0 : 1;
+        if (aBook !== bBook) return aBook - bBook;
+        const aDays = a.days_to_deadline ?? Infinity;
+        const bDays = b.days_to_deadline ?? Infinity;
+        return aDays - bDays;
+      });
   }, [watchlistItems, reviewMap, lotMap, brochureFilter]);
 
   // Row click handler

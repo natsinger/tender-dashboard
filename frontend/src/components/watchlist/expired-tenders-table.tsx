@@ -30,6 +30,10 @@ interface ExpiredTendersTableProps {
   reviewMap: Record<number, TenderReview> | undefined;
   /** Current user email for tracking who updated. */
   userEmail: string;
+  /** Drag start handler — makes rows draggable back to active. */
+  onDragStart?: (e: React.DragEvent, tenderId: number) => void;
+  /** Restore handler — moves tender back to active list. */
+  onRestore?: (tenderId: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +177,8 @@ export function ExpiredTendersTable({
   items,
   reviewMap,
   userEmail,
+  onDragStart,
+  onRestore,
 }: ExpiredTendersTableProps) {
   const tenderIds = useMemo(() => items.map((i) => i.tender_id), [items]);
   const { data: outcomeMap } = useTenderOutcomes(tenderIds);
@@ -239,6 +245,7 @@ export function ExpiredTendersTable({
               <th className="px-2 py-2 text-right">{"\u05DE\u05D9\u05E7\u05D5\u05DD"}</th>
               <th className="px-2 py-2 text-right">{"\u05D4\u05E2\u05E8\u05D5\u05EA"}</th>
               <th className="w-12 px-1 py-2" />
+              <th className="w-10 px-1 py-2" />
             </tr>
           </thead>
           <tbody>
@@ -255,7 +262,9 @@ export function ExpiredTendersTable({
               return (
                 <tr
                   key={item.tender_id}
-                  className="border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50"
+                  draggable={!!onDragStart}
+                  onDragStart={onDragStart ? (e) => onDragStart(e, item.tender_id) : undefined}
+                  className="border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50 cursor-grab active:cursor-grabbing"
                 >
                   {/* Tender name */}
                   <td className="max-w-[180px] truncate px-2 py-2 text-xs font-medium text-megido-text-heading">
@@ -349,6 +358,23 @@ export function ExpiredTendersTable({
                       <span className="animate-in fade-in text-[0.6rem] font-medium text-emerald-600">
                         {"\u2713 \u05E0\u05E9\u05DE\u05E8"}
                       </span>
+                    )}
+                  </td>
+
+                  {/* Restore button */}
+                  <td className="px-1 py-2">
+                    {onRestore && (
+                      <button
+                        type="button"
+                        onClick={() => onRestore(item.tender_id)}
+                        title={"\u05D4\u05D7\u05D6\u05E8 \u05DC\u05E4\u05E2\u05D9\u05DC\u05D9\u05DD"}
+                        className="rounded p-0.5 text-megido-text-muted transition-colors hover:bg-megido-neutral-100 hover:text-megido-primary"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg>
+                      </button>
                     )}
                   </td>
                 </tr>

@@ -74,6 +74,7 @@ export function useSetTenderOutcome() {
       ourOffer,
       ourPosition,
       outcomeNotes,
+      forcedExpired,
       updatedBy,
     }: {
       tenderId: number;
@@ -81,6 +82,7 @@ export function useSetTenderOutcome() {
       ourOffer?: number | null;
       ourPosition?: number | null;
       outcomeNotes?: string | null;
+      forcedExpired?: boolean;
       updatedBy: string;
     }) => {
       const now = new Date().toISOString().slice(0, 19);
@@ -94,6 +96,7 @@ export function useSetTenderOutcome() {
       if (ourOffer !== undefined) row.our_offer = ourOffer;
       if (ourPosition !== undefined) row.our_position = ourPosition;
       if (outcomeNotes !== undefined) row.outcome_notes = outcomeNotes;
+      if (forcedExpired !== undefined) row.forced_expired = forcedExpired;
 
       const { error } = await supabase
         .from("tender_outcomes")
