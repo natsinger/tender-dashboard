@@ -9,7 +9,7 @@
  */
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -65,16 +65,31 @@ export function ReviewStatusEditor({
 
   const mutation = useSetReviewStatus();
 
-  // Build label map
+  // Build label map — name, city, units
   const tenderLabels = useMemo(() => {
     const labels: Record<string, string> = {};
     for (const t of tenders) {
       const name = (t.tender_name ?? "").slice(0, 30);
       const city = (t.city ?? "").slice(0, 15);
-      labels[String(t.tender_id)] = `${name} \u2014 ${city}`;
+      const units = t.units ? `${t.units} \u05D9\u05D7"\u05D3` : "";
+      labels[String(t.tender_id)] = [name, city, units].filter(Boolean).join(" \u2014 ");
     }
     return labels;
   }, [tenders]);
+
+  // Searchable tender select state
+  const [tenderSearch, setTenderSearch] = useState("");
+  const [tenderDropdownOpen, setTenderDropdownOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const filteredTenders = useMemo(() => {
+    const q = tenderSearch.trim().toLowerCase();
+    if (!q) return tenders;
+    return tenders.filter((t) => {
+      const label = tenderLabels[String(t.tender_id)]?.toLowerCase() ?? "";
+      return label.includes(q) || String(t.tender_id).includes(q);
+    });
+  }, [tenders, tenderSearch, tenderLabels]);
 
   // When selected tender changes, load its current status + notes
   useEffect(() => {
@@ -147,25 +162,49 @@ export function ReviewStatusEditor({
 
   return (
     <div dir="rtl" className={cn("space-y-3", className)}>
-      {/* Tender select */}
-      <div>
+      {/* Tender search + select */}
+      <div className="relative">
         <label className="mb-1 block text-xs font-medium text-megido-neutral-600">
           {"\u05DE\u05DB\u05E8\u05D6"}
         </label>
-        <Select value={selectedTenderId} onValueChange={setSelectedTenderId}>
-          <SelectTrigger className="w-full">
-            <SelectValue
-              placeholder={"\u05D1\u05D7\u05E8 \u05DE\u05DB\u05E8\u05D6..."}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {tenders.map((t) => (
-              <SelectItem key={t.tender_id} value={String(t.tender_id)}>
+        <Input
+          ref={searchRef}
+          value={tenderSearch || (selectedTenderId ? tenderLabels[selectedTenderId] ?? "" : "")}
+          onChange={(e) => {
+            setTenderSearch(e.target.value);
+            setTenderDropdownOpen(true);
+            if (!e.target.value) setSelectedTenderId("");
+          }}
+          onFocus={() => {
+            setTenderDropdownOpen(true);
+            if (selectedTenderId) setTenderSearch("");
+          }}
+          onBlur={() => {
+            // Delay to allow click on dropdown items
+            setTimeout(() => setTenderDropdownOpen(false), 200);
+          }}
+          placeholder={"\u05D7\u05E4\u05E9 \u05DE\u05DB\u05E8\u05D6 \u05DC\u05E4\u05D9 \u05E9\u05DD, \u05E2\u05D9\u05E8 \u05D0\u05D5 \u05DE\u05E1\u05E4\u05E8..."}
+          dir="rtl"
+        />
+        {tenderDropdownOpen && filteredTenders.length > 0 && (
+          <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-megido-border bg-megido-bg-card shadow-lg">
+            {filteredTenders.slice(0, 20).map((t) => (
+              <button
+                key={t.tender_id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setSelectedTenderId(String(t.tender_id));
+                  setTenderSearch("");
+                  setTenderDropdownOpen(false);
+                }}
+                className="w-full px-3 py-2 text-start text-sm text-megido-text-heading transition-colors hover:bg-megido-neutral-50"
+              >
                 {tenderLabels[String(t.tender_id)] ?? String(t.tender_id)}
-              </SelectItem>
+              </button>
             ))}
-          </SelectContent>
-        </Select>
+          </div>
+        )}
       </div>
 
       {/* Status select */}
