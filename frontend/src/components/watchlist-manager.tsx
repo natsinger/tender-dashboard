@@ -8,7 +8,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Trash2, Search, X } from "lucide-react";
+import { Trash2, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -291,48 +291,11 @@ export function WatchlistManager({
             : "\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D1\u05DE\u05E2\u05E7\u05D1 \u05D0\u05D9\u05E9\u05D9"}
         </p>
       ) : (
-        <ul className="space-y-1">
-          {watchlistItems.map((item) => {
-            const tender = item.tender;
-            const displayName = (
-              tender?.tender_name ?? String(item.tender_id)
-            ).slice(0, 25);
-            const displayCity = (tender?.city ?? "").slice(0, 12);
-            const units = tender?.units;
-            const hasUnits = units != null && units > 0;
-
-            return (
-              <li
-                key={item.tender_id}
-                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-megido-neutral-50"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-megido-text-heading">
-                    {displayName}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-blue-500">{displayCity}</span>
-                    {hasUnits && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {units} {'\u05D9\u05D7"\u05D3'}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setConfirmRemoveId(item.tender_id)}
-                  disabled={removeMutation.isPending}
-                  className="shrink-0 text-megido-text-muted hover:text-red-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+        <WatchlistItemsList
+          items={watchlistItems}
+          onRemove={(id) => setConfirmRemoveId(id)}
+          removePending={removeMutation.isPending}
+        />
       )}
 
       {/* Confirmation dialog for remove */}
@@ -369,5 +332,101 @@ export function WatchlistManager({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Paginated items list
+// ---------------------------------------------------------------------------
+
+const LIST_PAGE_SIZE = 10;
+
+function WatchlistItemsList({
+  items,
+  onRemove,
+  removePending,
+}: {
+  items: WatchlistItemWithTender[];
+  onRemove: (id: number) => void;
+  removePending: boolean;
+}) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.ceil(items.length / LIST_PAGE_SIZE);
+  const pagedItems = useMemo(
+    () => items.slice(page * LIST_PAGE_SIZE, (page + 1) * LIST_PAGE_SIZE),
+    [items, page],
+  );
+
+  return (
+    <>
+      <ul className="space-y-1">
+        {pagedItems.map((item) => {
+            const tender = item.tender;
+            const displayName = (
+              tender?.tender_name ?? String(item.tender_id)
+            ).slice(0, 25);
+            const displayCity = (tender?.city ?? "").slice(0, 12);
+            const units = tender?.units;
+            const hasUnits = units != null && units > 0;
+
+            return (
+              <li
+                key={item.tender_id}
+                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-megido-neutral-50"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-megido-text-heading">
+                    {displayName}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-blue-500">{displayCity}</span>
+                    {hasUnits && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {units} {'\u05D9\u05D7"\u05D3'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onRemove(item.tender_id)}
+                  disabled={removePending}
+                  className="shrink-0 text-megido-text-muted hover:text-red-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {pageCount > 1 && (
+          <div className="mt-2 flex items-center justify-between text-xs text-megido-text-muted">
+            <span>
+              {page * LIST_PAGE_SIZE + 1}–{Math.min((page + 1) * LIST_PAGE_SIZE, items.length)} {"\u05DE\u05EA\u05D5\u05DA"} {items.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded border border-megido-border p-1 transition-colors hover:bg-megido-neutral-50 disabled:opacity-40"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                disabled={page >= pageCount - 1}
+                className="rounded border border-megido-border p-1 transition-colors hover:bg-megido-neutral-50 disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </>
   );
 }

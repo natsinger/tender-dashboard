@@ -11,7 +11,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
@@ -187,6 +187,15 @@ export default function WatchlistPage() {
     XLSX.writeFile(wb, `watchlist_${today}.xls`, { bookType: "xls" });
   }, [teamWatchlistWithTender, reviewMap]);
 
+  // ---- Pagination for active watchlist ----
+  const PAGE_SIZE = 10;
+  const [activePage, setActivePage] = useState(0);
+  const activePageCount = Math.ceil(activeWatchlist.length / PAGE_SIZE);
+  const pagedActiveWatchlist = useMemo(
+    () => activeWatchlist.slice(activePage * PAGE_SIZE, (activePage + 1) * PAGE_SIZE),
+    [activeWatchlist, activePage],
+  );
+
   // ---- Loading state ----
 
   const isWatchlistLoading = tendersLoading || teamLoading;
@@ -326,7 +335,7 @@ export default function WatchlistPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {activeWatchlist.map((item) => {
+                      {pagedActiveWatchlist.map((item) => {
                         const tender = item.tender;
                         const review = reviewMap?.[item.tender_id];
                         const statusText =
@@ -386,6 +395,33 @@ export default function WatchlistPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination */}
+                {activePageCount > 1 && (
+                  <div className="mt-3 flex items-center justify-between text-xs text-megido-text-muted">
+                    <span>
+                      {activePage * PAGE_SIZE + 1}–{Math.min((activePage + 1) * PAGE_SIZE, activeWatchlist.length)} {"\u05DE\u05EA\u05D5\u05DA"} {activeWatchlist.length}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivePage((p) => Math.max(0, p - 1))}
+                        disabled={activePage === 0}
+                        className="rounded border border-megido-border p-1 transition-colors hover:bg-megido-neutral-50 disabled:opacity-40"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActivePage((p) => Math.min(activePageCount - 1, p + 1))}
+                        disabled={activePage >= activePageCount - 1}
+                        className="rounded border border-megido-border p-1 transition-colors hover:bg-megido-neutral-50 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Review Status Editor */}
                 <Separator className="my-4" />
