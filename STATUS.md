@@ -1,6 +1,6 @@
 # STATUS.md — Project State
 
-**Last updated:** 2026-03-27 (building rights per תא שטח in מתחמים)
+**Last updated:** 2026-04-12 (drag-and-drop watchlist, chart overhaul, analytics enrichment)
 
 ---
 
@@ -9,10 +9,12 @@
 All 6 sprints are **complete**. The project is an Israeli land tender intelligence platform (MEGIDO BY AURA) with a React/Next.js frontend deployed on Vercel and a Python data pipeline running via GitHub Actions.
 
 - **Phase 3 (React/Next.js Migration)** — ~95% feature parity. Only missing: on-demand building rights extraction trigger button, debug section.
-- **All 7 SQL migrations** have been applied to production Supabase.
+- **All 8 SQL migrations** have been applied to production Supabase (incl. tender_outcomes).
 - **Auth** — deployed and working (magic link + password login).
 - **Lot extraction + building rights** — automated in daily cron.
 - **Streamlit fully removed** — all legacy files deleted (app.py, pages/, .streamlit/, dashboard_utils.py, test scripts).
+- **Analytics enrichment** — 20,154 price rows extracted from 4,065 cached tender details. 1,586 taba plans built.
+- **Agentation MCP** — Visual feedback toolbar integrated for dev-time design annotations.
 - **351 pytest tests passing**, zero regressions.
 
 ### Deployment
@@ -38,6 +40,12 @@ Data pipeline scripts fetch from the Israeli Land Authority API, normalize and p
 
 | Date | Change | Files |
 |------|--------|-------|
+| 2026-04-12 | **Drag-and-drop watchlist + expired tenders** — Watchlist split into active/expired sections. Drag tenders between sections (persisted via `forced_expired` in `tender_outcomes`). Expired table: inline-editable outcome fields (did we bid, our offer, winning bid from API, position, notes). Restore button fallback. New `tender_outcomes` table + `use-outcomes.ts` hook. | `frontend/src/app/(dashboard)/watchlist/page.tsx`, `frontend/src/components/watchlist/expired-tenders-table.tsx` (new), `frontend/src/hooks/use-outcomes.ts` (new), `frontend/src/types/database.ts`, `scripts/sql/tender_outcomes_schema.sql` (new) |
+| 2026-04-12 | **Chart overhaul — יח"ד-based metrics** — All management page pie charts show יח"ד instead of tender count. Tooltip shows both units + tender count (secondaryKey). Bar chart: יח"ד primary, tender count annotation, full-width, RTL text. Layout: 3 pies + 3 KPI cards in one row. Pie label contrast fix + compact numbers (5.2K). | `frontend/src/components/management/market-kpi-section.tsx`, `frontend/src/components/charts/pie-chart.tsx`, `frontend/src/components/charts/hebrew-tooltip.tsx` |
+| 2026-04-12 | **Analytics: שומה column + sticky headers + type filter** — Added appraisal price column to מתחמים table, winning bid in green. Sticky table headers. Tender type toggle filter pills. Filter out tenders with no actual bidding results. | `frontend/src/components/analytics/lot-comparison-section.tsx`, `frontend/src/lib/utils/analytics-engine.ts` |
+| 2026-04-12 | **Analytics enrichment pipeline** — Fetched 4,065 tender detail JSON files from RMI API. Extracted 20,154 price rows, 3,325 plan numbers, 1,586 taba plans. Fixed NaN handling in taba analytics. | `analytics_enrichment.py`, `tmp/fetch_details.py`, `tmp/run_enrichment.py` |
+| 2026-04-12 | **Agentation MCP integration** — Visual feedback toolbar for in-browser design annotations. MCP server on port 4747, React component with `endpoint` prop, CSP allowlist. Dev-only. | `.mcp.json`, `frontend/src/app/layout.tsx`, `frontend/next.config.ts` |
+| 2026-04-12 | **Tender detail modal: RMI link** — Added "אתר רמ"י" link to tender popup, pointing to the Land Authority page for each tender. | `frontend/src/components/tender-detail-modal.tsx` |
 | 2026-03-27 | **OCR support for scanned PDFs** — Added OCR extraction path to `building_rights_extractor.py` for scanned/image-only Mavat plan PDFs (~50% of PDFs). Uses pytesseract + pypdfium2 + OpenCV. Auto-detects scanned PDFs, OCRs pages to find Section 5, attempts table extraction. Text-based path untouched. Scanned Section 5 detection works (2/2 relevant PDFs), structured column extraction partial (needs Ghostscript+OCRmyPDF or Azure DI for full parsing). 351 tests pass, zero regressions. CI updated with tesseract-ocr apt install. | `building_rights_extractor.py`, `requirements.txt`, `.github/workflows/daily_refresh.yml` |
 | 2026-03-27 | **Building rights per תא שטח in מתחמים** — Replaced 3 deferred aggregated columns (מסחר/תעסוקה/מוסדות ציבור) with a flat sub-table of building rights from Taba section 5. Each expanded tender in ניתוח שוק → מתחמים now shows all תאי שטח with ייעוד, שימוש, עיקרי, שירות, and יח"ד. New `useBuildingRightsForPlans` batch-fetch hook. `MultiLotTenderGroup` now carries raw `BuildingRight[]` array instead of aggregated totals. | `frontend/src/components/analytics/lot-comparison-section.tsx`, `frontend/src/hooks/use-lots.ts`, `frontend/src/hooks/use-analytics.ts`, `frontend/src/lib/utils/analytics-engine.ts` |
 | 2026-03-10 | **GovMap TABA link integration** — Resolve RMI plan numbers to GovMap viewer URLs via TABA API. Backend: `govmap_client.py` (resolve/batch/build), `db.py` (`govmap_url` column + `update_govmap_urls`), daily cron Step 8 resolves pending plans. Frontend: `/api/govmap` proxy route, `use-govmap` hook (cache-first, API-fallback), `GovMapLink` component (MapPin icon), column added to team watchlist section. **Migration needed:** `ALTER TABLE tenders ADD COLUMN IF NOT EXISTS govmap_url TEXT;` 351 tests pass, build clean. | `govmap_client.py` (new), `tests/test_govmap_client.py` (new), `frontend/src/app/api/govmap/route.ts` (new), `frontend/src/hooks/use-govmap.ts` (new), `frontend/src/components/govmap-link.tsx` (new), `db.py`, `scripts/refresh_tenders.py`, `frontend/src/types/database.ts`, `frontend/src/components/management/team-watchlist-section.tsx` |
@@ -75,7 +83,7 @@ Data pipeline scripts fetch from the Israeli Land Authority API, normalize and p
 
 ## Database Schema (Supabase PostgreSQL)
 
-All tables exist in production. All 7 SQL migrations have been applied.
+All tables exist in production. All 8 SQL migrations have been applied.
 
 ```
 -- Tender data (managed by db.py)
@@ -90,6 +98,7 @@ tender_lots        — lot-level data from API + brochure PDFs (21 columns incl.
 -- User data (managed by user_db.py)
 user_watchlist     — per-user tender watchlist for email alerts (includes notes column)
 tender_reviews     — review status tracking (5-stage workflow)
+tender_outcomes    — post-deadline bidding outcomes (did_bid, our_offer, position, forced_expired)
 alert_history      — sent alert log for deduplication
 
 -- Security: RLS enabled on all tables, anon writes revoked, team-wide policies on watchlist/reviews/alerts
@@ -154,6 +163,7 @@ Gov tender projects/
 │   │   │   ├── management/         # Management page components
 │   │   │   ├── explorer/           # Explorer components (detail-viewer, csv-export)
 │   │   │   ├── analytics/          # Analytics page components
+│   │   │   ├── watchlist/          # Watchlist components (expired-tenders-table)
 │   │   │   ├── charts/             # Shared chart components (Recharts)
 │   │   │   ├── auth-guard.tsx      # Route protection
 │   │   │   ├── filter-bar.tsx      # Shared filter bar
@@ -171,6 +181,7 @@ Gov tender projects/
 │   │   │   ├── use-bulk-lots.ts    # Bulk lot loading
 │   │   │   ├── use-watchlist.ts    # Watchlist CRUD
 │   │   │   ├── use-reviews.ts      # Review status mutations
+│   │   │   ├── use-outcomes.ts     # Tender outcome tracking (post-deadline)
 │   │   │   ├── use-govmap.ts       # GovMap URL resolution (cache-first, API-fallback)
 │   │   │   ├── use-documents.ts    # Document queries
 │   │   │   ├── use-analytics.ts    # Analytics data
@@ -211,6 +222,7 @@ Gov tender projects/
 │       ├── tender_lots_schema.sql           # tender_lots table (21 columns)
 │       ├── watchlist_notes_schema.sql       # notes column on user_watchlist
 │       ├── lot_count_schema.sql             # lot_count + max_lots_per_bidder columns
+│       ├── tender_outcomes_schema.sql       # tender_outcomes table + forced_expired column
 │       ├── enable_rls_all_tables.sql        # RLS policies on all tables
 │       └── fix_mitcham_gush_schema.sql      # mitcham_name + gush_helka_raw columns
 ├── tests/                          # pytest test suite (351 tests)

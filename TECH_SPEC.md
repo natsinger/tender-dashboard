@@ -108,10 +108,24 @@ graph TD
 3.  **Linting**: `ruff` for linting and formatting.
 4.  **Testing**: `pytest` for unit tests.
 
+### 5.1 Dev Tools & MCP Integrations
+
+| Tool | Purpose | Configuration |
+|------|---------|---------------|
+| **Agentation** | Visual feedback toolbar — in-browser annotations that sync to Claude Code via MCP. Annotations are created in the browser and picked up by Claude Code for implementation. | `.mcp.json` (MCP server), `frontend/src/app/layout.tsx` (`<Agentation endpoint="http://localhost:4747" />`), CSP allowlist in `frontend/next.config.ts` |
+| **Playwright MCP** | Browser automation for testing and debugging | `.claude/settings.local.json` |
+
+**Agentation setup:**
+- MCP server: `npx -y agentation-mcp server` (HTTP on port 4747)
+- React component: `<Agentation endpoint="http://localhost:4747" />` in layout.tsx (dev-only)
+- CSP: `connect-src` in `next.config.ts` must include `http://localhost:4747`
+- Diagnostics: `npx agentation-mcp doctor`
+- The `endpoint` prop is **required** — without it annotations only save to localStorage
+
 ---
 
-## 6. Future Considerations (Phase 3)
+## 6. Future Considerations
 
-*   **Migration to React**: Shift `app.py` logic to a FastAPI backend.
-*   **Database**: Replace local JSON caching with SQLite or PostgreSQL.
-*   **Authentication**: Add user auth for executive dashboard access.
+*   **Analytics enrichment in daily cron** — Add detail fetching + price extraction to `refresh_tenders.py` for automatic results collection.
+*   **WhatsApp API integration** — WhatsApp Business API for review status notifications.
+*   **Performance monitoring** — Add error tracking / performance monitoring to Vercel frontend.
