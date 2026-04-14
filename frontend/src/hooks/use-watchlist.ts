@@ -80,7 +80,7 @@ export function useWatchlist(email: string | null | undefined) {
       }));
     },
     enabled: !!email,
-    staleTime: 30 * 1000,
+    staleTime: 2 * 60 * 1000,
   });
 }
 

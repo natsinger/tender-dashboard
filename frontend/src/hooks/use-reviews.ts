@@ -49,7 +49,7 @@ export function useReviewStatuses(tenderIds: number[]) {
       return result;
     },
     enabled: tenderIds.length > 0,
-    staleTime: 30 * 1000,
+    staleTime: 2 * 60 * 1000,
   });
 }
 

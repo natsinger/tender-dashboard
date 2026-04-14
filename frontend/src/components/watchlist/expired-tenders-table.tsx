@@ -107,58 +107,48 @@ function CheckboxCell({
 
 function NumberCell({
   value,
+  placeholder,
   onChange,
   isCurrency,
 }: {
   value: number | null | undefined;
+  placeholder?: string;
   onChange: (val: number | null) => void;
   isCurrency?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
 
-  const formatDisplay = useCallback(
-    (num: number | null | undefined): string => {
-      if (num == null) return "";
-      if (isCurrency) return `\u20AA${num.toLocaleString("he-IL")}`;
-      return num.toLocaleString("he-IL");
-    },
-    [isCurrency],
-  );
-
   const handleBlur = useCallback(() => {
     const raw = ref.current?.value.replace(/[^\d.-]/g, "") ?? "";
     const num = raw ? parseFloat(raw) : null;
     onChange(num);
-    if (ref.current) {
-      ref.current.value = formatDisplay(num);
-    }
-  }, [onChange, formatDisplay]);
-
-  const handleFocus = useCallback(() => {
-    if (ref.current) {
-      const raw = ref.current.value.replace(/[^\d.-]/g, "");
-      ref.current.value = raw;
-      ref.current.select();
-    }
-  }, []);
+  }, [onChange]);
 
   return (
     <input
       ref={ref}
       type="text"
-      defaultValue={formatDisplay(value)}
+      defaultValue={
+        value != null
+          ? isCurrency
+            ? value.toLocaleString("he-IL")
+            : String(value)
+          : ""
+      }
+      placeholder={placeholder}
       onBlur={handleBlur}
-      onFocus={handleFocus}
-      className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm transition-colors focus:border-megido-primary focus:outline-none"
+      className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-megido-text-heading transition-colors focus:border-megido-primary focus:outline-none"
     />
   );
 }
 
 function TextCell({
   value,
+  placeholder,
   onChange,
 }: {
   value: string | null | undefined;
+  placeholder?: string;
   onChange: (val: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -172,8 +162,9 @@ function TextCell({
       ref={ref}
       type="text"
       defaultValue={value ?? ""}
+      placeholder={placeholder}
       onBlur={handleBlur}
-      className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm transition-colors focus:border-megido-primary focus:outline-none"
+      className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-megido-text-heading transition-colors focus:border-megido-primary focus:outline-none"
     />
   );
 }
@@ -235,29 +226,29 @@ export function ExpiredTendersTable({
   return (
     <div className="space-y-3">
       <h3 className="text-base font-semibold text-megido-text-heading">
-        {"\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({items.length})
+        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D5"} ({items.length})
       </h3>
 
-      <div className="overflow-x-auto rounded-md border">
-        <table className="table-auto w-full min-w-[900px] text-sm" dir="rtl">
-          <thead className="[&_tr]:border-b">
-            <tr>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05E2\u05D9\u05E8"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{'\u05D9\u05D7"\u05D3'}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05E1\u05D5\u05D2"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}</th>
-              <th className="text-foreground h-10 px-2 text-center align-middle font-medium whitespace-nowrap">{"\u05D4\u05D2\u05E9\u05E0\u05D5?"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05D4\u05D4\u05E6\u05E2\u05D4 \u05E9\u05DC\u05E0\u05D5"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05D4\u05E6\u05E2\u05D4 \u05D6\u05D5\u05DB\u05D4"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05DE\u05D9\u05E7\u05D5\u05DD"}</th>
-              <th className="text-foreground h-10 px-2 text-right align-middle font-medium whitespace-nowrap">{"\u05D4\u05E2\u05E8\u05D5\u05EA"}</th>
-              <th className="h-10 w-12 px-1" />
-              <th className="h-10 w-10 px-1" />
+      <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
+        <table className="w-full text-sm" dir="rtl">
+          <thead>
+            <tr className="border-b border-megido-border text-xs font-medium text-megido-text-muted">
+              <th className="px-2 py-2 text-right">{"\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6"}</th>
+              <th className="px-2 py-2 text-right">{"\u05E2\u05D9\u05E8"}</th>
+              <th className="px-2 py-2 text-right">{'\u05D9\u05D7"\u05D3'}</th>
+              <th className="px-2 py-2 text-right">{"\u05E1\u05D5\u05D2"}</th>
+              <th className="px-2 py-2 text-right">{"\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4"}</th>
+              <th className="px-2 py-2 text-right">{"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}</th>
+              <th className="px-2 py-2 text-center">{"\u05D4\u05D2\u05E9\u05E0\u05D5?"}</th>
+              <th className="px-2 py-2 text-right">{"\u05D4\u05D4\u05E6\u05E2\u05D4 \u05E9\u05DC\u05E0\u05D5"}</th>
+              <th className="px-2 py-2 text-right">{"\u05D4\u05E6\u05E2\u05D4 \u05D6\u05D5\u05DB\u05D4"}</th>
+              <th className="px-2 py-2 text-right">{"\u05DE\u05D9\u05E7\u05D5\u05DD"}</th>
+              <th className="px-2 py-2 text-right">{"\u05D4\u05E2\u05E8\u05D5\u05EA"}</th>
+              <th className="w-12 px-1 py-2" />
+              <th className="w-10 px-1 py-2" />
             </tr>
           </thead>
-          <tbody className="[&_tr:last-child]:border-0">
+          <tbody>
             {items.map((item) => {
               const tender = item.tender;
               if (!tender) return null;
@@ -273,35 +264,35 @@ export function ExpiredTendersTable({
                   key={item.tender_id}
                   draggable={!!onDragStart}
                   onDragStart={onDragStart ? (e) => onDragStart(e, item.tender_id) : undefined}
-                  className="border-b transition-colors hover:bg-muted/50"
+                  className="border-b border-megido-border/50 transition-colors hover:bg-megido-neutral-50/50 cursor-grab active:cursor-grabbing"
                 >
                   {/* Tender name */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm font-medium max-w-[180px] truncate">
+                  <td className="max-w-[180px] truncate px-2 py-2 text-xs font-medium text-megido-text-heading">
                     {tender.tender_name ?? tender.tender_id}
                   </td>
 
                   {/* City */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm">
+                  <td className="px-2 py-2 text-xs text-megido-text-muted">
                     {tender.city ?? "\u2014"}
                   </td>
 
                   {/* Units */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm">
+                  <td className="px-2 py-2 text-xs text-megido-text-muted">
                     {tender.units ?? "\u2014"}
                   </td>
 
                   {/* Type */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm">
+                  <td className="px-2 py-2 text-xs text-megido-text-muted">
                     {tender.purpose ?? "\u2014"}
                   </td>
 
                   {/* Deadline */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm">
+                  <td className="px-2 py-2 text-xs text-megido-text-muted">
                     {formatDeadline(tender.deadline)}
                   </td>
 
                   {/* Review status */}
-                  <td className="p-2 align-middle whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <Badge
                       variant={getReviewBadgeVariant(statusText)}
                       className="text-[0.64rem]"
@@ -311,7 +302,7 @@ export function ExpiredTendersTable({
                   </td>
 
                   {/* Did we bid? */}
-                  <td className="p-2 align-middle whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <CheckboxCell
                       checked={outcome?.did_bid ?? false}
                       onChange={(val) =>
@@ -321,9 +312,10 @@ export function ExpiredTendersTable({
                   </td>
 
                   {/* Our offer */}
-                  <td className="p-2 align-middle whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <NumberCell
                       value={outcome?.our_offer}
+                      placeholder="\u20AA"
                       isCurrency
                       onChange={(val) =>
                         handleUpdate(item.tender_id, { our_offer: val })
@@ -332,14 +324,15 @@ export function ExpiredTendersTable({
                   </td>
 
                   {/* Winning bid (auto from API or manual) */}
-                  <td className="p-2 align-middle whitespace-nowrap text-sm">
+                  <td className="px-2 py-2 text-xs text-megido-text-muted">
                     {formatCurrency(apiWinBid)}
                   </td>
 
                   {/* Position */}
-                  <td className="p-2 align-middle whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <NumberCell
                       value={outcome?.our_position}
+                      placeholder="#"
                       onChange={(val) =>
                         handleUpdate(item.tender_id, {
                           our_position: val != null ? Math.round(val) : null,
@@ -349,9 +342,10 @@ export function ExpiredTendersTable({
                   </td>
 
                   {/* Notes */}
-                  <td className="p-2 align-middle whitespace-nowrap">
+                  <td className="px-2 py-2">
                     <TextCell
                       value={outcome?.outcome_notes}
+                      placeholder={"\u05D4\u05E2\u05E8\u05D5\u05EA..."}
                       onChange={(val) =>
                         handleUpdate(item.tender_id, { outcome_notes: val })
                       }
@@ -359,7 +353,7 @@ export function ExpiredTendersTable({
                   </td>
 
                   {/* Save indicator */}
-                  <td className="p-1 align-middle">
+                  <td className="px-1 py-2">
                     {savedTenderId === item.tender_id && (
                       <span className="animate-in fade-in text-[0.6rem] font-medium text-emerald-600">
                         {"\u2713 \u05E0\u05E9\u05DE\u05E8"}
