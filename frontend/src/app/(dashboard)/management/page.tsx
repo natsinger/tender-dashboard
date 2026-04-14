@@ -17,18 +17,14 @@ import { useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Separator } from "@/components/ui/separator";
 import { TeamWatchlistSection } from "@/components/management/team-watchlist-section";
-import { ExpiredTendersTable } from "@/components/watchlist/expired-tenders-table";
 import { ClosingSoonSection } from "@/components/management/closing-soon-section";
 import { MarketKPISection } from "@/components/management/market-kpi-section";
 import { CategoryTabsSection } from "@/components/management/category-tabs-section";
 import { useActiveTenders } from "@/hooks/use-tenders";
-import { useTeamWatchlist } from "@/hooks/use-watchlist";
-import { useReviewStatuses } from "@/hooks/use-reviews";
 import { useBulkLots } from "@/hooks/use-bulk-lots";
 import { RELEVANT_TENDER_TYPES } from "@/lib/constants";
 import { getClosingSoonTenders } from "@/lib/utils/tenders";
-import { useAuthStore } from "@/stores/auth-store";
-import type { TenderWithComputed, WatchlistItemWithTender } from "@/types/database";
+import type { TenderWithComputed } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Constants (mirroring management.py)
@@ -51,25 +47,6 @@ const CARD_TENDER_TYPES = new Set([1, 5, 8]);
 
 export default function ManagementPage() {
   const { data: allTenders, isLoading } = useActiveTenders();
-  const userEmail = useAuthStore((s) => s.email) ?? "";
-
-  // Expired watchlist tenders (separate section below the active watchlist)
-  const { data: teamWatchlist } = useTeamWatchlist();
-  const expiredWatchlist = useMemo<WatchlistItemWithTender[]>(() => {
-    if (!teamWatchlist) return [];
-    const now = new Date();
-    return teamWatchlist.filter((item) => {
-      const deadline = item.tender?.deadline;
-      if (!deadline) return false;
-      return new Date(deadline) < now;
-    });
-  }, [teamWatchlist]);
-
-  const expiredTenderIds = useMemo(
-    () => expiredWatchlist.map((item) => item.tender_id),
-    [expiredWatchlist],
-  );
-  const { data: expiredReviewMap } = useReviewStatuses(expiredTenderIds);
 
   // Step 1: Filter to relevant tender types + purposes (main dataset)
   const filteredTenders: TenderWithComputed[] = useMemo(() => {
@@ -129,15 +106,6 @@ export default function ManagementPage() {
 
       {/* Section 1: Team Watchlist */}
       <TeamWatchlistSection />
-
-      {/* Section 1b: Expired watchlist tenders (separate section) */}
-      {expiredWatchlist.length > 0 && (
-        <ExpiredTendersTable
-          items={expiredWatchlist}
-          reviewMap={expiredReviewMap}
-          userEmail={userEmail}
-        />
-      )}
 
       <Separator />
 
