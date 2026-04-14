@@ -114,7 +114,7 @@ export function ClosingSoonSection({
   isLoading,
 }: ClosingSoonSectionProps) {
   const [expanded, setExpanded] = useState(false);
-  const [brochureFilter, setBrochureFilter] = useState<BrochureFilter>("all");
+  const [brochureFilter, setBrochureFilter] = useState<BrochureFilter>("with_brochure");
 
   // Modal state
   const [selectedTender, setSelectedTender] =

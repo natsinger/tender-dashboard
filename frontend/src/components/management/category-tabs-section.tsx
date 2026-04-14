@@ -124,7 +124,7 @@ function CategoryTabContent({
   tenders,
   emptyMessage,
 }: CategoryTabContentProps) {
-  const [brochureFilter, setBrochureFilter] = useState<BrochureFilter>("all");
+  const [brochureFilter, setBrochureFilter] = useState<BrochureFilter>("with_brochure");
 
   const filtered = useMemo(() => {
     if (brochureFilter === "with_brochure") {

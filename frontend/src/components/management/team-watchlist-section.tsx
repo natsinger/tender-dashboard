@@ -18,10 +18,12 @@ import { BrochureToggle, type BrochureFilter } from "@/components/brochure-toggl
 import { DeadlineBadge } from "@/components/deadline-badge";
 import { GovMapLink } from "@/components/govmap-link";
 import { TenderDetailModal } from "@/components/tender-detail-modal";
+import { ExpiredTendersTable } from "@/components/watchlist/expired-tenders-table";
 import { useTeamWatchlist } from "@/hooks/use-watchlist";
 import { useReviewStatuses } from "@/hooks/use-reviews";
 import { useBulkLots, type LotAggregation } from "@/hooks/use-bulk-lots";
 import { useTenderLots, useTenderBuildingRights } from "@/hooks/use-lots";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Tender, WatchlistItemWithTender } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -204,6 +206,7 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
 // ---------------------------------------------------------------------------
 
 export function TeamWatchlistSection() {
+  const userEmail = useAuthStore((s) => s.email) ?? "";
   const { data: watchlistItems, isLoading: watchlistLoading } =
     useTeamWatchlist();
 
@@ -235,26 +238,33 @@ export function TeamWatchlistSection() {
     selectedTender?.tender_id,
   );
 
-  // Build table rows
-  const rows: WatchlistRow[] = useMemo(() => {
-    if (!watchlistItems) return [];
+  // Build table rows — split active vs expired
+  const { activeRows, expiredItems } = useMemo(() => {
+    if (!watchlistItems) return { activeRows: [] as WatchlistRow[], expiredItems: [] as WatchlistItemWithTender[] };
 
-    let items = watchlistItems.filter(
+    const withTender = watchlistItems.filter(
       (item): item is WatchlistItemWithTender & { tender: Tender } =>
         item.tender != null,
     );
 
-    // Brochure filter
-    if (brochureFilter === "with_brochure") {
-      items = items.filter((item) => Boolean(item.tender.published_booklet));
+    const now = new Date();
+    const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
+    const expired: WatchlistItemWithTender[] = [];
+
+    for (const item of withTender) {
+      const deadline = item.tender.deadline ? new Date(item.tender.deadline) : null;
+      if (deadline && deadline < now) {
+        expired.push(item);
+      } else {
+        active.push(item);
+      }
     }
 
-    return items
+    const activeBuilt = active
       .map((item) => {
         const tid = item.tender_id;
         const review = reviewMap?.[tid];
         const days = computeDays(item.tender.deadline);
-
         return {
           tender_id: tid,
           tender: item.tender,
@@ -265,7 +275,6 @@ export function TeamWatchlistSection() {
           lot_agg: lotMap?.[tid] ?? EMPTY_LOT,
         };
       })
-      // Default sort: brochure first, then closest deadline
       .sort((a, b) => {
         const aBook = a.tender.published_booklet ? 0 : 1;
         const bBook = b.tender.published_booklet ? 0 : 1;
@@ -274,7 +283,17 @@ export function TeamWatchlistSection() {
         const bDays = b.days_to_deadline ?? Infinity;
         return aDays - bDays;
       });
-  }, [watchlistItems, reviewMap, lotMap, brochureFilter]);
+
+    return { activeRows: activeBuilt, expiredItems: expired };
+  }, [watchlistItems, reviewMap, lotMap]);
+
+  // Apply brochure filter to active rows only
+  const rows = useMemo(() => {
+    if (brochureFilter === "with_brochure") {
+      return activeRows.filter((r) => Boolean(r.tender?.published_booklet));
+    }
+    return activeRows;
+  }, [activeRows, brochureFilter]);
 
   // Row click handler
   const handleRowClick = (row: WatchlistRow) => {
@@ -365,6 +384,17 @@ export function TeamWatchlistSection() {
         <p className="py-4 text-sm text-megido-text-muted">
           {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD. \u05D4\u05D5\u05E1\u05E3 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D3\u05E8\u05DA \u05D3\u05D0\u05E9\u05D1\u05D5\u05E8\u05D3 \u05D7\u05D3\u05E8 \u05D4\u05E2\u05E1\u05E7\u05D0\u05D5\u05EA."}
         </p>
+      )}
+
+      {/* Expired watchlist tenders — with outcome tracking */}
+      {expiredItems.length > 0 && (
+        <div className="mt-6">
+          <ExpiredTendersTable
+            items={expiredItems}
+            reviewMap={reviewMap}
+            userEmail={userEmail}
+          />
+        </div>
       )}
 
       <TenderDetailModal
