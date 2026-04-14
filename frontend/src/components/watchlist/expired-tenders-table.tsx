@@ -226,7 +226,7 @@ export function ExpiredTendersTable({
   return (
     <div className="space-y-3">
       <h3 className="text-base font-semibold text-megido-text-heading">
-        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D5"} ({items.length})
+        {"\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({items.length})
       </h3>
 
       <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">

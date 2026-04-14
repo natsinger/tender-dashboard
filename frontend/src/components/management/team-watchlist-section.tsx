@@ -223,7 +223,7 @@ export function TeamWatchlistSection() {
 
   // Brochure filter
   const [brochureFilter, setBrochureFilter] =
-    useState<BrochureFilter>("all");
+    useState<BrochureFilter>("with_brochure");
 
   // Modal state
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
