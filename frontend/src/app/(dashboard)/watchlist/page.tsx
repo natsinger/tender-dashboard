@@ -28,6 +28,7 @@ import {
   useSetTenderOutcome,
 } from "@/hooks";
 import { RELEVANT_TENDER_TYPES, TEAM_EMAIL } from "@/lib/constants";
+import { isExpiredTender } from "@/lib/utils/tenders";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Tender, WatchlistItemWithTender } from "@/types/database";
 
@@ -126,16 +127,13 @@ export default function WatchlistPage() {
     [teamWatchlist],
   );
 
-  // Split into active vs expired (deadline passed OR manually forced)
+  // Split into active vs expired (forced_expired OR deadline+results)
   const { activeWatchlist, expiredWatchlist } = useMemo(() => {
-    const now = new Date();
     const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
     const expired: (WatchlistItemWithTender & { tender: Tender })[] = [];
 
     for (const item of teamWatchlistWithTender) {
-      const deadline = item.tender.deadline;
-      const forcedExpired = outcomeMap?.[item.tender_id]?.forced_expired;
-      if (forcedExpired || (deadline && new Date(deadline) <= now)) {
+      if (isExpiredTender(item.tender, outcomeMap?.[item.tender_id])) {
         expired.push(item);
       } else {
         active.push(item);

@@ -26,6 +26,7 @@ import { useTenderOutcomes } from "@/hooks/use-outcomes";
 import { useTenderPrices } from "@/hooks/use-prices";
 import { useBulkLots, type LotAggregation } from "@/hooks/use-bulk-lots";
 import { useTenderLots, useTenderBuildingRights } from "@/hooks/use-lots";
+import { isExpiredTender } from "@/lib/utils/tenders";
 import type { Tender, TenderOutcome, TenderPrice, WatchlistItemWithTender } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -341,6 +342,7 @@ export function TeamWatchlistSection() {
 
   const { data: reviewMap } = useReviewStatuses(tenderIds);
   const { data: lotMap } = useBulkLots(tenderIds);
+  const { data: outcomeMap } = useTenderOutcomes(tenderIds);
 
   // Brochure filter
   const [brochureFilter, setBrochureFilter] =
@@ -356,22 +358,20 @@ export function TeamWatchlistSection() {
     selectedTender?.tender_id,
   );
 
-  // Split watchlist into active vs expired (deadline passed)
+  // Split watchlist into active vs expired (forced_expired OR deadline+results)
   const { activeItems, expiredItems } = useMemo(() => {
-    if (!watchlistItems) return { activeItems: [] as (WatchlistItemWithTender & { tender: Tender })[], expiredItems: [] as WatchlistItemWithTender[] };
+    if (!watchlistItems) return { activeItems: [] as (WatchlistItemWithTender & { tender: Tender })[], expiredItems: [] as (WatchlistItemWithTender & { tender: Tender })[] };
 
     const withTender = watchlistItems.filter(
       (item): item is WatchlistItemWithTender & { tender: Tender } =>
         item.tender != null,
     );
 
-    const now = new Date();
     const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
-    const expired: WatchlistItemWithTender[] = [];
+    const expired: (WatchlistItemWithTender & { tender: Tender })[] = [];
 
     for (const item of withTender) {
-      const deadline = item.tender.deadline ? new Date(item.tender.deadline) : null;
-      if (deadline && deadline < now) {
+      if (isExpiredTender(item.tender, outcomeMap?.[item.tender_id])) {
         expired.push(item);
       } else {
         active.push(item);
@@ -379,7 +379,7 @@ export function TeamWatchlistSection() {
     }
 
     return { activeItems: active, expiredItems: expired };
-  }, [watchlistItems]);
+  }, [watchlistItems, outcomeMap]);
 
   // Build active table rows (with brochure filter)
   const rows: WatchlistRow[] = useMemo(() => {
@@ -415,12 +415,7 @@ export function TeamWatchlistSection() {
       });
   }, [activeItems, reviewMap, lotMap, brochureFilter]);
 
-  // Expired tender outcome + price data
-  const expiredTenderIds = useMemo(
-    () => expiredItems.filter((i) => i.tender != null).map((i) => i.tender_id),
-    [expiredItems],
-  );
-  const { data: outcomeMap } = useTenderOutcomes(expiredTenderIds);
+  // Price data for expired tender outcome display
   const { data: allPrices } = useTenderPrices();
 
   const pricesByTender = useMemo(() => {
