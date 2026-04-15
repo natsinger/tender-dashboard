@@ -182,6 +182,20 @@ class LandTendersClient:
                 logger.info("Fetched %d tenders from Land Authority API", len(data))
                 return data
 
+            # API may wrap the list in a dict — try common keys
+            if isinstance(data, dict):
+                logger.info(
+                    "API returned dict with keys: %s", list(data.keys()),
+                )
+                # Try known wrapper keys (case-insensitive search)
+                for key in data:
+                    if isinstance(data[key], list) and len(data[key]) > 0:
+                        logger.info(
+                            "Extracted %d tenders from dict key '%s'",
+                            len(data[key]), key,
+                        )
+                        return data[key]
+
             logger.error("Unexpected data format: %s", type(data))
             return None
 
