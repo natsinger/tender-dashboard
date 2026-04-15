@@ -20,6 +20,7 @@ import { TeamWatchlistSection } from "@/components/management/team-watchlist-sec
 import { ClosingSoonSection } from "@/components/management/closing-soon-section";
 import { MarketKPISection } from "@/components/management/market-kpi-section";
 import { CategoryTabsSection } from "@/components/management/category-tabs-section";
+import { ExpiredWatchlistSection } from "@/components/management/expired-watchlist-section";
 import { useActiveTenders } from "@/hooks/use-tenders";
 import { useBulkLots } from "@/hooks/use-bulk-lots";
 import { RELEVANT_TENDER_TYPES } from "@/lib/constants";
@@ -128,6 +129,11 @@ export default function ManagementPage() {
 
       {/* Section 4: Category Tabs */}
       <CategoryTabsSection allActiveTenders={allTypedActive} />
+
+      <Separator />
+
+      {/* Section 5: Expired Watchlist Tenders */}
+      <ExpiredWatchlistSection />
     </div>
   );
 }

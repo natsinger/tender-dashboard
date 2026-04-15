@@ -546,22 +546,7 @@ export function TeamWatchlistSection() {
         </p>
       )}
 
-      {/* Expired watchlist tenders — same DataTable, read-only */}
-      {expiredRows.length > 0 && (
-        <>
-          <Separator className="my-6" />
-          <h4 className="mb-3 text-lg font-semibold text-megido-text-heading">
-            {"\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({expiredRows.length})
-          </h4>
-          <DataTable
-            columns={expiredColumns}
-            data={expiredRows}
-            isLoading={false}
-            pageSize={10}
-            emptyMessage=""
-          />
-        </>
-      )}
+      {/* Expired tenders are rendered separately at page bottom */}
 
       <TenderDetailModal
         open={modalOpen}
