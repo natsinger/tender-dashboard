@@ -23,10 +23,10 @@ import { Separator } from "@/components/ui/separator";
 import { useTeamWatchlist } from "@/hooks/use-watchlist";
 import { useReviewStatuses } from "@/hooks/use-reviews";
 import { useTenderOutcomes } from "@/hooks/use-outcomes";
-import { useTenderPrices } from "@/hooks/use-prices";
 import { useBulkLots, type LotAggregation } from "@/hooks/use-bulk-lots";
 import { useTenderLots, useTenderBuildingRights } from "@/hooks/use-lots";
-import type { Tender, TenderOutcome, TenderPrice, WatchlistItemWithTender } from "@/types/database";
+import { isExpiredTender } from "@/lib/utils/tenders";
+import type { Tender, WatchlistItemWithTender } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Row type for the watchlist table
@@ -204,123 +204,6 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Expired tender row type + columns (read-only, outcome data)
-// ---------------------------------------------------------------------------
-
-interface ExpiredRow {
-  tender_id: number;
-  tender: Tender | null;
-  review_status: string;
-  did_bid: boolean;
-  our_offer: number | null;
-  winning_bid: number | null;
-  our_position: number | null;
-  outcome_notes: string;
-}
-
-function formatCurrency(value: number | null | undefined): string {
-  if (value == null || value === 0) return "\u2014";
-  return `\u20AA${value.toLocaleString("he-IL", { maximumFractionDigits: 0 })}`;
-}
-
-function getReviewBadgeVariant(
-  status: string,
-): "default" | "secondary" | "outline" {
-  if (status.includes("\u05D0\u05D5\u05E9\u05E8")) return "default";
-  if (status.includes("\u05D4\u05D5\u05E6\u05D2") || status.includes("\u05D1\u05D3\u05D9\u05E7\u05D4")) return "secondary";
-  return "outline";
-}
-
-const expiredColumns: ColumnDef<ExpiredRow, unknown>[] = [
-  {
-    id: "tender_name",
-    header: "\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6",
-    cell: ({ row }) => (
-      <span className="text-sm font-medium truncate block max-w-[180px]">
-        {row.original.tender?.tender_name ?? row.original.tender_id}
-      </span>
-    ),
-  },
-  {
-    id: "city",
-    header: "\u05E2\u05D9\u05E8",
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.tender?.city ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "units",
-    header: '\u05D9\u05D7"\u05D3',
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.tender?.units ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "purpose",
-    header: "\u05E1\u05D5\u05D2",
-    cell: ({ row }) => (
-      <span className="text-sm truncate block max-w-[90px]">
-        {row.original.tender?.purpose ?? "\u2014"}
-      </span>
-    ),
-  },
-  {
-    id: "deadline",
-    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
-    cell: ({ row }) => (
-      <span className="text-sm">{formatDateWithYear(row.original.tender?.deadline ?? null)}</span>
-    ),
-  },
-  {
-    id: "review_status",
-    header: "\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4",
-    cell: ({ row }) => (
-      <Badge variant={getReviewBadgeVariant(row.original.review_status)} className="text-[0.64rem]">
-        {row.original.review_status}
-      </Badge>
-    ),
-  },
-  {
-    id: "did_bid",
-    header: "\u05D4\u05D2\u05E9\u05E0\u05D5?",
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.did_bid ? "\u2705" : "\u2014"}</span>
-    ),
-  },
-  {
-    id: "our_offer",
-    header: "\u05D4\u05D4\u05E6\u05E2\u05D4 \u05E9\u05DC\u05E0\u05D5",
-    cell: ({ row }) => (
-      <span className="text-sm">{formatCurrency(row.original.our_offer)}</span>
-    ),
-  },
-  {
-    id: "winning_bid",
-    header: "\u05D4\u05E6\u05E2\u05D4 \u05D6\u05D5\u05DB\u05D4",
-    cell: ({ row }) => (
-      <span className="text-sm">{formatCurrency(row.original.winning_bid)}</span>
-    ),
-  },
-  {
-    id: "position",
-    header: "\u05DE\u05D9\u05E7\u05D5\u05DD",
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.our_position ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
-    size: 120,
-    cell: ({ row }) => (
-      <span className="text-xs text-megido-text-muted line-clamp-2">
-        {row.original.outcome_notes || "\u2014"}
-      </span>
-    ),
-  },
-];
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -341,6 +224,7 @@ export function TeamWatchlistSection() {
 
   const { data: reviewMap } = useReviewStatuses(tenderIds);
   const { data: lotMap } = useBulkLots(tenderIds);
+  const { data: outcomeMap } = useTenderOutcomes(tenderIds);
 
   // Brochure filter
   const [brochureFilter, setBrochureFilter] =
@@ -356,22 +240,20 @@ export function TeamWatchlistSection() {
     selectedTender?.tender_id,
   );
 
-  // Split watchlist into active vs expired (deadline passed)
+  // Split watchlist into active vs expired (forced_expired OR deadline+results)
   const { activeItems, expiredItems } = useMemo(() => {
-    if (!watchlistItems) return { activeItems: [] as (WatchlistItemWithTender & { tender: Tender })[], expiredItems: [] as WatchlistItemWithTender[] };
+    if (!watchlistItems) return { activeItems: [] as (WatchlistItemWithTender & { tender: Tender })[], expiredItems: [] as (WatchlistItemWithTender & { tender: Tender })[] };
 
     const withTender = watchlistItems.filter(
       (item): item is WatchlistItemWithTender & { tender: Tender } =>
         item.tender != null,
     );
 
-    const now = new Date();
     const active: (WatchlistItemWithTender & { tender: Tender })[] = [];
-    const expired: WatchlistItemWithTender[] = [];
+    const expired: (WatchlistItemWithTender & { tender: Tender })[] = [];
 
     for (const item of withTender) {
-      const deadline = item.tender.deadline ? new Date(item.tender.deadline) : null;
-      if (deadline && deadline < now) {
+      if (isExpiredTender(item.tender, outcomeMap?.[item.tender_id])) {
         expired.push(item);
       } else {
         active.push(item);
@@ -379,7 +261,7 @@ export function TeamWatchlistSection() {
     }
 
     return { activeItems: active, expiredItems: expired };
-  }, [watchlistItems]);
+  }, [watchlistItems, outcomeMap]);
 
   // Build active table rows (with brochure filter)
   const rows: WatchlistRow[] = useMemo(() => {
@@ -415,50 +297,7 @@ export function TeamWatchlistSection() {
       });
   }, [activeItems, reviewMap, lotMap, brochureFilter]);
 
-  // Expired tender outcome + price data
-  const expiredTenderIds = useMemo(
-    () => expiredItems.filter((i) => i.tender != null).map((i) => i.tender_id),
-    [expiredItems],
-  );
-  const { data: outcomeMap } = useTenderOutcomes(expiredTenderIds);
-  const { data: allPrices } = useTenderPrices();
-
-  const pricesByTender = useMemo(() => {
-    if (!allPrices) return {} as Record<number, TenderPrice[]>;
-    const map: Record<number, TenderPrice[]> = {};
-    for (const p of allPrices) {
-      if (!map[p.tender_id]) map[p.tender_id] = [];
-      map[p.tender_id].push(p);
-    }
-    return map;
-  }, [allPrices]);
-
-  // Build expired table rows with outcome columns
-  const expiredRows: ExpiredRow[] = useMemo(() => {
-    return expiredItems
-      .filter(
-        (item): item is WatchlistItemWithTender & { tender: Tender } =>
-          item.tender != null,
-      )
-      .map((item) => {
-        const tid = item.tender_id;
-        const review = reviewMap?.[tid];
-        const outcome = outcomeMap?.[tid];
-        const prices = pricesByTender[tid] ?? [];
-        const winBid = prices.find((p) => p.winning_bid != null && p.winning_bid > 0)?.winning_bid ?? null;
-
-        return {
-          tender_id: tid,
-          tender: item.tender,
-          review_status: review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
-          did_bid: outcome?.did_bid ?? false,
-          our_offer: outcome?.our_offer ?? null,
-          winning_bid: winBid,
-          our_position: outcome?.our_position ?? null,
-          outcome_notes: outcome?.outcome_notes ?? "",
-        };
-      });
-  }, [expiredItems, reviewMap, outcomeMap, pricesByTender]);
+  // Expired tenders are rendered by ExpiredWatchlistSection at page bottom
 
   // Row click handler
   const handleRowClick = (row: WatchlistRow) => {
@@ -551,22 +390,7 @@ export function TeamWatchlistSection() {
         </p>
       )}
 
-      {/* Expired watchlist tenders — same DataTable, read-only */}
-      {expiredRows.length > 0 && (
-        <>
-          <Separator className="my-6" />
-          <h4 className="mb-3 text-lg font-semibold text-megido-text-heading">
-            {"\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({expiredRows.length})
-          </h4>
-          <DataTable
-            columns={expiredColumns}
-            data={expiredRows}
-            isLoading={false}
-            pageSize={10}
-            emptyMessage=""
-          />
-        </>
-      )}
+      {/* Expired tenders are rendered separately at page bottom */}
 
       <TenderDetailModal
         open={modalOpen}

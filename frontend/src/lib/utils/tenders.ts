@@ -16,12 +16,31 @@ import type {
   ScoredTender,
   Tender,
   TenderDocument,
+  TenderOutcome,
   TenderWithComputed,
 } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Check if a watchlisted tender should be in the "expired" section.
+ *
+ * A tender is expired if:
+ * 1. Manually forced via drag-and-drop (forced_expired = true), OR
+ * 2. Deadline has passed AND results are published (status_code 2 = נדון בוועדת מכרזים)
+ */
+export function isExpiredTender(
+  tender: Tender,
+  outcome: TenderOutcome | undefined,
+): boolean {
+  if (outcome?.forced_expired) return true;
+  const deadline = parseDate(tender.deadline);
+  const deadlinePassed = deadline != null && deadline <= new Date();
+  const hasResults = tender.status_code === 2;
+  return deadlinePassed && hasResults;
+}
 
 /** Parse an ISO date string to a Date, returning null on failure. */
 function parseDate(value: string | null | undefined): Date | null {
