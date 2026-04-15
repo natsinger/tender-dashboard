@@ -14,6 +14,7 @@ Usage:
 import logging
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def main() -> None:
 
     # 3. Detect new tender IDs (before upsert) for new-tender alerts
     new_tender_rows: list[dict] = []
+    new_ids: set = set()
     try:
         from db import TenderDB as _TenderDB_pre
         existing_ids = _TenderDB_pre().get_all_tender_ids()
