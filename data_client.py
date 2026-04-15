@@ -187,7 +187,16 @@ class LandTendersClient:
                 logger.info(
                     "API returned dict with keys: %s", list(data.keys()),
                 )
-                # Try known wrapper keys (case-insensitive search)
+
+                # Check if this is an API error/message response
+                if "Title" in data or "Body" in data or "MessageType" in data:
+                    logger.error(
+                        "API returned a message response — Title: %s | Body: %s | MessageType: %s",
+                        data.get("Title"), data.get("Body"), data.get("MessageType"),
+                    )
+                    return None
+
+                # Try to extract list from wrapper
                 for key in data:
                     if isinstance(data[key], list) and len(data[key]) > 0:
                         logger.info(
