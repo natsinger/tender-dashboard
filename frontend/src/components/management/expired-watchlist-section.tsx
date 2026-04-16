@@ -109,6 +109,15 @@ const columns: ColumnDef<ExpiredRow, unknown>[] = [
     ),
   },
   {
+    id: "notes",
+    header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
+    cell: ({ row }) => (
+      <span className="text-xs text-megido-text-muted line-clamp-2">
+        {row.original.outcome_notes || "\u2014"}
+      </span>
+    ),
+  },
+  {
     id: "did_bid",
     header: "\u05D4\u05D2\u05E9\u05E0\u05D5?",
     cell: ({ row }) => (
@@ -134,15 +143,6 @@ const columns: ColumnDef<ExpiredRow, unknown>[] = [
     header: "\u05DE\u05D9\u05E7\u05D5\u05DD",
     cell: ({ row }) => (
       <span className="text-sm">{row.original.our_position ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
-    cell: ({ row }) => (
-      <span className="text-xs text-megido-text-muted line-clamp-2">
-        {row.original.outcome_notes || "\u2014"}
-      </span>
     ),
   },
 ];
@@ -216,7 +216,7 @@ export function ExpiredWatchlistSection() {
   return (
     <section>
       <h3 className="mb-3 text-lg font-semibold text-megido-text-heading">
-        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05E0\u05E1\u05D2\u05E8\u05D5"} ({rows.length})
+        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({rows.length})
       </h3>
       <DataTable
         columns={columns}

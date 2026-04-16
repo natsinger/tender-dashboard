@@ -226,7 +226,7 @@ export function ExpiredTendersTable({
   return (
     <div className="space-y-3">
       <h3 className="text-base font-semibold text-megido-text-heading">
-        {"\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({items.length})
+        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({items.length})
       </h3>
 
       <div className="overflow-x-auto rounded-lg border border-megido-border bg-megido-bg-card">
@@ -239,11 +239,11 @@ export function ExpiredTendersTable({
               <th className="px-2 py-2 text-right">{"\u05E1\u05D5\u05D2"}</th>
               <th className="px-2 py-2 text-right">{"\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4"}</th>
               <th className="px-2 py-2 text-right">{"\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4"}</th>
+              <th className="px-2 py-2 text-right">{"\u05D4\u05E2\u05E8\u05D5\u05EA"}</th>
               <th className="px-2 py-2 text-center">{"\u05D4\u05D2\u05E9\u05E0\u05D5?"}</th>
               <th className="px-2 py-2 text-right">{"\u05D4\u05D4\u05E6\u05E2\u05D4 \u05E9\u05DC\u05E0\u05D5"}</th>
               <th className="px-2 py-2 text-right">{"\u05D4\u05E6\u05E2\u05D4 \u05D6\u05D5\u05DB\u05D4"}</th>
               <th className="px-2 py-2 text-right">{"\u05DE\u05D9\u05E7\u05D5\u05DD"}</th>
-              <th className="px-2 py-2 text-right">{"\u05D4\u05E2\u05E8\u05D5\u05EA"}</th>
               <th className="w-12 px-1 py-2" />
               <th className="w-10 px-1 py-2" />
             </tr>
@@ -301,6 +301,17 @@ export function ExpiredTendersTable({
                     </Badge>
                   </td>
 
+                  {/* Notes */}
+                  <td className="px-2 py-2">
+                    <TextCell
+                      value={outcome?.outcome_notes}
+                      placeholder={"\u05D4\u05E2\u05E8\u05D5\u05EA..."}
+                      onChange={(val) =>
+                        handleUpdate(item.tender_id, { outcome_notes: val })
+                      }
+                    />
+                  </td>
+
                   {/* Did we bid? */}
                   <td className="px-2 py-2">
                     <CheckboxCell
@@ -337,17 +348,6 @@ export function ExpiredTendersTable({
                         handleUpdate(item.tender_id, {
                           our_position: val != null ? Math.round(val) : null,
                         })
-                      }
-                    />
-                  </td>
-
-                  {/* Notes */}
-                  <td className="px-2 py-2">
-                    <TextCell
-                      value={outcome?.outcome_notes}
-                      placeholder={"\u05D4\u05E2\u05E8\u05D5\u05EA..."}
-                      onChange={(val) =>
-                        handleUpdate(item.tender_id, { outcome_notes: val })
                       }
                     />
                   </td>

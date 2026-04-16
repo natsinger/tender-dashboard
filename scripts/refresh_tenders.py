@@ -14,6 +14,7 @@ Usage:
 import logging
 import os
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def main() -> None:
 
     # 3. Detect new tender IDs (before upsert) for new-tender alerts
     new_tender_rows: list[dict] = []
+    new_ids: set = set()
     try:
         from db import TenderDB as _TenderDB_pre
         existing_ids = _TenderDB_pre().get_all_tender_ids()
@@ -89,39 +91,45 @@ def main() -> None:
         )
 
     # 5. Sync documents for active tenders (non-fatal — skipped if API is slow)
+    #
+    # Strategy: ALWAYS sync all watchlisted tenders (critical — alerts depend
+    # on fresh docs). Split the remaining non-watchlisted tenders across the
+    # two daily cron runs (morning/afternoon) so every tender gets synced
+    # once per day without hitting API rate limits.
     try:
-        if "status_code" in df.columns:
-            active_ids = df[df["status_code"].isin([1, 2, 3])]["tender_id"].tolist()
-        else:
-            active_ids = df["tender_id"].tolist()
+        from datetime import datetime as _dt, timezone as _tz
 
-        # Prioritize watchlisted tenders so they are synced first
+        if "status_code" in df.columns:
+            all_active_ids = df[df["status_code"].isin([1, 2, 3])]["tender_id"].tolist()
+        else:
+            all_active_ids = df["tender_id"].tolist()
+
+        # Separate watchlisted vs rest
+        watched_ids: set[int] = set()
         try:
             from user_db import UserDB as _UserDB_sync
             watched_entries = _UserDB_sync().get_all_active_watchlists()
             watched_ids = {entry["tender_id"] for entry in watched_entries}
-            watched_first = [tid for tid in active_ids if tid in watched_ids]
-            rest = [tid for tid in active_ids if tid not in watched_ids]
-            active_ids = watched_first + rest
-            if watched_first:
-                logger.info(
-                    "Prioritized %d watchlisted tenders for doc sync",
-                    len(watched_first),
-                )
         except Exception as exc:
-            logger.warning("Could not prioritize watchlisted tenders: %s", exc)
+            logger.warning("Could not load watchlist for doc sync: %s", exc)
 
-        # Limit batch size to avoid API rate limits in CI (no cache on fresh checkout)
-        max_doc_sync = int(os.environ.get("DOC_SYNC_LIMIT", "50"))
-        if len(active_ids) > max_doc_sync:
-            logger.info(
-                "Limiting doc sync to %d/%d tenders (set DOC_SYNC_LIMIT to change)",
-                max_doc_sync, len(active_ids),
-            )
-            active_ids = active_ids[:max_doc_sync]
+        watched_active = [tid for tid in all_active_ids if tid in watched_ids]
+        rest = [tid for tid in all_active_ids if tid not in watched_ids]
 
-        logger.info("Syncing documents for %d active tenders...", len(active_ids))
-        new_docs = client.sync_documents_to_db(active_ids)
+        # Split non-watchlisted across morning (<12 UTC) and afternoon runs
+        is_morning = _dt.now(_tz.utc).hour < 12
+        rest_half = rest[::2] if is_morning else rest[1::2]
+
+        sync_ids = watched_active + rest_half
+        logger.info(
+            "Doc sync: %d watchlisted (always) + %d/%d others (%s half) = %d total",
+            len(watched_active), len(rest_half), len(rest),
+            "morning" if is_morning else "afternoon",
+            len(sync_ids),
+        )
+
+        logger.info("Syncing documents for %d active tenders...", len(sync_ids))
+        new_docs = client.sync_documents_to_db(sync_ids)
         logger.info("Document sync complete: %d new documents found", new_docs)
     except Exception as exc:
         logger.warning("Document sync failed (non-fatal): %s", exc)
