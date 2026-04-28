@@ -29,20 +29,21 @@ import type {
  *
  * A tender is expired if any of:
  * 1. Manually forced via drag-and-drop (forced_expired = true)
- * 2. Status is terminal (2 = committee-reviewed, 4 = suspended,
- *    5 = closed, 7 = cancelled) — regardless of deadline
+ * 2. Cancelled (status_code = 7 / בוטל) — overrides deadline because
+ *    cancellation can happen before the deadline
  * 3. Deadline has passed
+ *
+ * Note: status_code 2 (נדון בוועדת מכרזים) is NOT treated as terminal —
+ * the API uses it for live tenders the committee has merely touched
+ * (e.g. set conditions, extended). It only signals expiry when paired
+ * with a past deadline, which rule 3 already covers.
  */
-const TERMINAL_STATUS_CODES = new Set([2, 4, 5, 7]);
-
 export function isExpiredTender(
   tender: Tender,
   outcome: TenderOutcome | undefined,
 ): boolean {
   if (outcome?.forced_expired) return true;
-  if (tender.status_code != null && TERMINAL_STATUS_CODES.has(tender.status_code)) {
-    return true;
-  }
+  if (tender.status_code === 7) return true;
   const deadline = parseDate(tender.deadline);
   return deadline != null && deadline <= new Date();
 }
