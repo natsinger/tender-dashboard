@@ -2,9 +2,10 @@
  * ExpiredWatchlistSection for the Management page.
  *
  * Self-contained section showing watchlisted tenders that have expired
- * (forced_expired OR deadline passed + results published). Displays
- * outcome data (did we bid, our offer, winning bid, position, notes).
- * Rendered at the bottom of the management page.
+ * (forced_expired OR terminal status [2/4/5/7] OR deadline passed). Columns
+ * mirror the top "מכרזים מועדפים - חדר עסקאות" table (cols 1-8 + הערות),
+ * with the outcome columns (הגשנו?, ההצעה שלנו, הצעה זוכה, מיקום) appended
+ * at the end. Rendered at the bottom of the management page.
  */
 "use client";
 
@@ -12,37 +13,54 @@ import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/data-table";
-import { Badge } from "@/components/ui/badge";
+import { DeadlineBadge } from "@/components/deadline-badge";
 import { useTeamWatchlist } from "@/hooks/use-watchlist";
 import { useReviewStatuses } from "@/hooks/use-reviews";
 import { useTenderOutcomes } from "@/hooks/use-outcomes";
 import { useTenderPrices } from "@/hooks/use-prices";
+import { useBulkLots, type LotAggregation } from "@/hooks/use-bulk-lots";
 import { isExpiredTender } from "@/lib/utils/tenders";
 import type { Tender, TenderPrice, WatchlistItemWithTender } from "@/types/database";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (mirrors team-watchlist-section.tsx)
 // ---------------------------------------------------------------------------
 
+function computeDays(deadline: string | null): number | null {
+  if (!deadline) return null;
+  const d = new Date(deadline);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((d.getTime() - Date.now()) / 86_400_000);
+}
+
 function formatDateWithYear(date: string | null): string {
-  if (!date) return "\u2014";
+  if (!date) return "—";
   const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "\u2014";
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
 function formatCurrency(value: number | null | undefined): string {
-  if (value == null || value === 0) return "\u2014";
-  return `\u20AA${value.toLocaleString("he-IL", { maximumFractionDigits: 0 })}`;
+  if (value == null || value === 0) return "—";
+  return `₪${value.toLocaleString("he-IL", { maximumFractionDigits: 0 })}`;
 }
 
-function getReviewBadgeVariant(
-  status: string,
-): "default" | "secondary" | "outline" {
-  if (status.includes("\u05D0\u05D5\u05E9\u05E8")) return "default";
-  if (status.includes("\u05D4\u05D5\u05E6\u05D2") || status.includes("\u05D1\u05D3\u05D9\u05E7\u05D4")) return "secondary";
-  return "outline";
+function getCategoryLabel(tender: Tender | null): string {
+  if (!tender) return "—";
+  const purpose = tender.purpose ?? "";
+  if (tender.tender_type_code === 9) return "ייזום";
+  if (purpose.includes("דיור מוגן")) return "דיור מוגן";
+  if (purpose.includes("דיור להשכרה") || tender.tender_type_code === 6) return "דיור להשכרה";
+  if (tender.tender_type_code === 5 || tender.tender_type_code === 8) return "מחיר מטרה";
+  return "שוק חופשי";
 }
+
+const EMPTY_LOT: LotAggregation = {
+  free_market: 0,
+  target_price: 0,
+  total: 0,
+  pct: "—",
+};
 
 // ---------------------------------------------------------------------------
 // Row type + columns
@@ -52,97 +70,128 @@ interface ExpiredRow {
   tender_id: number;
   tender: Tender | null;
   review_status: string;
+  watchlist_notes: string;
+  days_to_deadline: number | null;
+  lot_agg: LotAggregation;
   did_bid: boolean;
   our_offer: number | null;
   winning_bid: number | null;
   our_position: number | null;
-  outcome_notes: string;
 }
 
 const columns: ColumnDef<ExpiredRow, unknown>[] = [
   {
-    id: "tender_name",
-    header: "\u05E9\u05DD \u05DE\u05DB\u05E8\u05D6",
+    id: "deadline",
+    header: "מועד סגירה",
+    accessorFn: (row) => row.days_to_deadline ?? Infinity,
+    sortingFn: "basic",
+    size: 100,
+    cell: ({ row }) => {
+      const t = row.original.tender;
+      return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <DeadlineBadge daysRemaining={row.original.days_to_deadline} compact />
+          <span className="text-sm">{formatDateWithYear(t?.deadline ?? null)}</span>
+        </div>
+      );
+    },
+  },
+  {
+    id: "publish_date",
+    header: "תאריך פרסום",
+    size: 80,
     cell: ({ row }) => (
-      <span className="text-sm font-medium truncate block max-w-[180px]">
-        {row.original.tender?.tender_name ?? row.original.tender_id}
+      <span className="text-sm whitespace-nowrap">
+        {formatDateWithYear(row.original.tender?.publish_date ?? null)}
       </span>
     ),
   },
   {
     id: "city",
-    header: "\u05E2\u05D9\u05E8",
+    header: "עיר",
+    size: 80,
     cell: ({ row }) => (
-      <span className="text-sm">{row.original.tender?.city ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "units",
-    header: '\u05D9\u05D7"\u05D3',
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.tender?.units ?? "\u2014"}</span>
-    ),
-  },
-  {
-    id: "purpose",
-    header: "\u05E1\u05D5\u05D2",
-    cell: ({ row }) => (
-      <span className="text-sm truncate block max-w-[90px]">
-        {row.original.tender?.purpose ?? "\u2014"}
+      <span className="truncate block max-w-[80px]">
+        {row.original.tender?.city ?? "—"}
       </span>
     ),
   },
   {
-    id: "deadline",
-    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
+    id: "tender_type",
+    header: "סוג",
+    size: 90,
     cell: ({ row }) => (
-      <span className="text-sm">{formatDateWithYear(row.original.tender?.deadline ?? null)}</span>
+      <span className="truncate block max-w-[90px]">
+        {getCategoryLabel(row.original.tender)}
+      </span>
     ),
   },
   {
-    id: "review_status",
-    header: "\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4",
-    cell: ({ row }) => (
-      <Badge variant={getReviewBadgeVariant(row.original.review_status)} className="text-[0.64rem]">
-        {row.original.review_status}
-      </Badge>
+    id: "booklet",
+    header: "חוברת",
+    size: 55,
+    cell: ({ row }) =>
+      row.original.tender?.published_booklet ? "✅" : "❌",
+  },
+  {
+    id: "units",
+    header: 'יח"ד',
+    size: 60,
+    cell: ({ row }) =>
+      row.original.lot_agg.total || row.original.tender?.units || "—",
+  },
+  {
+    id: "pct_target",
+    header: "% מחיר מטרה",
+    size: 70,
+    cell: ({ row }) => row.original.lot_agg.pct,
+  },
+  {
+    accessorKey: "review_status",
+    header: "סטטוס",
+    size: 80,
+    cell: ({ getValue }) => (
+      <span className="text-sm">{getValue<string>()}</span>
     ),
   },
   {
-    id: "notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
-    cell: ({ row }) => (
+    accessorKey: "watchlist_notes",
+    header: "הערות",
+    size: 120,
+    cell: ({ getValue }) => (
       <span className="text-xs text-megido-text-muted line-clamp-2">
-        {row.original.outcome_notes || "\u2014"}
+        {getValue<string>() || "—"}
       </span>
     ),
   },
   {
     id: "did_bid",
-    header: "\u05D4\u05D2\u05E9\u05E0\u05D5?",
+    header: "הגשנו?",
     cell: ({ row }) => (
-      <span className="text-sm">{row.original.did_bid ? "\u2705" : "\u2014"}</span>
+      <span className="text-sm">{row.original.did_bid ? "✅" : "—"}</span>
     ),
   },
   {
     id: "our_offer",
-    header: "\u05D4\u05D4\u05E6\u05E2\u05D4 \u05E9\u05DC\u05E0\u05D5",
+    header: "ההצעה שלנו",
     cell: ({ row }) => (
       <span className="text-sm">{formatCurrency(row.original.our_offer)}</span>
     ),
   },
   {
     id: "winning_bid",
-    header: "\u05D4\u05E6\u05E2\u05D4 \u05D6\u05D5\u05DB\u05D4",
+    header: "הצעה זוכה",
     cell: ({ row }) => (
-      <span className="text-sm font-semibold text-emerald-600">{formatCurrency(row.original.winning_bid)}</span>
+      <span className="text-sm font-semibold text-emerald-600">
+        {formatCurrency(row.original.winning_bid)}
+      </span>
     ),
   },
   {
     id: "position",
-    header: "\u05DE\u05D9\u05E7\u05D5\u05DD",
+    header: "מיקום",
     cell: ({ row }) => (
-      <span className="text-sm">{row.original.our_position ?? "\u2014"}</span>
+      <span className="text-sm">{row.original.our_position ?? "—"}</span>
     ),
   },
 ];
@@ -167,6 +216,7 @@ export function ExpiredWatchlistSection() {
 
   const { data: reviewMap } = useReviewStatuses(allTenderIds);
   const { data: outcomeMap } = useTenderOutcomes(allTenderIds);
+  const { data: lotMap } = useBulkLots(allTenderIds);
   const { data: allPrices } = useTenderPrices();
 
   // Filter to expired only
@@ -201,22 +251,24 @@ export function ExpiredWatchlistSection() {
       return {
         tender_id: tid,
         tender: item.tender,
-        review_status: review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
+        review_status: review?.status ?? "לא נסקר",
+        watchlist_notes: item.notes ?? "",
+        days_to_deadline: computeDays(item.tender.deadline),
+        lot_agg: lotMap?.[tid] ?? EMPTY_LOT,
         did_bid: outcome?.did_bid ?? false,
         our_offer: outcome?.our_offer ?? null,
         winning_bid: winBid,
         our_position: outcome?.our_position ?? null,
-        outcome_notes: outcome?.outcome_notes ?? "",
       };
     });
-  }, [expiredItems, reviewMap, outcomeMap, pricesByTender]);
+  }, [expiredItems, reviewMap, outcomeMap, lotMap, pricesByTender]);
 
   if (rows.length === 0) return null;
 
   return (
     <section>
       <h3 className="mb-3 text-lg font-semibold text-megido-text-heading">
-        {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05E9\u05D4\u05D5\u05E1\u05E8\u05D5 \u05DE\u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD"} ({rows.length})
+        {"מכרזים שהוסרו ממועדפים"} ({rows.length})
       </h3>
       <DataTable
         columns={columns}

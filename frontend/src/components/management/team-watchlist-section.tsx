@@ -240,7 +240,7 @@ export function TeamWatchlistSection() {
     selectedTender?.tender_id,
   );
 
-  // Split watchlist into active vs expired (forced_expired OR deadline+results)
+  // Split watchlist into active vs expired (forced_expired OR terminal status OR deadline passed)
   const { activeItems, expiredItems } = useMemo(() => {
     if (!watchlistItems) return { activeItems: [] as (WatchlistItemWithTender & { tender: Tender })[], expiredItems: [] as (WatchlistItemWithTender & { tender: Tender })[] };
 
