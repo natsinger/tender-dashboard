@@ -27,19 +27,24 @@ import type {
 /**
  * Check if a watchlisted tender should be in the "expired" section.
  *
- * A tender is expired if:
- * 1. Manually forced via drag-and-drop (forced_expired = true), OR
- * 2. Deadline has passed AND results are published (status_code 2 = נדון בוועדת מכרזים)
+ * A tender is expired if any of:
+ * 1. Manually forced via drag-and-drop (forced_expired = true)
+ * 2. Status is terminal (2 = committee-reviewed, 4 = suspended,
+ *    5 = closed, 7 = cancelled) — regardless of deadline
+ * 3. Deadline has passed
  */
+const TERMINAL_STATUS_CODES = new Set([2, 4, 5, 7]);
+
 export function isExpiredTender(
   tender: Tender,
   outcome: TenderOutcome | undefined,
 ): boolean {
   if (outcome?.forced_expired) return true;
+  if (tender.status_code != null && TERMINAL_STATUS_CODES.has(tender.status_code)) {
+    return true;
+  }
   const deadline = parseDate(tender.deadline);
-  const deadlinePassed = deadline != null && deadline <= new Date();
-  const hasResults = tender.status_code === 2;
-  return deadlinePassed && hasResults;
+  return deadline != null && deadline <= new Date();
 }
 
 /** Parse an ISO date string to a Date, returning null on failure. */
