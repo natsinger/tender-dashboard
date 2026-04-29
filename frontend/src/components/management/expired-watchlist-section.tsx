@@ -70,7 +70,7 @@ interface ExpiredRow {
   tender_id: number;
   tender: Tender | null;
   review_status: string;
-  watchlist_notes: string;
+  removal_reason: string;
   days_to_deadline: number | null;
   lot_agg: LotAggregation;
   did_bid: boolean;
@@ -155,9 +155,9 @@ const columns: ColumnDef<ExpiredRow, unknown>[] = [
     ),
   },
   {
-    accessorKey: "watchlist_notes",
-    header: "הערות",
-    size: 120,
+    accessorKey: "removal_reason",
+    header: "סיבת הסרה ממועדפים",
+    size: 140,
     cell: ({ getValue }) => (
       <span className="text-xs text-megido-text-muted line-clamp-2">
         {getValue<string>() || "—"}
@@ -252,7 +252,7 @@ export function ExpiredWatchlistSection() {
         tender_id: tid,
         tender: item.tender,
         review_status: review?.status ?? "לא נסקר",
-        watchlist_notes: item.notes ?? "",
+        removal_reason: outcome?.outcome_notes ?? "",
         days_to_deadline: computeDays(item.tender.deadline),
         lot_agg: lotMap?.[tid] ?? EMPTY_LOT,
         did_bid: outcome?.did_bid ?? false,
