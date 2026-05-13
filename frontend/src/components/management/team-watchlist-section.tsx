@@ -10,7 +10,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { Download } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Layers } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { DataTable } from "@/components/data-table";
@@ -54,16 +54,16 @@ function computeDays(deadline: string | null): number | null {
 }
 
 function formatDeadline(deadline: string | null): string {
-  if (!deadline) return "\u2014";
+  if (!deadline) return "—";
   const d = new Date(deadline);
-  if (Number.isNaN(d.getTime())) return "\u2014";
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" });
 }
 
 function formatDateWithYear(date: string | null): string {
-  if (!date) return "\u2014";
+  if (!date) return "—";
   const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "\u2014";
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
@@ -73,7 +73,7 @@ function formatDateWithYear(date: string | null): string {
 
 /** Derive a short category label from purpose + tender_type_code. */
 function getCategoryLabel(tender: Tender | null): string {
-  if (!tender) return "\u2014";
+  if (!tender) return "—";
   const purpose = tender.purpose ?? "";
   if (tender.tender_type_code === 9) return "ייזום";
   if (purpose.includes("דיור מוגן")) return "דיור מוגן";
@@ -86,122 +86,20 @@ const EMPTY_LOT: LotAggregation = {
   free_market: 0,
   target_price: 0,
   total: 0,
-  pct: "\u2014",
+  pct: "—",
 };
 
 // ---------------------------------------------------------------------------
-// Column definitions
+// Category display order for grouped view
 // ---------------------------------------------------------------------------
 
-const columns: ColumnDef<WatchlistRow, unknown>[] = [
-  {
-    id: "deadline",
-    header: "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4",
-    accessorFn: (row) => row.days_to_deadline ?? Infinity,
-    sortingFn: "basic",
-    size: 100,
-    cell: ({ row }) => {
-      const t = row.original.tender;
-      return (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <DeadlineBadge
-            daysRemaining={row.original.days_to_deadline}
-            compact
-          />
-          <span className="text-sm">
-            {formatDateWithYear(t?.deadline ?? null)}
-          </span>
-        </div>
-      );
-    },
-  },
-  {
-    id: "publish_date",
-    header: "תאריך פרסום",
-    size: 80,
-    cell: ({ row }) => {
-      const t = row.original.tender;
-      return (
-        <span className="text-sm whitespace-nowrap">
-          {formatDateWithYear(t?.publish_date ?? null)}
-        </span>
-      );
-    },
-  },
-  {
-    id: "city",
-    header: "\u05E2\u05D9\u05E8",
-    size: 80,
-    cell: ({ row }) => (
-      <span className="truncate block max-w-[80px]">
-        {row.original.tender?.city ?? "\u2014"}
-      </span>
-    ),
-  },
-  {
-    id: "tender_type",
-    header: "\u05E1\u05D5\u05D2",
-    size: 90,
-    cell: ({ row }) => (
-      <span className="truncate block max-w-[90px]">
-        {getCategoryLabel(row.original.tender)}
-      </span>
-    ),
-  },
-  {
-    id: "booklet",
-    header: "\u05D7\u05D5\u05D1\u05E8\u05EA",
-    size: 55,
-    cell: ({ row }) =>
-      row.original.tender?.published_booklet ? "\u2705" : "\u274C",
-  },
-  {
-    id: "units",
-    header: '\u05D9\u05D7"\u05D3',
-    size: 60,
-    cell: ({ row }) => row.original.lot_agg.total || row.original.tender?.units || "\u2014",
-  },
-  {
-    id: "pct_target",
-    header: "% \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4",
-    size: 70,
-    cell: ({ row }) => row.original.lot_agg.pct,
-  },
-  {
-    accessorKey: "review_status",
-    header: "\u05E1\u05D8\u05D8\u05D5\u05E1",
-    size: 80,
-    cell: ({ getValue }) => (
-      <span className="text-sm">{getValue<string>()}</span>
-    ),
-  },
-  {
-    accessorKey: "review_notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA",
-    size: 110,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-megido-text-muted line-clamp-2">
-        {getValue<string>() || "\u2014"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "watchlist_notes",
-    header: "\u05D4\u05E2\u05E8\u05D5\u05EA",
-    size: 120,
-    cell: ({ getValue }) => (
-      <span className="text-xs text-megido-text-muted line-clamp-2">
-        {getValue<string>() || "\u2014"}
-      </span>
-    ),
-  },
-  {
-    id: "govmap",
-    header: "תב\"ע",
-    size: 50,
-    cell: ({ row }) => <GovMapLink tender={row.original.tender} />,
-  },
-];
+const CATEGORY_ORDER = [
+  "שוק חופשי",
+  "מחיר מטרה",
+  "דיור להשכרה",
+  "דיור מוגן",
+  "ייזום",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -210,6 +108,154 @@ const columns: ColumnDef<WatchlistRow, unknown>[] = [
 export function TeamWatchlistSection() {
   const { data: watchlistItems, isLoading: watchlistLoading } =
     useTeamWatchlist();
+
+  // Group-by-type state (toggled by clicking the "סוג" column header)
+  const [groupByType, setGroupByType] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = useCallback((cat: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }, []);
+
+  // Column definitions — defined inside the component so the "סוג"
+  // header can close over groupByType state.
+  const columns = useMemo<ColumnDef<WatchlistRow, unknown>[]>(
+    () => [
+      {
+        id: "deadline",
+        header: "מועד סגירה",
+        accessorFn: (row) => row.days_to_deadline ?? Infinity,
+        sortingFn: "basic",
+        size: 100,
+        cell: ({ row }) => {
+          const t = row.original.tender;
+          return (
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <DeadlineBadge
+                daysRemaining={row.original.days_to_deadline}
+                compact
+              />
+              <span className="text-sm">
+                {formatDateWithYear(t?.deadline ?? null)}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "publish_date",
+        header: "תאריך פרסום",
+        size: 80,
+        cell: ({ row }) => {
+          const t = row.original.tender;
+          return (
+            <span className="text-sm whitespace-nowrap">
+              {formatDateWithYear(t?.publish_date ?? null)}
+            </span>
+          );
+        },
+      },
+      {
+        id: "city",
+        header: "עיר",
+        size: 80,
+        cell: ({ row }) => (
+          <span className="truncate block max-w-[80px]">
+            {row.original.tender?.city ?? "—"}
+          </span>
+        ),
+      },
+      {
+        id: "tender_type",
+        header: () => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setGroupByType((prev) => !prev);
+            }}
+            className="flex items-center gap-1 cursor-pointer hover:text-megido-primary"
+            title={groupByType ? "בטל קיבוץ לפי סוג" : "קבץ לפי סוג"}
+          >
+            <span>{"סוג"}</span>
+            <Layers
+              className={
+                groupByType
+                  ? "h-3.5 w-3.5 text-megido-primary"
+                  : "h-3.5 w-3.5 text-megido-text-muted"
+              }
+            />
+          </button>
+        ),
+        size: 90,
+        cell: ({ row }) => (
+          <span className="truncate block max-w-[90px]">
+            {getCategoryLabel(row.original.tender)}
+          </span>
+        ),
+      },
+      {
+        id: "booklet",
+        header: "חוברת",
+        size: 55,
+        cell: ({ row }) =>
+          row.original.tender?.published_booklet ? "✅" : "❌",
+      },
+      {
+        id: "units",
+        header: 'יח"ד',
+        size: 60,
+        cell: ({ row }) =>
+          row.original.lot_agg.total || row.original.tender?.units || "—",
+      },
+      {
+        id: "pct_target",
+        header: "% מחיר מטרה",
+        size: 70,
+        cell: ({ row }) => row.original.lot_agg.pct,
+      },
+      {
+        accessorKey: "review_status",
+        header: "סטטוס",
+        size: 80,
+        cell: ({ getValue }) => (
+          <span className="text-sm">{getValue<string>()}</span>
+        ),
+      },
+      {
+        accessorKey: "review_notes",
+        header: "הערות צוות",
+        size: 110,
+        cell: ({ getValue }) => (
+          <span className="text-xs text-megido-text-muted line-clamp-2">
+            {getValue<string>() || "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "watchlist_notes",
+        header: "הערות",
+        size: 120,
+        cell: ({ getValue }) => (
+          <span className="text-xs text-megido-text-muted line-clamp-2">
+            {getValue<string>() || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "govmap",
+        header: 'תב"ע',
+        size: 50,
+        cell: ({ row }) => <GovMapLink tender={row.original.tender} />,
+      },
+    ],
+    [groupByType],
+  );
 
   // Derive tender IDs for sub-queries
   const tenderIds = useMemo(
@@ -280,7 +326,7 @@ export function TeamWatchlistSection() {
         return {
           tender_id: tid,
           tender: item.tender,
-          review_status: review?.status ?? "\u05DC\u05D0 \u05E0\u05E1\u05E7\u05E8",
+          review_status: review?.status ?? "לא נסקר",
           review_notes: review?.notes ?? "",
           watchlist_notes: item.notes ?? "",
           days_to_deadline: days,
@@ -297,6 +343,22 @@ export function TeamWatchlistSection() {
       });
   }, [activeItems, reviewMap, lotMap, brochureFilter]);
 
+  // Bucket rows by category for grouped view (preserves deadline ordering within group)
+  const groupedRows = useMemo(() => {
+    if (!groupByType) return null;
+    const buckets = new Map<string, WatchlistRow[]>();
+    for (const r of rows) {
+      const cat = getCategoryLabel(r.tender);
+      const arr = buckets.get(cat);
+      if (arr) arr.push(r);
+      else buckets.set(cat, [r]);
+    }
+    return CATEGORY_ORDER.filter((cat) => buckets.has(cat)).map((cat) => ({
+      category: cat,
+      rows: buckets.get(cat)!,
+    }));
+  }, [rows, groupByType]);
+
   // Expired tenders are rendered by ExpiredWatchlistSection at page bottom
 
   // Row click handler
@@ -312,33 +374,33 @@ export function TeamWatchlistSection() {
     const xlsRows = rows.map((r) => {
       const t = r.tender;
       return {
-        "\u05E1\u05D8\u05D8\u05D5\u05E1 \u05E1\u05E7\u05D9\u05E8\u05D4": r.review_status,
-        "\u05D4\u05E2\u05E8\u05D5\u05EA \u05E6\u05D5\u05D5\u05EA": r.review_notes || "",
-        "\u05D7\u05D5\u05D1\u05E8\u05EA": t?.published_booklet ? "\u05DB\u05DF" : "\u05DC\u05D0",
-        "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05DB\u05E8\u05D6": t?.tender_name ?? r.tender_id,
-        "\u05E2\u05D9\u05E8": t?.city ?? "",
-        "\u05E1\u05D5\u05D2 \u05DE\u05DB\u05E8\u05D6": t?.tender_type ?? "",
-        "\u05D9\u05D9\u05E2\u05D5\u05D3": t?.purpose ?? "",
-        '\u05D9\u05D7"\u05D3': t?.units ?? "",
-        "\u05DE\u05D5\u05E2\u05D3 \u05E1\u05D2\u05D9\u05E8\u05D4": t?.deadline ?? "",
-        "\u05E9\u05D5\u05E7 \u05D7\u05D5\u05E4\u05E9\u05D9": r.lot_agg.free_market || "",
-        "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4": r.lot_agg.target_price || "",
-        '\u05E1\u05D4"\u05DB \u05DE\u05D2\u05E8\u05E9\u05D9\u05DD': r.lot_agg.total || "",
-        "% \u05DE\u05D7\u05D9\u05E8 \u05DE\u05D8\u05E8\u05D4": r.lot_agg.pct,
-        "\u05D4\u05E2\u05E8\u05D5\u05EA": r.watchlist_notes || "",
-        "\u05DE\u05D7\u05D5\u05D6": t?.region ?? "",
-        "\u05DE\u05D9\u05E7\u05D5\u05DD": t?.location ?? "",
-        '\u05E9\u05D8\u05D7 (\u05DE"\u05E8)': t?.area_sqm ?? "",
-        "\u05DE\u05D7\u05D9\u05E8 \u05DE\u05D9\u05E0\u05D9\u05DE\u05D5\u05DD": t?.min_price ?? "",
-        "\u05EA\u05D0\u05E8\u05D9\u05DA \u05E4\u05E8\u05E1\u05D5\u05DD": t?.publish_date ?? "",
-        "\u05EA\u05DB\u05E0\u05D9\u05EA": t?.plan_number ?? "",
-        "\u05DE\u05E1\u05F3 \u05DE\u05EA\u05D7\u05DE\u05D9\u05DD": t?.lot_count ?? "",
+        "סטטוס סקירה": r.review_status,
+        "הערות צוות": r.review_notes || "",
+        "חוברת": t?.published_booklet ? "כן" : "לא",
+        "מספר מכרז": t?.tender_name ?? r.tender_id,
+        "עיר": t?.city ?? "",
+        "סוג מכרז": t?.tender_type ?? "",
+        "ייעוד": t?.purpose ?? "",
+        'יח"ד': t?.units ?? "",
+        "מועד סגירה": t?.deadline ?? "",
+        "שוק חופשי": r.lot_agg.free_market || "",
+        "מחיר מטרה": r.lot_agg.target_price || "",
+        'סה"כ מגרשים': r.lot_agg.total || "",
+        "% מחיר מטרה": r.lot_agg.pct,
+        "הערות": r.watchlist_notes || "",
+        "מחוז": t?.region ?? "",
+        "מיקום": t?.location ?? "",
+        'שטח (מ"ר)': t?.area_sqm ?? "",
+        "מחיר מינימום": t?.min_price ?? "",
+        "תאריך פרסום": t?.publish_date ?? "",
+        "תכנית": t?.plan_number ?? "",
+        "מס׳ מתחמים": t?.lot_count ?? "",
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(xlsRows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "\u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA");
+    XLSX.utils.book_append_sheet(wb, ws, "חדר עסקאות");
 
     const today = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `watchlist_${today}.xls`, { bookType: "xls" });
@@ -348,7 +410,7 @@ export function TeamWatchlistSection() {
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-lg font-semibold text-megido-text-heading">
-          {"\u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD - \u05D7\u05D3\u05E8 \u05E2\u05E1\u05E7\u05D0\u05D5\u05EA"}
+          {"מכרזים מועדפים - חדר עסקאות"}
         </h4>
         <button
           type="button"
@@ -357,7 +419,7 @@ export function TeamWatchlistSection() {
           className="flex items-center gap-1.5 rounded-lg border border-megido-border px-3 py-1.5 text-xs font-medium text-megido-text-heading transition-colors hover:bg-megido-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Download className="h-3.5 w-3.5" />
-          {"\u05D9\u05D9\u05E6\u05D5\u05D0 \u05DC\u05D0\u05E7\u05E1\u05DC"}
+          {"ייצוא לאקסל"}
         </button>
       </div>
 
@@ -368,14 +430,53 @@ export function TeamWatchlistSection() {
             onChange={setBrochureFilter}
             className="mb-3"
           />
-          <DataTable
-            columns={columns}
-            data={rows}
-            isLoading={watchlistLoading}
-            onRowClick={handleRowClick}
-            pageSize={20}
-            emptyMessage={"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD."}
-          />
+          {groupByType && groupedRows ? (
+            <div className="space-y-4">
+              {groupedRows.map(({ category, rows: groupRows }) => {
+                const collapsed = collapsedGroups.has(category);
+                return (
+                  <div key={category}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(category)}
+                      className="flex w-full items-center gap-2 rounded-md py-1.5 text-end transition-colors hover:bg-megido-neutral-50"
+                    >
+                      {collapsed ? (
+                        <ChevronDown className="h-4 w-4 text-megido-text-muted" />
+                      ) : (
+                        <ChevronUp className="h-4 w-4 text-megido-text-muted" />
+                      )}
+                      <h5 className="text-base font-semibold text-megido-text-heading">
+                        {category}{" "}
+                        <span className="text-sm font-normal text-megido-text-muted">
+                          ({groupRows.length})
+                        </span>
+                      </h5>
+                    </button>
+                    {!collapsed && (
+                      <DataTable
+                        columns={columns}
+                        data={groupRows}
+                        isLoading={watchlistLoading}
+                        onRowClick={handleRowClick}
+                        pageSize={100}
+                        emptyMessage={"אין מכרזים בקטגוריה זו."}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={rows}
+              isLoading={watchlistLoading}
+              onRowClick={handleRowClick}
+              pageSize={20}
+              emptyMessage={"אין מכרזים מועדפים."}
+            />
+          )}
         </>
       ) : watchlistLoading ? (
         <DataTable
@@ -386,7 +487,7 @@ export function TeamWatchlistSection() {
         />
       ) : (
         <p className="py-4 text-sm text-megido-text-muted">
-          {"\u05D0\u05D9\u05DF \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05DE\u05D5\u05E2\u05D3\u05E4\u05D9\u05DD. \u05D4\u05D5\u05E1\u05E3 \u05DE\u05DB\u05E8\u05D6\u05D9\u05DD \u05D3\u05E8\u05DA \u05D3\u05D0\u05E9\u05D1\u05D5\u05E8\u05D3 \u05D7\u05D3\u05E8 \u05D4\u05E2\u05E1\u05E7\u05D0\u05D5\u05EA."}
+          {"אין מכרזים מועדפים. הוסף מכרזים דרך דאשבורד חדר העסקאות."}
         </p>
       )}
 
